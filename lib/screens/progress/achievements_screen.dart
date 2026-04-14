@@ -21,7 +21,7 @@ class AchievementsScreen extends StatelessWidget {
     );
   }
 
-  Widget _card(achievement) {
+  Widget _card(Achievement achievement) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(

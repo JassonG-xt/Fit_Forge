@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../services/app_state.dart';
 import 'home/home_screen.dart';
 import 'library/exercise_library_screen.dart';
 import 'nutrition/meal_plan_screen.dart';

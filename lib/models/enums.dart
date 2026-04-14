@@ -1,5 +1,4 @@
-/// FitForge 所有枚举定义
-/// 对应 Swift 版的 Enums.swift
+// FitForge 所有枚举定义
 
 // ──────────── 性别 ────────────
 enum Gender {

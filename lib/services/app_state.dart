@@ -2,14 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import '../engines/plan_engine.dart';
 
 /// 全局应用状态（Provider ChangeNotifier）
 class AppState extends ChangeNotifier {
-  static const _uuid = Uuid();
-
   // ──── 状态 ────
   UserProfile? _profile;
   List<Exercise> _exercises = [];

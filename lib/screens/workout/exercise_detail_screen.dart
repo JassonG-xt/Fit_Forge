@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/models.dart';
 import '../../services/app_state.dart';
 
 class ExerciseDetailScreen extends StatelessWidget {
@@ -141,6 +140,6 @@ class ExerciseDetailScreen extends StatelessWidget {
 }
 
 extension on Color {
-  Color get shade50 => withOpacity(0.1);
+  Color get shade50 => withValues(alpha: 0.1);
   Color get shade700 => this;
 }

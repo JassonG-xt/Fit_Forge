@@ -104,7 +104,7 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
             color: Colors.orange,
             barWidth: 3,
             dotData: const FlDotData(show: true),
-            belowBarData: BarAreaData(show: true, color: Colors.orange.withOpacity(0.1)),
+            belowBarData: BarAreaData(show: true, color: Colors.orange.withValues(alpha: 0.1)),
           ),
         ],
       )),

@@ -22,7 +22,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   FitnessGoal _goal = FitnessGoal.buildMuscle;
   int _weeklyFrequency = 4;
   ExperienceLevel _level = ExperienceLevel.beginner;
-  List<Equipment> _equipment = [Equipment.bodyweight, Equipment.dumbbell, Equipment.barbell, Equipment.bench];
+  final List<Equipment> _equipment = [Equipment.bodyweight, Equipment.dumbbell, Equipment.barbell, Equipment.bench];
 
   void _next() {
     if (_step < 7) {
