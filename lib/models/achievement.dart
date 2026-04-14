@@ -73,5 +73,4 @@ List<Achievement> defaultAchievements() => [
       Achievement(id: 'a07', type: AchievementType.totalWorkouts, title: '健身战士', description: '累计完成 100 次训练', icon: '💪', threshold: 100),
       Achievement(id: 'a08', type: AchievementType.personalRecord, title: '突破自我', description: '第一次打破个人记录', icon: '⚡', threshold: 1),
       Achievement(id: 'a09', type: AchievementType.personalRecord, title: '记录粉碎机', description: '打破 10 次个人记录', icon: '⚡', threshold: 10),
-      Achievement(id: 'a10', type: AchievementType.nutritionStreak, title: '饮食管理', description: '连续记录饮食 7 天', icon: '🥗', threshold: 7),
     ];

@@ -7,6 +7,9 @@ class Exercise {
   final BodyPart bodyPart;
   final List<String> muscleGroups;
   final Equipment equipment;
+  /// 完成此动作所需的全部器械（含主器械）。
+  /// 计划引擎会检查用户是否拥有所有��需器械。
+  final List<Equipment> requiredEquipment;
   final ExperienceLevel difficulty;
   final bool isCompound;
   final List<String> formCues;
@@ -26,6 +29,7 @@ class Exercise {
     required this.bodyPart,
     required this.muscleGroups,
     required this.equipment,
+    this.requiredEquipment = const [],
     this.difficulty = ExperienceLevel.beginner,
     this.isCompound = false,
     this.formCues = const [],
@@ -40,13 +44,22 @@ class Exercise {
     this.recommendedRepsMax = 12,
   });
 
+  /// 实际需要的所有器械。如果 requiredEquipment 为空，降级为 [equipment]。
+  List<Equipment> get allRequiredEquipment =>
+      requiredEquipment.isNotEmpty ? requiredEquipment : [equipment];
+
   factory Exercise.fromJson(Map<String, dynamic> json) {
+    final mainEquipment = Equipment.values.byName(json['equipment'] as String);
     return Exercise(
       id: json['id'] as String,
       name: json['name'] as String,
       bodyPart: BodyPart.values.byName(json['bodyPart'] as String),
       muscleGroups: List<String>.from(json['muscleGroups'] as List),
-      equipment: Equipment.values.byName(json['equipment'] as String),
+      equipment: mainEquipment,
+      requiredEquipment: (json['requiredEquipment'] as List?)
+              ?.map((e) => Equipment.values.byName(e as String))
+              .toList() ??
+          [],
       difficulty: ExperienceLevel.values.byName(json['difficulty'] as String),
       isCompound: json['isCompound'] as bool? ?? false,
       formCues: List<String>.from(json['formCues'] as List? ?? []),

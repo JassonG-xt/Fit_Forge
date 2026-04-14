@@ -88,13 +88,12 @@ class AppState extends ChangeNotifier {
   }
 
   // ──── 训练计划 ────
-  WorkoutPlan generatePlan() {
+
+  /// 生成计划预览，不修改状态、不持久化。
+  /// 用户确认后再调用 adoptPlan()。
+  WorkoutPlan previewPlan() {
     if (_profile == null) throw StateError('Profile not set');
-    final plan = PlanEngine.generatePlan(_profile!, _exercises);
-    _activePlan = plan;
-    notifyListeners();
-    _persist();
-    return plan;
+    return PlanEngine.generatePlan(_profile!, _exercises);
   }
 
   void adoptPlan(WorkoutPlan plan) {
@@ -119,7 +118,7 @@ class AppState extends ChangeNotifier {
   // ──── 训练记录 ────
   void saveSession(WorkoutSession session) {
     _sessions.add(session);
-    _updateAchievements();
+    _updateAchievements(session);
     notifyListeners();
     _persist();
   }
@@ -133,9 +132,12 @@ class AppState extends ChangeNotifier {
   }
 
   // ──── 成就 ────
-  void _updateAchievements() {
+  void _updateAchievements(WorkoutSession latestSession) {
     final totalCompleted = completedSessions.length;
     final streak = streakDays;
+
+    // 计算本次训练中有多少个 PR（个人记录突破）
+    final newPRCount = _countPersonalRecords(latestSession);
 
     for (final a in _achievements) {
       if (a.isUnlocked) continue;
@@ -146,10 +148,46 @@ class AppState extends ChangeNotifier {
         case AchievementType.totalWorkouts:
           a.currentProgress = totalCompleted;
           if (totalCompleted >= a.threshold) a.unlock();
+        case AchievementType.personalRecord:
+          if (newPRCount > 0) {
+            a.currentProgress += newPRCount;
+            if (a.currentProgress >= a.threshold) a.unlock();
+          }
         default:
           break;
       }
     }
+  }
+
+  /// 对比本次训练中每个动作的最大单组重量 vs 历史最高
+  int _countPersonalRecords(WorkoutSession session) {
+    var prCount = 0;
+    for (final record in session.exerciseRecords) {
+      final currentMax = record.sets
+          .where((s) => s.isCompleted && s.weightKg > 0)
+          .fold<double>(0, (max, s) => s.weightKg > max ? s.weightKg : max);
+      if (currentMax <= 0) continue;
+
+      // 在历史记录中查找该动作的最高重量
+      double historicalMax = 0;
+      for (final oldSession in _sessions) {
+        if (oldSession.id == session.id) continue;
+        for (final oldRecord in oldSession.exerciseRecords) {
+          if (oldRecord.exerciseId == record.exerciseId) {
+            for (final s in oldRecord.sets) {
+              if (s.isCompleted && s.weightKg > historicalMax) {
+                historicalMax = s.weightKg;
+              }
+            }
+          }
+        }
+      }
+
+      if (currentMax > historicalMax && historicalMax > 0) {
+        prCount++;
+      }
+    }
+    return prCount;
   }
 
   // ──── 持久化 ────

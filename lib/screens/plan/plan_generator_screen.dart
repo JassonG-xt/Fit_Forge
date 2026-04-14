@@ -19,7 +19,8 @@ class _PlanGeneratorScreenState extends State<PlanGeneratorScreen> {
   void _generate() {
     setState(() => _isGenerating = true);
     Future.delayed(const Duration(milliseconds: 500), () {
-      final plan = context.read<AppState>().generatePlan();
+      if (!mounted) return;
+      final plan = context.read<AppState>().previewPlan();
       setState(() {
         _plan = plan;
         _isGenerating = false;

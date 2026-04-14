@@ -140,7 +140,7 @@ class PlanEngine {
     for (final part in bodyParts) {
       final candidates = allExercises.where((e) =>
           e.bodyPart == part &&
-          availableEquipment.contains(e.equipment) &&
+          e.allRequiredEquipment.every((req) => availableEquipment.contains(req)) &&
           ExperienceLevel.values.indexOf(e.difficulty) <= levelIndex).toList();
 
       if (candidates.isEmpty) {

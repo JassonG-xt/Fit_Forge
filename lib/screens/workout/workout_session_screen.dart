@@ -50,13 +50,33 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
   }
 
-  void _saveAndExit() {
+  int get _completedSetsCount =>
+      _records.values.expand((r) => r.sets).where((s) => s.isCompleted).length;
+
+  void _saveAndExit() async {
+    final hasCompletedSets = _completedSetsCount > 0;
+
+    if (!hasCompletedSets) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('未完成训练'),
+          content: const Text('你还没有完成任何一组，确定要结束吗？\n本次训练将记录为未完成。'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('继续训练')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('结束')),
+          ],
+        ),
+      );
+      if (confirm != true || !mounted) return;
+    }
+
     final duration = DateTime.now().difference(_startTime).inMinutes;
     final session = WorkoutSession(
       id: _uuid.v4(),
       dayType: widget.workoutDay.dayType,
       durationMinutes: duration,
-      isCompleted: true,
+      isCompleted: hasCompletedSets,
       exerciseRecords: _records.values.toList(),
     );
     context.read<AppState>().saveSession(session);
@@ -217,16 +237,24 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   // ──── 完成 ────
   Widget _completedView() {
     final duration = DateTime.now().difference(_startTime).inMinutes;
-    final totalSets = _records.values.expand((r) => r.sets).where((s) => s.isCompleted).length;
+    final totalSets = _completedSetsCount;
     final totalVolume = _records.values.fold<double>(0, (sum, r) => sum + r.totalVolume);
     final cooldowns = PlanEngine.cooldownRecommendation(widget.workoutDay.dayType);
+    final hasWork = totalSets > 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(children: [
-        const Icon(Icons.emoji_events, size: 60, color: Colors.orange),
+        Icon(hasWork ? Icons.emoji_events : Icons.info_outline,
+            size: 60, color: hasWork ? Colors.orange : Colors.grey),
         const SizedBox(height: 8),
-        const Text('训练完成!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        Text(hasWork ? '训练完成!' : '训练未完成',
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        if (!hasWork)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('你还没有完成任何一组', style: TextStyle(color: Colors.grey[600])),
+          ),
         const SizedBox(height: 16),
         Card(
           elevation: 0, color: Colors.grey[100],
@@ -254,7 +282,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           child: ElevatedButton(
             onPressed: _saveAndExit,
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
-            child: const Text('保存并返回'),
+            child: Text(hasWork ? '保存并返回' : '结束训练'),
           ),
         ),
       ]),
