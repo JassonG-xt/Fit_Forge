@@ -1,7 +1,12 @@
 name: fit_forge
-description: "FitForge - 智能健身 App"
+description: "FitForge — 智能健身 App。根据用户画像自动生成训练和营养计划。AI-powered personal trainer with auto-generated workout and nutrition plans."
 publish_to: 'none'
 version: 1.0.0+1
+
+homepage: https://github.com/JassonG-xt/Fit_Forge
+repository: https://github.com/JassonG-xt/Fit_Forge
+issue_tracker: https://github.com/JassonG-xt/Fit_Forge/issues
+documentation: https://github.com/JassonG-xt/Fit_Forge#readme
 
 environment:
   sdk: ^3.11.4
@@ -16,10 +21,7 @@ dependencies:
   provider: ^6.1.2
 
   # 本地存储
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
   shared_preferences: ^2.3.3
-  path_provider: ^2.1.5
 
   # 图表
   fl_chart: ^0.69.0
@@ -28,12 +30,14 @@ dependencies:
   lottie: ^3.1.2
 
   # 音频播放
-  just_audio: ^0.9.40
-  audioplayers: ^6.1.0
+  # (reserved for future real audio implementation)
 
-  # 通知
-  flutter_local_notifications: ^17.2.3
-  timezone: ^0.9.4
+  # 通知 (reserved for future implementation)
+  # flutter_local_notifications: ^17.2.3
+  # timezone: ^0.9.4
+
+  # 字体
+  google_fonts: ^6.2.1
 
   # 工具
   intl: ^0.19.0
@@ -44,12 +48,9 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^6.0.0
-  build_runner: ^2.4.13
-  hive_generator: ^2.0.1
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/data/
-    - assets/animations/
