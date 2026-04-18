@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/app_state.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/app_radius.dart';
+import '../../widgets/brand/glow_button.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -13,6 +17,12 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _controller = PageController();
   int _step = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   // 表单数据
   Gender _gender = Gender.male;
@@ -60,12 +70,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           children: [
             // 进度指示
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
               child: LinearProgressIndicator(
                 value: (_step + 1) / 8,
-                backgroundColor: Colors.grey[200],
-                color: Colors.orange,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: AppRadius.brFull,
               ),
             ),
             Expanded(
@@ -91,39 +99,48 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   // ──── Step 0: 欢迎 ────
-  Widget _welcomePage() => Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.fitness_center, size: 80, color: Colors.orange),
-            const SizedBox(height: 24),
-            const Text('欢迎来到 FitForge', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Text('你的私人智能健身助手', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
-            const Spacer(),
-            _primaryButton('开始设置', _next),
-          ],
-        ),
-      );
+  Widget _welcomePage() {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80, height: 80,
+            decoration: const BoxDecoration(
+              gradient: AppColors.heatGradient,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.fitness_center, size: 40, color: Colors.white),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text('欢迎来到 FitForge', style: theme.textTheme.headlineLarge),
+          const SizedBox(height: AppSpacing.sm),
+          Text('你的私人智能健身助手', style: theme.textTheme.bodyMedium),
+          const Spacer(),
+          GlowButton(label: '开始设置', onPressed: _next),
+        ],
+      ),
+    );
+  }
 
   // ──── Step 1: 性别年龄 ────
   Widget _genderAgePage() => _pageWrapper('基本信息', [
-        const Text('性别', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
+        Text('性别', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.sm),
         Row(
           children: Gender.values.map((g) => Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
                   child: _selectCard(g.displayName, _gender == g, () => setState(() => _gender = g)),
                 ),
               )).toList(),
         ),
-        const SizedBox(height: 24),
-        Text('年龄: $_age 岁', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: AppSpacing.lg),
+        Text('年龄: $_age 岁', style: Theme.of(context).textTheme.titleSmall),
         Slider(
           value: _age.toDouble(), min: 14, max: 80, divisions: 66,
-          activeColor: Colors.orange,
           label: '$_age',
           onChanged: (v) => setState(() => _age = v.round()),
         ),
@@ -132,18 +149,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // ──── Step 2: 身高体重 ────
   Widget _bodyPage() => _pageWrapper('身体数据', [
         Text('身高: ${_heightCm.round()} cm',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.orange)),
+            style: Theme.of(context).textTheme.headlineSmall!.copyWith(color: AppColors.primary)),
         Slider(
           value: _heightCm, min: 140, max: 220, divisions: 80,
-          activeColor: Colors.orange,
           onChanged: (v) => setState(() => _heightCm = v),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.md),
         Text('体重: ${_weightKg.toStringAsFixed(1)} kg',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.orange)),
+            style: Theme.of(context).textTheme.headlineSmall!.copyWith(color: AppColors.primary)),
         Slider(
           value: _weightKg, min: 35, max: 150, divisions: 230,
-          activeColor: Colors.orange,
           onChanged: (v) => setState(() => _weightKg = double.parse(v.toStringAsFixed(1))),
         ),
       ]);
@@ -151,7 +166,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // ──── Step 3: 目标 ────
   Widget _goalPage() => _pageWrapper('你的目标', [
         ...FitnessGoal.values.map((g) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: _selectCard(
                 '${g.icon}  ${g.displayName}',
                 _goal == g,
@@ -167,7 +182,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           final freq = i + 1;
           final hint = freq <= 2 ? '推荐新手' : (freq <= 4 ? '推荐' : '高级');
           return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: _selectCard(
               '每周 $freq 次 ($hint)',
               _weeklyFrequency == freq,
@@ -181,7 +196,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // ──── Step 5: 经验等级 ────
   Widget _levelPage() => _pageWrapper('你的训练经验', [
         ...ExperienceLevel.values.map((l) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: _selectCard(
                 '${l.displayName} — ${l.description}',
                 _level == l,
@@ -194,15 +209,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // ──── Step 6: 器械 ────
   Widget _equipmentPage() => _pageWrapper('你有哪些器械？', [
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: Equipment.values.map((e) {
             final selected = _equipment.contains(e);
             return FilterChip(
               label: Text(e.displayName),
               selected: selected,
-              selectedColor: Colors.orange.shade100,
-              checkmarkColor: Colors.orange,
               onSelected: (v) => setState(() {
                 if (v) {
                   _equipment.add(e);
@@ -225,23 +238,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _infoRow('频率', '每周 $_weeklyFrequency 次'),
         _infoRow('经验', _level.displayName),
         _infoRow('器械', '${_equipment.length} 种'),
-        const SizedBox(height: 24),
-        _primaryButton('开始训练', _finish),
+        const SizedBox(height: AppSpacing.lg),
+        GlowButton(label: '开始训练', icon: Icons.play_arrow_rounded, onPressed: _finish),
       ], showNav: false);
 
   // ──── 辅助组件 ────
 
   Widget _pageWrapper(String title, List<Widget> children, {bool showNav = true}) {
+    final theme = Theme.of(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 24),
+          Text(title, style: theme.textTheme.headlineMedium),
+          const SizedBox(height: AppSpacing.lg),
           ...children,
           if (showNav) ...[
-            const SizedBox(height: 32),
+            const SizedBox(height: AppSpacing.xl),
             Row(
               children: [
                 if (_step > 0)
@@ -251,8 +265,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       child: const Text('上一步'),
                     ),
                   ),
-                if (_step > 0) const SizedBox(width: 12),
-                Expanded(child: _primaryButton('下一步', _next)),
+                if (_step > 0) const SizedBox(width: AppSpacing.cardGap),
+                Expanded(child: GlowButton(label: '下一步', onPressed: _next)),
               ],
             ),
           ],
@@ -262,45 +276,40 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _selectCard(String text, bool isSelected, VoidCallback onTap, {double height = 64}) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         height: height,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? Colors.orange.shade50 : Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? Colors.orange : Colors.transparent, width: 2),
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : (isDark ? AppColors.bgElevated : AppColors.bgBaseLight),
+          borderRadius: AppRadius.brMd,
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+            width: isSelected ? 2 : 0.5,
+          ),
         ),
         child: Text(text, style: TextStyle(
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: isSelected ? Colors.orange.shade800 : null,
+          color: isSelected ? AppColors.primary : null,
         )),
       ),
     );
   }
 
-  Widget _primaryButton(String text, VoidCallback onPressed) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-    );
-  }
-
   Widget _infoRow(String label, String value) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey[600])),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(label, style: theme.textTheme.bodySmall),
+          Text(value, style: theme.textTheme.titleSmall),
         ],
       ),
     );

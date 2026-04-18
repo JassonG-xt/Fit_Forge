@@ -1,89 +1,124 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/models.dart';
 import '../../services/app_state.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/app_radius.dart';
+import '../../widgets/cards/section_card.dart';
+import '../../widgets/cards/chip_tag.dart';
+import '../../widgets/brand/stat_number.dart';
 
 class ExerciseDetailScreen extends StatelessWidget {
-  final String exerciseId;
   const ExerciseDetailScreen({super.key, required this.exerciseId});
+  final String exerciseId;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final exercises = context.read<AppState>().exercises;
     final exercise = exercises.where((e) => e.id == exerciseId).firstOrNull;
 
     if (exercise == null) {
-      return Scaffold(appBar: AppBar(), body: const Center(child: Text('动作未找到')));
+      return Scaffold(appBar: AppBar(), body: Center(child: Text('动作未找到', style: theme.textTheme.bodyMedium)));
     }
 
     return Scaffold(
       appBar: AppBar(title: Text(exercise.name)),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.screenH),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // 动画占位
+          // 动作示意图
           Container(
             height: 200,
             width: double.infinity,
-            decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(16)),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _bodyPartColor(exercise.bodyPart).withValues(alpha: 0.15),
+                  _bodyPartColor(exercise.bodyPart).withValues(alpha: 0.05),
+                ],
+              ),
+              borderRadius: AppRadius.brXl,
+              border: Border.all(color: _bodyPartColor(exercise.bodyPart).withValues(alpha: 0.3), width: 0.5),
+            ),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.fitness_center, size: 60, color: Colors.orange),
-              const SizedBox(height: 8),
-              Text('动画: ${exercise.lottieAnimationName}', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+              Icon(_bodyPartIcon(exercise.bodyPart), size: 56,
+                  color: _bodyPartColor(exercise.bodyPart)),
+              const SizedBox(height: AppSpacing.sm),
+              Text(exercise.bodyPart.displayName,
+                  style: theme.textTheme.titleSmall!.copyWith(
+                    color: _bodyPartColor(exercise.bodyPart),
+                  )),
+              Text(exercise.isCompound ? '复合动作' : '孤立动作',
+                  style: theme.textTheme.labelSmall),
             ]),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.md),
 
           // 标签
-          Wrap(spacing: 6, children: [
-            _chip(exercise.bodyPart.displayName, Colors.orange),
-            _chip(exercise.equipment.displayName, Colors.blue),
-            _chip(exercise.difficulty.displayName, Colors.green),
-            if (exercise.isCompound) _chip('复合动作', Colors.purple),
+          Wrap(spacing: AppSpacing.sm, runSpacing: AppSpacing.xs, children: [
+            ChipTag(label: exercise.bodyPart.displayName, selected: true, color: AppColors.primary),
+            ChipTag(label: exercise.equipment.displayName, selected: true, color: AppColors.back),
+            ChipTag(label: exercise.difficulty.displayName, selected: true, color: AppColors.accent),
+            if (exercise.isCompound) const ChipTag(label: '复合动作', selected: true, color: AppColors.shoulders),
           ]),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.lg),
 
           // 动作讲解
-          _section('动作讲解', Icons.description),
-          Text(exercise.instructions, style: const TextStyle(height: 1.6)),
-          const SizedBox(height: 16),
+          _section(theme, '动作讲解', Icons.description),
+          Text(exercise.instructions, style: theme.textTheme.bodyMedium!.copyWith(height: 1.6)),
+          const SizedBox(height: AppSpacing.md),
 
           // 动作要点
-          _section('动作要点', Icons.check_circle),
-          ...exercise.formCues.map((c) => _tipRow(c, Icons.check_circle, Colors.green)),
-          const SizedBox(height: 16),
+          _section(theme, '动作要点', Icons.check_circle),
+          ...exercise.formCues.map((c) => _tipRow(theme, c, Icons.check_circle, AppColors.accent)),
+          const SizedBox(height: AppSpacing.md),
 
           // 避免借力
-          _section('避免借力', Icons.warning_amber),
-          ...exercise.antiCheatTips.map((t) => _tipRow(t, Icons.warning_amber, Colors.orange)),
-          const SizedBox(height: 16),
+          _section(theme, '避免借力', Icons.warning_amber),
+          ...exercise.antiCheatTips.map((t) => _tipRow(theme, t, Icons.warning_amber, AppColors.warning)),
+          const SizedBox(height: AppSpacing.md),
 
           // 常见错误
-          _section('常见错误', Icons.cancel),
-          ...exercise.commonMistakes.map((m) => _tipRow(m, Icons.cancel, Colors.red)),
-          const SizedBox(height: 16),
+          _section(theme, '常见错误', Icons.cancel),
+          ...exercise.commonMistakes.map((m) => _tipRow(theme, m, Icons.cancel, AppColors.danger)),
+          const SizedBox(height: AppSpacing.md),
 
           // 推荐参数
-          _section('推荐训练参数', Icons.tune),
+          _section(theme, '推荐训练参数', Icons.tune),
           Row(children: [
-            _paramBox('组数', '${exercise.recommendedSetsMin}-${exercise.recommendedSetsMax}'),
-            const SizedBox(width: 12),
-            _paramBox('次数', '${exercise.recommendedRepsMin}-${exercise.recommendedRepsMax}'),
+            Expanded(child: SectionCard(
+              child: StatNumber(
+                value: '${exercise.recommendedSetsMin}-${exercise.recommendedSetsMax}',
+                label: '组数', fontSize: 20,
+              ),
+            )),
+            const SizedBox(width: AppSpacing.cardGap),
+            Expanded(child: SectionCard(
+              child: StatNumber(
+                value: '${exercise.recommendedRepsMin}-${exercise.recommendedRepsMax}',
+                label: '次数', fontSize: 20, valueColor: AppColors.accent,
+              ),
+            )),
           ]),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.md),
 
           // 替代动作
           if (exercise.alternativeIds.isNotEmpty) ...[
-            _section('替代动作', Icons.swap_horiz),
+            _section(theme, '替代动作', Icons.swap_horiz),
             ...exercise.alternativeIds.map((altId) {
               final alt = exercises.where((e) => e.id == altId).firstOrNull;
               if (alt == null) return const SizedBox();
               return ListTile(
-                leading: const Icon(Icons.fitness_center, color: Colors.orange),
+                leading: const Icon(Icons.fitness_center, color: AppColors.primary),
                 title: Text(alt.name),
                 subtitle: Text(alt.equipment.displayName),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => ExerciseDetailScreen(exerciseId: alt.id))),
+                    MaterialPageRoute<void>(builder: (_) => ExerciseDetailScreen(exerciseId: alt.id))),
                 dense: true,
               );
             }),
@@ -93,53 +128,48 @@ class ExerciseDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _chip(String text, Color color) {
-    return Chip(
-      label: Text(text, style: TextStyle(fontSize: 12, color: color.shade700)),
-      backgroundColor: color.shade50,
-      side: BorderSide.none,
-      padding: EdgeInsets.zero,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    );
-  }
-
-  Widget _section(String title, IconData icon) {
+  Widget _section(ThemeData theme, String title, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(children: [
-        Icon(icon, size: 18, color: Colors.orange),
-        const SizedBox(width: 6),
-        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Icon(icon, size: 18, color: AppColors.primary),
+        const SizedBox(width: AppSpacing.sm),
+        Text(title, style: theme.textTheme.titleSmall),
       ]),
     );
   }
 
-  Widget _tipRow(String text, IconData icon, Color color) {
+  Widget _tipRow(ThemeData theme, String text, IconData icon, Color color) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(icon, size: 16, color: color),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
       ]),
     );
   }
 
-  Widget _paramBox(String label, String value) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
-        child: Column(children: [
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.orange)),
-          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-        ]),
-      ),
-    );
-  }
-}
+  static IconData _bodyPartIcon(BodyPart part) => switch (part) {
+        BodyPart.chest => Icons.fitbit_outlined,
+        BodyPart.back => Icons.airline_seat_flat,
+        BodyPart.shoulders => Icons.accessibility_new,
+        BodyPart.biceps || BodyPart.triceps || BodyPart.forearms => Icons.front_hand,
+        BodyPart.legs || BodyPart.calves => Icons.directions_walk,
+        BodyPart.glutes => Icons.chair,
+        BodyPart.abs => Icons.view_column_outlined,
+        BodyPart.fullBody => Icons.sports_gymnastics,
+        BodyPart.cardio => Icons.favorite,
+      };
 
-extension on Color {
-  Color get shade50 => withValues(alpha: 0.1);
-  Color get shade700 => this;
+  static Color _bodyPartColor(BodyPart part) => switch (part) {
+        BodyPart.chest => AppColors.chest,
+        BodyPart.back => AppColors.back,
+        BodyPart.shoulders => AppColors.shoulders,
+        BodyPart.biceps || BodyPart.triceps || BodyPart.forearms => AppColors.arms,
+        BodyPart.legs || BodyPart.calves || BodyPart.glutes => AppColors.legs,
+        BodyPart.abs => AppColors.core,
+        BodyPart.fullBody => AppColors.primary,
+        BodyPart.cardio => AppColors.cardio,
+      };
 }

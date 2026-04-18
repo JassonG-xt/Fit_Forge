@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/app_state.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/app_radius.dart';
+import '../../widgets/cards/chip_tag.dart';
 import '../workout/exercise_detail_screen.dart';
 
 class ExerciseLibraryScreen extends StatefulWidget {
@@ -17,8 +21,9 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final exercises = context.watch<AppState>().exercises;
-    var filtered = exercises.where((e) {
+    final filtered = exercises.where((e) {
       if (_selectedPart != null && e.bodyPart != _selectedPart) return false;
       if (_search.isNotEmpty && !e.name.toLowerCase().contains(_search.toLowerCase())) return false;
       return true;
@@ -35,27 +40,38 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
       body: Column(children: [
         // 搜索栏
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          padding: const EdgeInsets.fromLTRB(AppSpacing.screenH, AppSpacing.sm, AppSpacing.screenH, 0),
           child: TextField(
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               hintText: '搜索动作',
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon: Icon(Icons.search),
               isDense: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onChanged: (v) => setState(() => _search = v),
           ),
         ),
         // 部位筛选
         SizedBox(
-          height: 44,
+          height: 50,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH - 6, vertical: AppSpacing.sm),
             children: [
-              _filterChip('全部', _selectedPart == null, () => setState(() => _selectedPart = null)),
+              ChipTag(
+                label: '全部',
+                selected: _selectedPart == null,
+                onTap: () => setState(() => _selectedPart = null),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               ...BodyPart.values.where((b) => b != BodyPart.fullBody && b != BodyPart.cardio).map((b) =>
-                  _filterChip(b.displayName, _selectedPart == b, () => setState(() => _selectedPart = b))),
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: ChipTag(
+                      label: b.displayName,
+                      selected: _selectedPart == b,
+                      onTap: () => setState(() => _selectedPart = b),
+                    ),
+                  )),
             ],
           ),
         ),
@@ -64,50 +80,39 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
           child: ListView(
             children: grouped.entries.map((entry) {
               return ExpansionTile(
-                title: Text(entry.key.displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                title: Text(entry.key.displayName, style: theme.textTheme.titleSmall),
                 initiallyExpanded: true,
                 children: entry.value.map((ex) => ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.orange.shade50,
-                        child: const Icon(Icons.fitness_center, color: Colors.orange, size: 18),
+                      leading: Container(
+                        width: 38, height: 38,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          borderRadius: AppRadius.brSm,
+                        ),
+                        child: const Icon(Icons.fitness_center, color: AppColors.primary, size: 18),
                       ),
-                      title: Text(ex.name, style: const TextStyle(fontSize: 14)),
+                      title: Text(ex.name, style: theme.textTheme.bodyMedium),
                       subtitle: Text('${ex.equipment.displayName} · ${ex.difficulty.displayName}',
-                          style: const TextStyle(fontSize: 12)),
+                          style: theme.textTheme.bodySmall),
                       trailing: ex.isCompound
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                  color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4)),
-                              child: const Text('复合', style: TextStyle(fontSize: 10, color: Colors.blue)),
+                          ? ChipTag(
+                              label: '复合',
+                              color: AppColors.back,
+                              selected: true,
+                              textStyle: theme.textTheme.labelSmall!.copyWith(
+                                color: Colors.white,
+                                fontSize: 10,
+                              ),
                             )
                           : null,
                       onTap: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => ExerciseDetailScreen(exerciseId: ex.id))),
+                          MaterialPageRoute<void>(builder: (_) => ExerciseDetailScreen(exerciseId: ex.id))),
                     )).toList(),
               );
             }).toList(),
           ),
         ),
       ]),
-    );
-  }
-
-  Widget _filterChip(String text, bool selected, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: selected ? Colors.orange : Colors.grey[200],
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(text,
-              style: TextStyle(fontSize: 12, color: selected ? Colors.white : Colors.black87)),
-        ),
-      ),
     );
   }
 }

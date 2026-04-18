@@ -1,14 +1,5 @@
 /// 身体数据记录
 class BodyMetric {
-  final String id;
-  final DateTime date;
-  double? weightKg;
-  double? bodyFatPercentage;
-  double? chestCm;
-  double? waistCm;
-  double? hipsCm;
-  double? armCm;
-  double? thighCm;
 
   BodyMetric({
     required this.id,
@@ -22,18 +13,6 @@ class BodyMetric {
     this.thighCm,
   }) : date = date ?? DateTime.now();
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'date': date.toIso8601String(),
-        'weightKg': weightKg,
-        'bodyFatPercentage': bodyFatPercentage,
-        'chestCm': chestCm,
-        'waistCm': waistCm,
-        'hipsCm': hipsCm,
-        'armCm': armCm,
-        'thighCm': thighCm,
-      };
-
   factory BodyMetric.fromJson(Map<String, dynamic> json) => BodyMetric(
         id: json['id'] as String,
         date: DateTime.parse(json['date'] as String),
@@ -45,4 +24,25 @@ class BodyMetric {
         armCm: (json['armCm'] as num?)?.toDouble(),
         thighCm: (json['thighCm'] as num?)?.toDouble(),
       );
+  final String id;
+  final DateTime date;
+  double? weightKg;
+  double? bodyFatPercentage;
+  double? chestCm;
+  double? waistCm;
+  double? hipsCm;
+  double? armCm;
+  double? thighCm;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'date': date.toIso8601String(),
+        'weightKg': weightKg,
+        'bodyFatPercentage': bodyFatPercentage,
+        'chestCm': chestCm,
+        'waistCm': waistCm,
+        'hipsCm': hipsCm,
+        'armCm': armCm,
+        'thighCm': thighCm,
+      };
 }

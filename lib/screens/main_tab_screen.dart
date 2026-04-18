@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'home/home_screen.dart';
 import 'library/exercise_library_screen.dart';
 import 'nutrition/meal_plan_screen.dart';
-import 'music/music_hub_screen.dart';
+import 'more/more_screen.dart';
 import 'progress/progress_tab_screen.dart';
 
 class MainTabScreen extends StatefulWidget {
@@ -19,8 +19,8 @@ class _MainTabScreenState extends State<MainTabScreen> {
     HomeScreen(),
     ExerciseLibraryScreen(),
     MealPlanScreen(),
-    MusicHubScreen(),
     ProgressTabScreen(),
+    MoreScreen(),
   ];
 
   @override
@@ -30,13 +30,12 @@ class _MainTabScreenState extends State<MainTabScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (i) => setState(() => _currentIndex = i),
-        indicatorColor: Colors.orange.shade100,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '首页'),
           NavigationDestination(icon: Icon(Icons.menu_book_outlined), selectedIcon: Icon(Icons.menu_book), label: '动作库'),
           NavigationDestination(icon: Icon(Icons.restaurant_outlined), selectedIcon: Icon(Icons.restaurant), label: '饮食'),
-          NavigationDestination(icon: Icon(Icons.music_note_outlined), selectedIcon: Icon(Icons.music_note), label: '音乐'),
           NavigationDestination(icon: Icon(Icons.show_chart_outlined), selectedIcon: Icon(Icons.show_chart), label: '进度'),
+          NavigationDestination(icon: Icon(Icons.more_horiz_outlined), selectedIcon: Icon(Icons.more_horiz), label: '更多'),
         ],
       ),
     );

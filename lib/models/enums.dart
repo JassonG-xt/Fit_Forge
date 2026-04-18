@@ -252,39 +252,6 @@ enum WorkoutDayType {
   }
 }
 
-// ──────────── 音乐类型 ────────────
-enum MusicGenre {
-  hiphop,
-  electronic,
-  rock,
-  pop,
-  metal,
-  motivation,
-  lofi,
-  latin;
-
-  String get displayName {
-    switch (this) {
-      case MusicGenre.hiphop:
-        return '嘻哈';
-      case MusicGenre.electronic:
-        return '电子';
-      case MusicGenre.rock:
-        return '摇滚';
-      case MusicGenre.pop:
-        return '流行';
-      case MusicGenre.metal:
-        return '金属';
-      case MusicGenre.motivation:
-        return '激励';
-      case MusicGenre.lofi:
-        return 'Lo-Fi';
-      case MusicGenre.latin:
-        return '拉丁';
-    }
-  }
-}
-
 // ──────────── 成就类型 ────────────
 enum AchievementType {
   streak,

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/app_state.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/app_radius.dart';
+import '../../widgets/brand/progress_ring.dart';
 
 class AchievementsScreen extends StatelessWidget {
   const AchievementsScreen({super.key});
@@ -13,51 +17,57 @@ class AchievementsScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('成就')),
       body: GridView.count(
         crossAxisCount: 2,
-        padding: const EdgeInsets.all(16),
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
+        padding: const EdgeInsets.all(AppSpacing.screenH),
+        mainAxisSpacing: AppSpacing.cardGap,
+        crossAxisSpacing: AppSpacing.cardGap,
         childAspectRatio: 0.85,
-        children: achievements.map((a) => _card(a)).toList(),
+        children: achievements.map((a) => _card(context, a)).toList(),
       ),
     );
   }
 
-  Widget _card(Achievement achievement) {
+  Widget _card(BuildContext context, Achievement achievement) {
+    final theme = Theme.of(context);
+    final isUnlocked = achievement.isUnlocked;
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.bgElevated,
+        borderRadius: AppRadius.brLg,
+        border: Border.all(
+          color: isUnlocked ? AppColors.accent.withValues(alpha: 0.5) : AppColors.border,
+          width: isUnlocked ? 1.5 : 0.5,
+        ),
+        boxShadow: isUnlocked
+            ? [BoxShadow(color: AppColors.accent.withValues(alpha: 0.15), blurRadius: 16)]
+            : null,
       ),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 50, height: 50,
-          decoration: BoxDecoration(
-            color: achievement.isUnlocked ? Colors.orange : Colors.grey[300],
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: Text(achievement.icon, style: const TextStyle(fontSize: 24)),
+        ProgressRing(
+          progress: isUnlocked ? 1.0 : achievement.progressPercentage,
+          size: 54,
+          strokeWidth: 4,
+          gradientColors: isUnlocked
+              ? const [AppColors.accent, AppColors.accent]
+              : const [AppColors.primary, AppColors.primaryGlow],
+          child: Text(achievement.icon, style: const TextStyle(fontSize: 22)),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         Text(achievement.title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            style: theme.textTheme.labelMedium!.copyWith(fontWeight: FontWeight.w700),
             textAlign: TextAlign.center),
         Text(achievement.description,
-            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+            style: theme.textTheme.labelSmall,
             textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 6),
-        if (!achievement.isUnlocked) ...[
-          LinearProgressIndicator(
-            value: achievement.progressPercentage,
-            backgroundColor: Colors.grey[300],
-            color: Colors.orange,
-            borderRadius: BorderRadius.circular(4),
-          ),
+        const SizedBox(height: AppSpacing.xs),
+        if (isUnlocked)
+          Text('已解锁', style: theme.textTheme.labelSmall!.copyWith(
+            color: AppColors.accent, fontWeight: FontWeight.w700,
+          ))
+        else
           Text('${achievement.currentProgress}/${achievement.threshold}',
-              style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-        ] else
-          Text('已解锁', style: TextStyle(fontSize: 11, color: Colors.green[700], fontWeight: FontWeight.bold)),
+              style: theme.textTheme.labelSmall),
       ]),
     );
   }

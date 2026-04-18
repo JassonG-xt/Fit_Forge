@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'services/app_state.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/main_tab_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,32 +24,19 @@ class FitForgeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'FitForge',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: Colors.orange,
-        brightness: Brightness.light,
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-          scrolledUnderElevation: 1,
-        ),
-      ),
-      darkTheme: ThemeData(
-        colorSchemeSeed: Colors.orange,
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
-      themeMode: ThemeMode.system,
-      home: Consumer<AppState>(
-        builder: (context, state, _) {
-          return state.hasCompletedOnboarding
+    return Consumer<AppState>(
+      builder: (context, state, _) {
+        return MaterialApp(
+          title: 'FitForge',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: state.themeMode,
+          home: state.hasCompletedOnboarding
               ? const MainTabScreen()
-              : const OnboardingScreen();
-        },
-      ),
+              : const OnboardingScreen(),
+        );
+      },
     );
   }
 }

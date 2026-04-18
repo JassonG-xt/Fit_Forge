@@ -55,7 +55,8 @@ class NutritionEngine {
 
   // ══════════ 三餐分配 ══════════
 
-  static List<MealSuggestion> generateMealPlan(MacroTarget macros, FitnessGoal goal) {
+  static List<MealSuggestion> generateMealPlan(
+      MacroTarget macros, FitnessGoal goal, List<Food> foods) {
     final ratios = switch (goal) {
       FitnessGoal.buildMuscle => [
           ('早餐', 0.25), ('午餐', 0.30), ('训练后加餐', 0.15), ('晚餐', 0.25), ('睡前加餐', 0.05),
@@ -80,45 +81,71 @@ class NutritionEngine {
         proteinGrams: pro,
         carbGrams: carb,
         fatGrams: fat,
-        foods: _suggestFoods(name, goal),
+        foods: _suggestFoods(name, goal, foods),
       );
     }).toList();
   }
 
-  static List<FoodSuggestion> _suggestFoods(String mealName, FitnessGoal goal) {
+  static List<FoodSuggestion> _suggestFoods(
+      String mealName, FitnessGoal goal, List<Food> foods) {
+    final proteins = foods.where((f) => f.category == '蛋白质').toList();
+    final carbs = foods.where((f) => f.category == '碳水').toList();
+    final veggies = foods.where((f) => f.category == '蔬菜').toList();
+    final fruits = foods.where((f) => f.category == '水果').toList();
+
+    Food pick(List<Food> list, int index) => list[index % list.length];
+
+    List<Food> selected;
+
     if (mealName.contains('早餐')) {
-      return [
-        FoodSuggestion('鸡蛋', '2个(100g)', 156, 12.6, 1.1, 11.2),
-        FoodSuggestion('全麦面包', '2片(60g)', 150, 6.0, 26.0, 2.4),
-        FoodSuggestion('牛奶', '1杯(250ml)', 155, 8.0, 12.0, 8.0),
-        if (goal == FitnessGoal.buildMuscle)
-          FoodSuggestion('蛋白粉', '1勺(30g)', 120, 24.0, 3.0, 1.5),
+      // Protein + carb + optional fat
+      selected = [
+        pick(proteins, 1), // 鸡蛋
+        pick(carbs, 2),    // 全麦面包
+        pick(proteins, 7), // 牛奶
       ];
+      if (goal == FitnessGoal.buildMuscle && proteins.length > 9) {
+        selected.add(proteins[9]); // 蛋白粉
+      }
     } else if (mealName.contains('午餐')) {
-      return [
-        FoodSuggestion('鸡胸肉', '150g', 165, 31.0, 0.0, 3.6),
-        FoodSuggestion('糙米饭', '200g(熟)', 230, 5.0, 48.0, 1.8),
-        FoodSuggestion('西兰花', '150g', 51, 4.2, 7.2, 0.6),
+      // Protein + carb + veggie
+      selected = [
+        pick(proteins, 0), // 鸡胸肉
+        pick(carbs, 1),    // 糙米饭
+        pick(veggies, 0),  // 西兰花
       ];
     } else if (mealName.contains('晚餐')) {
-      return [
-        FoodSuggestion('三文鱼', '150g', 280, 25.0, 0.0, 18.0),
-        if (goal != FitnessGoal.loseFat)
-          FoodSuggestion('糙米饭', '150g(熟)', 173, 3.8, 36.0, 1.4),
-        FoodSuggestion('时蔬炒菜', '200g', 100, 4.0, 12.0, 4.0),
+      // Protein + carb (optional if cutting) + veggie
+      selected = [
+        pick(proteins, 4), // 三文鱼
       ];
+      if (goal != FitnessGoal.loseFat) {
+        selected.add(pick(carbs, 1)); // 糙米饭
+      }
+      selected.add(pick(veggies, 1)); // 菠菜
     } else {
-      // 加餐
-      return goal == FitnessGoal.buildMuscle
-          ? [
-              FoodSuggestion('蛋白粉奶昔', '1杯', 200, 30.0, 10.0, 3.0),
-              FoodSuggestion('香蕉', '1根', 107, 1.3, 27.0, 0.3),
-            ]
-          : [
-              FoodSuggestion('希腊酸奶', '100g', 87, 10.0, 3.3, 3.3),
-              FoodSuggestion('蓝莓', '100g', 57, 0.7, 14.5, 0.3),
-            ];
+      // 加餐: protein + fruit or nut
+      if (goal == FitnessGoal.buildMuscle) {
+        selected = [
+          proteins.length > 9 ? proteins[9] : pick(proteins, 0), // 蛋白粉
+          pick(fruits, 0), // 香蕉
+        ];
+      } else {
+        selected = [
+          pick(proteins, 8), // 希腊酸奶
+          pick(fruits, 2),   // 蓝莓
+        ];
+      }
     }
+
+    return selected.map((f) => FoodSuggestion(
+      f.name,
+      '${f.portionName}(${f.commonPortion}g)',
+      f.portionCalories,
+      f.portionProtein,
+      f.portionCarbs,
+      f.portionFat,
+    )).toList();
   }
 
   /// 每日建议饮水量 (ml)
@@ -132,10 +159,6 @@ class NutritionEngine {
 // ══════════ 数据类 ══════════
 
 class MacroTarget {
-  final int calories;
-  final int proteinGrams;
-  final int carbGrams;
-  final int fatGrams;
 
   const MacroTarget({
     required this.calories,
@@ -143,15 +166,13 @@ class MacroTarget {
     required this.carbGrams,
     required this.fatGrams,
   });
-}
-
-class MealSuggestion {
-  final String name;
   final int calories;
   final int proteinGrams;
   final int carbGrams;
   final int fatGrams;
-  final List<FoodSuggestion> foods;
+}
+
+class MealSuggestion {
 
   const MealSuggestion({
     required this.name,
@@ -161,15 +182,21 @@ class MealSuggestion {
     required this.fatGrams,
     required this.foods,
   });
+  final String name;
+  final int calories;
+  final int proteinGrams;
+  final int carbGrams;
+  final int fatGrams;
+  final List<FoodSuggestion> foods;
 }
 
 class FoodSuggestion {
+
+  const FoodSuggestion(this.name, this.portion, this.calories, this.protein, this.carbs, this.fat);
   final String name;
   final String portion;
   final int calories;
   final double protein;
   final double carbs;
   final double fat;
-
-  const FoodSuggestion(this.name, this.portion, this.calories, this.protein, this.carbs, this.fat);
 }

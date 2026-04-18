@@ -2,26 +2,6 @@ import 'enums.dart';
 
 /// 动作定义
 class Exercise {
-  final String id;
-  final String name;
-  final BodyPart bodyPart;
-  final List<String> muscleGroups;
-  final Equipment equipment;
-  /// 完成此动作所需的全部器械（含主器械）。
-  /// 计划引擎会检查用户是否拥有所有��需器械。
-  final List<Equipment> requiredEquipment;
-  final ExperienceLevel difficulty;
-  final bool isCompound;
-  final List<String> formCues;
-  final List<String> commonMistakes;
-  final String instructions;
-  final List<String> antiCheatTips;
-  final String lottieAnimationName;
-  final List<String> alternativeIds;
-  final int recommendedSetsMin;
-  final int recommendedSetsMax;
-  final int recommendedRepsMin;
-  final int recommendedRepsMax;
 
   const Exercise({
     required this.id,
@@ -43,10 +23,6 @@ class Exercise {
     this.recommendedRepsMin = 8,
     this.recommendedRepsMax = 12,
   });
-
-  /// 实际需要的所有器械。如果 requiredEquipment 为空，降级为 [equipment]。
-  List<Equipment> get allRequiredEquipment =>
-      requiredEquipment.isNotEmpty ? requiredEquipment : [equipment];
 
   factory Exercise.fromJson(Map<String, dynamic> json) {
     final mainEquipment = Equipment.values.byName(json['equipment'] as String);
@@ -74,4 +50,28 @@ class Exercise {
       recommendedRepsMax: json['recommendedRepsMax'] as int? ?? 12,
     );
   }
+  final String id;
+  final String name;
+  final BodyPart bodyPart;
+  final List<String> muscleGroups;
+  final Equipment equipment;
+  /// 完成此动作所需的全部器械（含主器械）。
+  /// 计划引擎会检查用户是否拥有所有��需器械。
+  final List<Equipment> requiredEquipment;
+  final ExperienceLevel difficulty;
+  final bool isCompound;
+  final List<String> formCues;
+  final List<String> commonMistakes;
+  final String instructions;
+  final List<String> antiCheatTips;
+  final String lottieAnimationName;
+  final List<String> alternativeIds;
+  final int recommendedSetsMin;
+  final int recommendedSetsMax;
+  final int recommendedRepsMin;
+  final int recommendedRepsMax;
+
+  /// 实际需要的所有器械。如果 requiredEquipment 为空，降级为 [equipment]。
+  List<Equipment> get allRequiredEquipment =>
+      requiredEquipment.isNotEmpty ? requiredEquipment : [equipment];
 }

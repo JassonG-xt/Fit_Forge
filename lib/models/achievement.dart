@@ -2,15 +2,6 @@ import 'enums.dart';
 
 /// 成就
 class Achievement {
-  final String id;
-  final AchievementType type;
-  final String title;
-  final String description;
-  final String icon;
-  final int threshold;
-  int currentProgress;
-  bool isUnlocked;
-  DateTime? unlockedAt;
 
   Achievement({
     required this.id,
@@ -23,6 +14,29 @@ class Achievement {
     this.isUnlocked = false,
     this.unlockedAt,
   });
+
+  factory Achievement.fromJson(Map<String, dynamic> json) => Achievement(
+        id: json['id'] as String,
+        type: AchievementType.values.byName(json['type'] as String),
+        title: json['title'] as String,
+        description: json['description'] as String,
+        icon: json['icon'] as String,
+        threshold: json['threshold'] as int,
+        currentProgress: json['currentProgress'] as int? ?? 0,
+        isUnlocked: json['isUnlocked'] as bool? ?? false,
+        unlockedAt: json['unlockedAt'] != null
+            ? DateTime.parse(json['unlockedAt'] as String)
+            : null,
+      );
+  final String id;
+  final AchievementType type;
+  final String title;
+  final String description;
+  final String icon;
+  final int threshold;
+  int currentProgress;
+  bool isUnlocked;
+  DateTime? unlockedAt;
 
   double get progressPercentage {
     if (threshold <= 0) return 0;
@@ -46,20 +60,6 @@ class Achievement {
         'isUnlocked': isUnlocked,
         'unlockedAt': unlockedAt?.toIso8601String(),
       };
-
-  factory Achievement.fromJson(Map<String, dynamic> json) => Achievement(
-        id: json['id'] as String,
-        type: AchievementType.values.byName(json['type'] as String),
-        title: json['title'] as String,
-        description: json['description'] as String,
-        icon: json['icon'] as String,
-        threshold: json['threshold'] as int,
-        currentProgress: json['currentProgress'] as int? ?? 0,
-        isUnlocked: json['isUnlocked'] as bool? ?? false,
-        unlockedAt: json['unlockedAt'] != null
-            ? DateTime.parse(json['unlockedAt'] as String)
-            : null,
-      );
 }
 
 /// 预置成就列表
@@ -73,4 +73,7 @@ List<Achievement> defaultAchievements() => [
       Achievement(id: 'a07', type: AchievementType.totalWorkouts, title: '健身战士', description: '累计完成 100 次训练', icon: '💪', threshold: 100),
       Achievement(id: 'a08', type: AchievementType.personalRecord, title: '突破自我', description: '第一次打破个人记录', icon: '⚡', threshold: 1),
       Achievement(id: 'a09', type: AchievementType.personalRecord, title: '记录粉碎机', description: '打破 10 次个人记录', icon: '⚡', threshold: 10),
+      Achievement(id: 'a10', type: AchievementType.bodyPartMastery, title: '胸肌专家', description: '完成 20 次含胸部训练', icon: '🎯', threshold: 20),
+      Achievement(id: 'a11', type: AchievementType.bodyPartMastery, title: '背部达人', description: '完成 20 次含背部训练', icon: '🎯', threshold: 20),
+      Achievement(id: 'a12', type: AchievementType.bodyPartMastery, title: '腿王', description: '完成 20 次含腿部训练', icon: '🦵', threshold: 20),
     ];

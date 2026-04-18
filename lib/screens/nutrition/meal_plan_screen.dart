@@ -2,115 +2,121 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/app_state.dart';
 import '../../engines/nutrition_engine.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../widgets/brand/hero_card.dart';
+import '../../widgets/cards/section_card.dart';
 
 class MealPlanScreen extends StatelessWidget {
   const MealPlanScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final state = context.watch<AppState>();
     final profile = state.profile;
 
     if (profile == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('饮食计划')),
-        body: const Center(child: Text('请先完成个人资料设置')),
+        body: Center(child: Text('请先完成个人资料设置', style: theme.textTheme.bodyMedium)),
       );
     }
 
     final macros = NutritionEngine.calculateMacros(profile);
-    final meals = NutritionEngine.generateMealPlan(macros, profile.goal);
+    final meals = NutritionEngine.generateMealPlan(macros, profile.goal, state.foods);
     final water = NutritionEngine.dailyWaterIntake(profile.weightKg, profile.weeklyFrequency);
 
     return Scaffold(
       appBar: AppBar(title: const Text('饮食计划')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.screenH),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // 宏量总览
-          Card(
-            elevation: 0, color: Colors.orange.shade50,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(children: [
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  const Text('每日营养目标', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text(profile.goal.displayName, style: const TextStyle(color: Colors.orange)),
-                ]),
-                const SizedBox(height: 12),
-                Text('${macros.calories}',
-                    style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.orange)),
-                Text('千卡/天', style: TextStyle(color: Colors.grey[600])),
-                const SizedBox(height: 12),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                  _macroColumn('蛋白质', '${macros.proteinGrams}g', Colors.red),
-                  _macroColumn('碳水', '${macros.carbGrams}g', Colors.blue),
-                  _macroColumn('脂肪', '${macros.fatGrams}g', Colors.amber),
-                ]),
+          HeroCard(
+            gradient: AppColors.heatGradient,
+            child: Column(children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text('每日营养目标',
+                    style: theme.textTheme.titleSmall!.copyWith(color: Colors.white)),
+                Text(profile.goal.displayName,
+                    style: theme.textTheme.labelMedium!.copyWith(color: Colors.white.withValues(alpha: 0.8))),
               ]),
-            ),
+              const SizedBox(height: AppSpacing.md),
+              Text('${macros.calories}',
+                  style: theme.textTheme.displayLarge!.copyWith(color: Colors.white, fontSize: 40)),
+              Text('千卡/天', style: theme.textTheme.bodySmall!.copyWith(color: Colors.white.withValues(alpha: 0.7))),
+              const SizedBox(height: AppSpacing.md),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                _macroColumn(theme, '蛋白质', '${macros.proteinGrams}g', AppColors.danger),
+                _macroColumn(theme, '碳水', '${macros.carbGrams}g', AppColors.back),
+                _macroColumn(theme, '脂肪', '${macros.fatGrams}g', AppColors.warning),
+              ]),
+            ]),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.cardGap),
 
           // 饮水
-          Card(
-            elevation: 0, color: Colors.cyan.shade50,
-            child: ListTile(
-              leading: const Icon(Icons.water_drop, color: Colors.cyan),
-              title: const Text('每日饮水建议', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              subtitle: Text('$water ml（约 ${water ~/ 250} 杯）'),
-            ),
+          SectionCard(
+            borderColor: AppColors.accent.withValues(alpha: 0.3),
+            child: Row(children: [
+              const Icon(Icons.water_drop, color: AppColors.accent),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('每日饮水建议', style: theme.textTheme.titleSmall),
+                  Text('$water ml（约 ${water ~/ 250} 杯）', style: theme.textTheme.bodySmall),
+                ]),
+              ),
+            ]),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
 
           // 三餐
-          const Text('每日饮食建议', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          ...meals.map(_mealCard),
+          Text('每日饮食建议', style: theme.textTheme.titleSmall),
+          const SizedBox(height: AppSpacing.sm),
+          ...meals.map((meal) => _mealCard(theme, meal)),
         ]),
       ),
     );
   }
 
-  Widget _macroColumn(String label, String value, Color color) {
+  Widget _macroColumn(ThemeData theme, String label, String value, Color color) {
     return Column(children: [
       Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-      const SizedBox(height: 4),
-      Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-      Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+      const SizedBox(height: AppSpacing.xs),
+      Text(value, style: theme.textTheme.labelLarge!.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+      Text(label, style: theme.textTheme.labelSmall!.copyWith(color: Colors.white.withValues(alpha: 0.7))),
     ]);
   }
 
-  Widget _mealCard(MealSuggestion meal) {
-    return Card(
-      elevation: 0, color: Colors.grey[100],
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
+  Widget _mealCard(ThemeData theme, MealSuggestion meal) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.cardGap),
+      child: SectionCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Text(meal.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(meal.name, style: theme.textTheme.titleSmall),
             const Spacer(),
-            Text('${meal.calories} kcal', style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w600)),
+            Text('${meal.calories} kcal',
+                style: theme.textTheme.labelLarge!.copyWith(color: AppColors.primary)),
           ]),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           Row(children: [
-            Text('蛋白 ${meal.proteinGrams}g', style: const TextStyle(fontSize: 11, color: Colors.red)),
-            const SizedBox(width: 8),
-            Text('碳水 ${meal.carbGrams}g', style: const TextStyle(fontSize: 11, color: Colors.blue)),
-            const SizedBox(width: 8),
-            Text('脂肪 ${meal.fatGrams}g', style: const TextStyle(fontSize: 11, color: Colors.amber)),
+            Text('蛋白 ${meal.proteinGrams}g', style: theme.textTheme.labelSmall!.copyWith(color: AppColors.danger)),
+            const SizedBox(width: AppSpacing.sm),
+            Text('碳水 ${meal.carbGrams}g', style: theme.textTheme.labelSmall!.copyWith(color: AppColors.back)),
+            const SizedBox(width: AppSpacing.sm),
+            Text('脂肪 ${meal.fatGrams}g', style: theme.textTheme.labelSmall!.copyWith(color: AppColors.warning)),
           ]),
-          const Divider(height: 16),
+          const Divider(height: AppSpacing.lg),
           ...meal.foods.map((f) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1),
+                padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(children: [
-                  Text(f.name, style: const TextStyle(fontSize: 13)),
-                  const Spacer(),
-                  Text(f.portion, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                  const SizedBox(width: 8),
-                  Text('${f.calories}kcal', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                  Expanded(child: Text(f.name, style: theme.textTheme.bodyMedium)),
+                  Text(f.portion, style: theme.textTheme.bodySmall),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text('${f.calories}kcal', style: theme.textTheme.labelSmall),
                 ]),
               )),
         ]),

@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../widgets/brand/progress_ring.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class RestTimerScreen extends StatefulWidget {
-  final int seconds;
   const RestTimerScreen({super.key, required this.seconds});
+  final int seconds;
 
   @override
   State<RestTimerScreen> createState() => _RestTimerScreenState();
@@ -54,50 +58,55 @@ class _RestTimerScreenState extends State<RestTimerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('组间休息')),
       body: Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          SizedBox(
-            width: 200,
-            height: 200,
-            child: Stack(alignment: Alignment.center, children: [
-              SizedBox(
-                width: 200, height: 200,
-                child: CircularProgressIndicator(
-                  value: _progress,
-                  strokeWidth: 10,
-                  backgroundColor: Colors.grey[200],
-                  color: Colors.orange,
+          // 大环形倒计时
+          ProgressRing(
+            progress: _progress,
+            size: 200,
+            strokeWidth: 10,
+            gradientColors: _remaining > 10
+                ? const [AppColors.primary, AppColors.primaryGlow]
+                : const [AppColors.danger, AppColors.warning],
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                _timeString,
+                style: GoogleFonts.manrope(
+                  fontSize: 52,
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
-              Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(_timeString,
-                    style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-                Text('秒', style: TextStyle(color: Colors.grey[600])),
-              ]),
+              Text('秒', style: theme.textTheme.bodySmall),
             ]),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: AppSpacing.xl),
+
+          // 控制按钮
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             OutlinedButton(
               onPressed: () => setState(() => _remaining = (_remaining - 15).clamp(0, 9999)),
               child: const Text('-15s'),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpacing.md),
             FloatingActionButton(
-              backgroundColor: Colors.orange,
+              backgroundColor: AppColors.primary,
               onPressed: _isRunning ? _pause : _start,
               child: Icon(_isRunning ? Icons.pause : Icons.play_arrow, color: Colors.white),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpacing.md),
             OutlinedButton(
               onPressed: () => setState(() => _remaining += 15),
               child: const Text('+15s'),
             ),
           ]),
-          const SizedBox(height: 16),
-          Wrap(spacing: 8, children: [30, 60, 90, 120].map((s) =>
+          const SizedBox(height: AppSpacing.md),
+
+          // 预设时长
+          Wrap(spacing: AppSpacing.sm, children: [30, 60, 90, 120].map((s) =>
             ActionChip(
               label: Text('${s}s'),
               onPressed: () {
@@ -107,10 +116,11 @@ class _RestTimerScreenState extends State<RestTimerScreen> {
               },
             ),
           ).toList()),
-          const SizedBox(height: 32),
+          const SizedBox(height: AppSpacing.xl),
+
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('跳过休息', style: TextStyle(color: Colors.grey)),
+            child: Text('跳过休息', style: theme.textTheme.bodySmall),
           ),
         ]),
       ),

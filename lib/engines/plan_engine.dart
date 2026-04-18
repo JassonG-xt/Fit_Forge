@@ -135,19 +135,26 @@ class PlanEngine {
     TrainingParams params,
   ) {
     final selected = <Exercise>[];
+    final pickedIds = <String>{}; // 去重：防止跨部位选到同一动作
     final levelIndex = ExperienceLevel.values.indexOf(level);
 
     for (final part in bodyParts) {
       final candidates = allExercises.where((e) =>
           e.bodyPart == part &&
+          !pickedIds.contains(e.id) &&
           e.allRequiredEquipment.every((req) => availableEquipment.contains(req)) &&
           ExperienceLevel.values.indexOf(e.difficulty) <= levelIndex).toList();
 
       if (candidates.isEmpty) {
-        // 兜底：同部位自重动作
+        // 兜底：同部位自重动作（也需去重）
         final fallback = allExercises.where((e) =>
-            e.bodyPart == part && e.equipment == Equipment.bodyweight).toList();
-        if (fallback.isNotEmpty) selected.add(fallback.first);
+            e.bodyPart == part &&
+            !pickedIds.contains(e.id) &&
+            e.equipment == Equipment.bodyweight).toList();
+        if (fallback.isNotEmpty) {
+          selected.add(fallback.first);
+          pickedIds.add(fallback.first.id);
+        }
         continue;
       }
 
@@ -157,7 +164,11 @@ class PlanEngine {
       }
 
       final count = bodyParts.length <= 3 ? 2 : 1;
-      selected.addAll(candidates.take(count));
+      for (final ex in candidates.take(count)) {
+        if (pickedIds.add(ex.id)) {
+          selected.add(ex);
+        }
+      }
       if (selected.length >= params.exercisesPerSession) break;
     }
 
@@ -196,11 +207,6 @@ class PlanEngine {
 
 /// 训练参数
 class TrainingParams {
-  final int sets;
-  final int reps;
-  final int restSeconds;
-  final int exercisesPerSession;
-  final bool compoundFirst;
 
   const TrainingParams({
     required this.sets,
@@ -209,4 +215,9 @@ class TrainingParams {
     required this.exercisesPerSession,
     required this.compoundFirst,
   });
+  final int sets;
+  final int reps;
+  final int restSeconds;
+  final int exercisesPerSession;
+  final bool compoundFirst;
 }

@@ -1,0 +1,164 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:fit_forge/services/app_state.dart';
+import 'package:fit_forge/models/models.dart';
+
+/// Creates an AppState ready for testing (no init() — that needs rootBundle).
+/// Achievements are seeded via resetAllData which calls defaultAchievements().
+Future<AppState> createTestState() async {
+  SharedPreferences.setMockInitialValues({});
+  final state = AppState();
+  // resetAllData seeds default achievements without needing rootBundle
+  await state.resetAllData();
+  return state;
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late AppState state;
+
+  setUp(() async {
+    state = await createTestState();
+  });
+
+  group('completedSessions', () {
+    test('returns only completed sessions sorted descending', () {
+      final s1 = WorkoutSession(
+        id: '1', dayType: WorkoutDayType.push, isCompleted: true,
+        date: DateTime(2026, 4, 10),
+      );
+      final s2 = WorkoutSession(
+        id: '2', dayType: WorkoutDayType.pull, isCompleted: false,
+        date: DateTime(2026, 4, 11),
+      );
+      final s3 = WorkoutSession(
+        id: '3', dayType: WorkoutDayType.legs, isCompleted: true,
+        date: DateTime(2026, 4, 12),
+      );
+      state.saveSession(s1);
+      state.saveSession(s2);
+      state.saveSession(s3);
+
+      final completed = state.completedSessions;
+      expect(completed.length, 2);
+      expect(completed.first.id, '3'); // most recent first
+      expect(completed.last.id, '1');
+    });
+  });
+
+  group('lastWeightForExercise', () {
+    test('returns 0 when no history', () {
+      expect(state.lastWeightForExercise('ex001'), 0);
+    });
+
+    test('returns weight from most recent session', () {
+      final s1 = WorkoutSession(
+        id: '1', dayType: WorkoutDayType.push, isCompleted: true,
+        date: DateTime(2026, 4, 10),
+        exerciseRecords: [
+          ExerciseRecord(
+            exerciseId: 'ex001', exerciseName: 'Bench',
+            sets: [SetRecord(setNumber: 1, weightKg: 60, reps: 10, isCompleted: true)],
+          ),
+        ],
+      );
+      final s2 = WorkoutSession(
+        id: '2', dayType: WorkoutDayType.push, isCompleted: true,
+        date: DateTime(2026, 4, 12),
+        exerciseRecords: [
+          ExerciseRecord(
+            exerciseId: 'ex001', exerciseName: 'Bench',
+            sets: [SetRecord(setNumber: 1, weightKg: 65, reps: 8, isCompleted: true)],
+          ),
+        ],
+      );
+      state.saveSession(s1);
+      state.saveSession(s2);
+
+      expect(state.lastWeightForExercise('ex001'), 65); // most recent
+    });
+  });
+
+  group('lastRepsForExercise', () {
+    test('returns reps from most recent session', () {
+      final s1 = WorkoutSession(
+        id: '1', dayType: WorkoutDayType.push, isCompleted: true,
+        date: DateTime(2026, 4, 10),
+        exerciseRecords: [
+          ExerciseRecord(
+            exerciseId: 'ex001', exerciseName: 'Bench',
+            sets: [SetRecord(setNumber: 1, weightKg: 60, reps: 12, isCompleted: true)],
+          ),
+        ],
+      );
+      state.saveSession(s1);
+      expect(state.lastRepsForExercise('ex001'), 12);
+    });
+  });
+
+  group('saveSession + achievements', () {
+    test('totalWorkouts achievement progresses', () {
+      state.saveProfile(UserProfile(goal: FitnessGoal.buildMuscle));
+
+      for (var i = 0; i < 3; i++) {
+        state.saveSession(WorkoutSession(
+          id: 'w$i', dayType: WorkoutDayType.push, isCompleted: true,
+          date: DateTime(2026, 4, 1 + i),
+        ));
+      }
+
+      final totalWorkoutsAch = state.achievements
+          .where((a) => a.type == AchievementType.totalWorkouts)
+          .first;
+      expect(totalWorkoutsAch.currentProgress, 3);
+    });
+  });
+
+  group('setThemeMode', () {
+    test('changes theme and notifies', () {
+      var notified = false;
+      state.addListener(() => notified = true);
+
+      state.setThemeMode(ThemeMode.light);
+      expect(state.themeMode, ThemeMode.light);
+      expect(notified, true);
+    });
+  });
+
+  group('resetAllData', () {
+    test('clears all state', () async {
+      state.saveProfile(UserProfile(goal: FitnessGoal.loseFat));
+      state.saveSession(WorkoutSession(
+        id: 'w1', dayType: WorkoutDayType.push, isCompleted: true,
+      ));
+
+      expect(state.hasCompletedOnboarding, true);
+      expect(state.sessions.isNotEmpty, true);
+
+      await state.resetAllData();
+
+      expect(state.hasCompletedOnboarding, false);
+      expect(state.sessions.isEmpty, true);
+      expect(state.profile, null);
+      expect(state.activePlan, null);
+      expect(state.themeMode, ThemeMode.dark);
+    });
+  });
+
+  group('restartOnboarding', () {
+    test('clears onboarding flag but keeps data', () {
+      state.saveProfile(UserProfile(goal: FitnessGoal.buildMuscle));
+      state.saveSession(WorkoutSession(
+        id: 'w1', dayType: WorkoutDayType.push, isCompleted: true,
+      ));
+
+      state.restartOnboarding();
+
+      expect(state.hasCompletedOnboarding, false);
+      expect(state.sessions.length, 1); // data preserved
+      expect(state.profile, isNotNull); // profile preserved
+    });
+  });
+}
