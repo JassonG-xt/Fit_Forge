@@ -10,6 +10,8 @@ build/
 .idea/
 *.iml
 .vscode/
+# Claude Code (local, per-user)
+.claude/
 
 # macOS
 .DS_Store
@@ -24,6 +26,12 @@ build/
 **/android/gradlew.bat
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.*
+
+# Android signing — DO NOT COMMIT KEYSTORES OR PASSWORDS
+**/android/key.properties
+*.jks
+*.keystore
+*.p12
 
 # iOS
 **/ios/**/*.mode1v3
