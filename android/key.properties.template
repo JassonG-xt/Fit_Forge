@@ -1,0 +1,48 @@
+# ══════════════════════════════════════════════════════════════════
+#  ANDROID KEYSTORE TEMPLATE
+# ══════════════════════════════════════════════════════════════════
+#
+# Copy this file to `android/key.properties` and fill in real values.
+# The real `key.properties` is gitignored — NEVER commit it.
+#
+# ─── 本地开发流程 / Local Setup ───
+#
+# 1. Generate a keystore (one-time, in project root):
+#
+#      keytool -genkey -v -keystore android/fitforge.jks \
+#        -keyalg RSA -keysize 2048 -validity 10000 -alias fitforge
+#
+# 2. Copy this template and fill it in:
+#
+#      cp android/key.properties.template android/key.properties
+#
+# 3. Edit the real file with the passwords you chose in step 1.
+#
+# 4. Build a signed release:
+#
+#      flutter build apk --release
+#
+# ─── CI 流程 / CI Workflow ───
+#
+# GitHub Secrets expected:
+#   ANDROID_KEYSTORE_BASE64   — base64-encoded `.jks` file
+#   ANDROID_STORE_PASSWORD    — keystore password
+#   ANDROID_KEY_PASSWORD      — key password (may equal store password)
+#   ANDROID_KEY_ALIAS         — alias name (default: fitforge)
+#
+# The release.yml workflow decodes the base64 keystore into a temp file
+# and writes a temporary key.properties with the secret values.
+#
+# ─── Fallback 行为 ───
+#
+# If `key.properties` is missing (e.g., when a fork builds locally),
+# `build.gradle.kts` falls back to the debug signing config so
+# `flutter build apk --release` still runs — it just won't produce a
+# Play Store–grade signed APK.
+#
+# ══════════════════════════════════════════════════════════════════
+
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=fitforge
+storeFile=fitforge.jks
