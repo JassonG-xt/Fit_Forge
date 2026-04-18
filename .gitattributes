@@ -1,0 +1,62 @@
+# ════════════════════════════════════════════════════════════════════
+#  FitForge line-ending & language policy
+# ════════════════════════════════════════════════════════════════════
+#  Fixes CRLF/LF drift between Windows editors and WSL/CI (Linux).
+#  Without this, a Windows save re-wraps every file with CRLF and git
+#  reports 60 "modified" files that are identical content-wise.
+# ════════════════════════════════════════════════════════════════════
+
+# Default: text files use LF in the repo, auto-convert on checkout.
+* text=auto eol=lf
+
+# ─── Platform-specific scripts ───
+*.sh  text eol=lf
+gradlew text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# ─── Binary assets (never normalize) ───
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.svg  text
+*.mp3  binary
+*.mp4  binary
+*.mov  binary
+*.webm binary
+*.ttf  binary
+*.otf  binary
+*.woff binary
+*.woff2 binary
+*.eot  binary
+*.zip  binary
+*.gz   binary
+*.7z   binary
+*.pdf  binary
+
+# ─── Android signing / build artifacts ───
+*.apk      binary
+*.aab      binary
+*.jks      binary
+*.keystore binary
+*.p12      binary
+
+# ─── Generated code (not counted in Linguist language stats) ───
+# Prepares ground for Sprint 2 freezed / json_serializable refactor.
+*.g.dart        linguist-generated
+*.freezed.dart  linguist-generated
+*.config.dart   linguist-generated
+
+# ─── Lock files and build configs that occasionally render noisy diffs ───
+pubspec.lock  linguist-generated=false
+
+# ─── Documentation explicitly text ───
+*.md   text
+*.yaml text
+*.yml  text
+*.json text
+*.arb  text diff
