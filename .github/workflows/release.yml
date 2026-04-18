@@ -1,0 +1,108 @@
+name: Release
+
+# Trigger: push a version tag (e.g., git tag v1.0.0 && git push origin v1.0.0)
+# Builds signed release APKs (3 ABIs) + AAB, uploads to GitHub Releases.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # required to create GitHub Release
+
+jobs:
+  build-android:
+    name: Build & release Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Materialize signing secrets into the files `build.gradle.kts` expects.
+      # If ANDROID_KEYSTORE_BASE64 is unset, builds fall back to debug signing.
+      - name: Decode keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        if: ${{ env.KEYSTORE_B64 != '' }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 --decode > android/fitforge.jks
+
+      - name: Write key.properties
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        if: ${{ env.KEYSTORE_B64 != '' }}
+        run: |
+          {
+            echo "storePassword=${STORE_PASSWORD}"
+            echo "keyPassword=${KEY_PASSWORD}"
+            echo "keyAlias=${KEY_ALIAS}"
+            echo "storeFile=fitforge.jks"
+          } > android/key.properties
+
+      - name: Analyze (fast-fail before expensive builds)
+        run: flutter analyze --fatal-infos --fatal-warnings
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build split APKs (arm64 / armv7 / x86_64)
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build App Bundle (AAB, for future Play Store)
+        run: flutter build appbundle --release
+
+      # Safe: VERSION comes from git tag, pulled via env to avoid shell injection.
+      # tag names are validated by git but may contain `$`, `\`, backticks — hence quoting.
+      - name: Rename artifacts
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+             "dist/fit_forge-${VERSION}-android-arm64-v8a.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+             "dist/fit_forge-${VERSION}-android-armv7.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk \
+             "dist/fit_forge-${VERSION}-android-x86_64.apk"
+          cp build/app/outputs/bundle/release/app-release.aab \
+             "dist/fit_forge-${VERSION}-android.aab"
+          ls -la dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          body: |
+            ## 📱 Download
+
+            Most Android phones (2020+): grab **arm64-v8a** (smallest, ~20 MB).
+            Older devices: **armv7**. Emulators / x86 hardware: **x86_64**.
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for full history.
+
+            ---
+
+            Auto-generated notes below:

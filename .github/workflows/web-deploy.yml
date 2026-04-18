@@ -1,0 +1,54 @@
+name: Deploy Web Demo
+
+# Triggers:
+#  - push to main (auto-deploy)
+#  - manual dispatch from Actions tab
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # push to gh-pages branch
+
+jobs:
+  build-and-deploy:
+    name: Build & deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # base-href must match the GitHub Pages URL path EXACTLY (case-sensitive).
+      # Repo is `Fit_Forge` so URL is JassonG-xt.github.io/Fit_Forge/
+      # For a custom domain (CNAME) change to "/"
+      - name: Build web
+        run: flutter build web --release --base-href "/Fit_Forge/"
+
+      - name: Configure SPA fallback
+        run: cp build/web/index.html build/web/404.html
+
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
+          publish_branch: gh-pages
+          keep_files: false
+          cname: ${{ vars.CUSTOM_DOMAIN }}
+          commit_message: 'deploy ${{ github.sha }}'
