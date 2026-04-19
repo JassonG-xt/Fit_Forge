@@ -56,17 +56,25 @@ class NutritionEngine {
   // ══════════ 三餐分配 ══════════
 
   static List<MealSuggestion> generateMealPlan(
-      MacroTarget macros, FitnessGoal goal, List<Food> foods) {
+    MacroTarget macros,
+    FitnessGoal goal,
+    List<Food> foods,
+  ) {
     final ratios = switch (goal) {
       FitnessGoal.buildMuscle => [
-          ('早餐', 0.25), ('午餐', 0.30), ('训练后加餐', 0.15), ('晚餐', 0.25), ('睡前加餐', 0.05),
-        ],
+        ('早餐', 0.25),
+        ('午餐', 0.30),
+        ('训练后加餐', 0.15),
+        ('晚餐', 0.25),
+        ('睡前加餐', 0.05),
+      ],
       FitnessGoal.loseFat => [
-          ('早餐', 0.30), ('午餐', 0.35), ('下午加餐', 0.10), ('晚餐', 0.25),
-        ],
-      _ => [
-          ('早餐', 0.25), ('午餐', 0.35), ('下午加餐', 0.10), ('晚餐', 0.30),
-        ],
+        ('早餐', 0.30),
+        ('午餐', 0.35),
+        ('下午加餐', 0.10),
+        ('晚餐', 0.25),
+      ],
+      _ => [('早餐', 0.25), ('午餐', 0.35), ('下午加餐', 0.10), ('晚餐', 0.30)],
     };
 
     return ratios.map((entry) {
@@ -87,13 +95,21 @@ class NutritionEngine {
   }
 
   static List<FoodSuggestion> _suggestFoods(
-      String mealName, FitnessGoal goal, List<Food> foods) {
+    String mealName,
+    FitnessGoal goal,
+    List<Food> foods,
+  ) {
+    if (foods.isEmpty) return const [];
+
     final proteins = foods.where((f) => f.category == '蛋白质').toList();
     final carbs = foods.where((f) => f.category == '碳水').toList();
     final veggies = foods.where((f) => f.category == '蔬菜').toList();
     final fruits = foods.where((f) => f.category == '水果').toList();
 
-    Food pick(List<Food> list, int index) => list[index % list.length];
+    Food pick(List<Food> list, int index) {
+      final source = list.isNotEmpty ? list : foods;
+      return source[index % source.length];
+    }
 
     List<Food> selected;
 
@@ -101,7 +117,7 @@ class NutritionEngine {
       // Protein + carb + optional fat
       selected = [
         pick(proteins, 1), // 鸡蛋
-        pick(carbs, 2),    // 全麦面包
+        pick(carbs, 2), // 全麦面包
         pick(proteins, 7), // 牛奶
       ];
       if (goal == FitnessGoal.buildMuscle && proteins.length > 9) {
@@ -111,8 +127,8 @@ class NutritionEngine {
       // Protein + carb + veggie
       selected = [
         pick(proteins, 0), // 鸡胸肉
-        pick(carbs, 1),    // 糙米饭
-        pick(veggies, 0),  // 西兰花
+        pick(carbs, 1), // 糙米饭
+        pick(veggies, 0), // 西兰花
       ];
     } else if (mealName.contains('晚餐')) {
       // Protein + carb (optional if cutting) + veggie
@@ -133,19 +149,23 @@ class NutritionEngine {
       } else {
         selected = [
           pick(proteins, 8), // 希腊酸奶
-          pick(fruits, 2),   // 蓝莓
+          pick(fruits, 2), // 蓝莓
         ];
       }
     }
 
-    return selected.map((f) => FoodSuggestion(
-      f.name,
-      '${f.portionName}(${f.commonPortion}g)',
-      f.portionCalories,
-      f.portionProtein,
-      f.portionCarbs,
-      f.portionFat,
-    )).toList();
+    return selected
+        .map(
+          (f) => FoodSuggestion(
+            f.name,
+            '${f.portionName}(${f.commonPortion}g)',
+            f.portionCalories,
+            f.portionProtein,
+            f.portionCarbs,
+            f.portionFat,
+          ),
+        )
+        .toList();
   }
 
   /// 每日建议饮水量 (ml)
@@ -159,7 +179,6 @@ class NutritionEngine {
 // ══════════ 数据类 ══════════
 
 class MacroTarget {
-
   const MacroTarget({
     required this.calories,
     required this.proteinGrams,
@@ -173,7 +192,6 @@ class MacroTarget {
 }
 
 class MealSuggestion {
-
   const MealSuggestion({
     required this.name,
     required this.calories,
@@ -191,8 +209,14 @@ class MealSuggestion {
 }
 
 class FoodSuggestion {
-
-  const FoodSuggestion(this.name, this.portion, this.calories, this.protein, this.carbs, this.fat);
+  const FoodSuggestion(
+    this.name,
+    this.portion,
+    this.calories,
+    this.protein,
+    this.carbs,
+    this.fat,
+  );
   final String name;
   final String portion;
   final int calories;
