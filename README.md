@@ -73,6 +73,8 @@ A Flutter cross-platform fitness app that auto-generates personalized workout an
 | 🌐 **Web** | [Open in browser](https://JassonG-xt.github.io/Fit_Forge/) — no install needed |
 | 🍎 **iOS** | Not yet — see [Roadmap](#-roadmap) |
 
+> **Web Demo 提示**：首次打开需 2–5 秒下载 Flutter engine，期间会看到品牌加载动画——这是 Flutter Web 的已知冷启动特性，后续访问会进浏览器缓存秒开。数据完全保存在浏览器 `localStorage`，清缓存会丢失；建议长期使用装 Android APK。
+
 ### 🛠 本地开发 / Local Development
 
 ```bash
