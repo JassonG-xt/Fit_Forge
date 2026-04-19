@@ -16,7 +16,6 @@ class Exercise {
     this.commonMistakes = const [],
     this.instructions = '',
     this.antiCheatTips = const [],
-    this.lottieAnimationName = '',
     this.alternativeIds = const [],
     this.recommendedSetsMin = 3,
     this.recommendedSetsMax = 4,
@@ -42,7 +41,6 @@ class Exercise {
       commonMistakes: List<String>.from(json['commonMistakes'] as List? ?? []),
       instructions: json['instructions'] as String? ?? '',
       antiCheatTips: List<String>.from(json['antiCheatTips'] as List? ?? []),
-      lottieAnimationName: json['lottieAnimationName'] as String? ?? '',
       alternativeIds: List<String>.from(json['alternativeIds'] as List? ?? []),
       recommendedSetsMin: json['recommendedSetsMin'] as int? ?? 3,
       recommendedSetsMax: json['recommendedSetsMax'] as int? ?? 4,
@@ -64,7 +62,6 @@ class Exercise {
   final List<String> commonMistakes;
   final String instructions;
   final List<String> antiCheatTips;
-  final String lottieAnimationName;
   final List<String> alternativeIds;
   final int recommendedSetsMin;
   final int recommendedSetsMax;

@@ -16,11 +16,6 @@
 -keep class io.flutter.plugins.** { *; }
 -dontwarn io.flutter.embedding.**
 
-# ─── Lottie (assets/animations/*.json) ───
-# Lottie uses reflection to resolve layer/shape classes.
--keep class com.airbnb.lottie.** { *; }
--dontwarn com.airbnb.lottie.**
-
 # ─── flutter_local_notifications (Sprint 3) ───
 # BroadcastReceiver is referenced by AndroidManifest and must survive R8.
 -keep class com.dexterous.flutterlocalnotifications.** { *; }

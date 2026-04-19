@@ -95,7 +95,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed setup.
 | State | [Provider](https://pub.dev/packages/provider) + `ChangeNotifier` |
 | Persistence | [SharedPreferences](https://pub.dev/packages/shared_preferences) (JSON) |
 | Charts | [fl_chart](https://pub.dev/packages/fl_chart) |
-| Animations | [Lottie](https://pub.dev/packages/lottie) |
 | Typography | [google_fonts](https://pub.dev/packages/google_fonts) |
 | Models | [freezed](https://pub.dev/packages/freezed) + [json_serializable](https://pub.dev/packages/json_serializable) (Sprint 2) |
 | i18n | `flutter_localizations` + [intl](https://pub.dev/packages/intl) |
@@ -208,7 +207,6 @@ flutter test integration_test/ -d chrome  # E2E on web
 ### 🚧 v1.1 (Planned)
 - Full UI i18n coverage (currently core screens only)
 - PDF report export (leverages existing `exportToJson`)
-- More lottie animations
 - Expanded Health Connect scope (heart rate, steps)
 
 ### 🔮 v2 (Future — requires macOS)
@@ -243,7 +241,6 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 - Exercise library seed data in [`assets/data/exercise_library.json`](assets/data/exercise_library.json)
 - Food database seed in [`assets/data/food_database.json`](assets/data/food_database.json)
-- Lottie animations from [lottiefiles.com](https://lottiefiles.com) (see individual file credits)
 - Design inspiration from modern fitness apps (Strong, Hevy, MacroFactor)
 
 ---
