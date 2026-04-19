@@ -1,0 +1,27 @@
+flutter_native_splash:
+  # ──── 基础配色 ────
+  # Splash 背景 = Scaffold bgBase（#0A0B0F），深色主门面一致
+  color: "#0A0B0F"
+  color_dark: "#0A0B0F"
+
+  # 居中 logo
+  image: "assets/icon/app_icon.png"
+  image_dark: "assets/icon/app_icon.png"
+
+  # ──── 平台开关 ────
+  android: true
+  ios: true
+  # Web 的 splash 通过 index.html 里的 loading spinner 实现（Sprint 1.9）
+  web: false
+
+  # ──── Android 12+（Material You splash API） ────
+  # 注意：Android 12 的 splash icon 会被强制裁成圆形 + 2/3 裁切，
+  # 只有中心约 66% 的主视觉会显示。我们的主图是辉光杠铃 + 火焰，
+  # 中心密度较高，适合这个裁切。
+  android_12:
+    color: "#0A0B0F"
+    image: "assets/icon/app_icon.png"
+    icon_background_color: "#0A0B0F"
+
+  # ──── iOS（v2 预留） ────
+  ios_content_mode: center
