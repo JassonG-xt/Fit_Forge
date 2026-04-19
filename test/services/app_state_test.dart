@@ -26,15 +26,21 @@ void main() {
   group('completedSessions', () {
     test('returns only completed sessions sorted descending', () {
       final s1 = WorkoutSession(
-        id: '1', dayType: WorkoutDayType.push, isCompleted: true,
+        id: '1',
+        dayType: WorkoutDayType.push,
+        isCompleted: true,
         date: DateTime(2026, 4, 10),
       );
       final s2 = WorkoutSession(
-        id: '2', dayType: WorkoutDayType.pull, isCompleted: false,
+        id: '2',
+        dayType: WorkoutDayType.pull,
+        isCompleted: false,
         date: DateTime(2026, 4, 11),
       );
       final s3 = WorkoutSession(
-        id: '3', dayType: WorkoutDayType.legs, isCompleted: true,
+        id: '3',
+        dayType: WorkoutDayType.legs,
+        isCompleted: true,
         date: DateTime(2026, 4, 12),
       );
       state.saveSession(s1);
@@ -55,22 +61,37 @@ void main() {
 
     test('returns weight from most recent session', () {
       final s1 = WorkoutSession(
-        id: '1', dayType: WorkoutDayType.push, isCompleted: true,
+        id: '1',
+        dayType: WorkoutDayType.push,
+        isCompleted: true,
         date: DateTime(2026, 4, 10),
         exerciseRecords: [
           ExerciseRecord(
-            exerciseId: 'ex001', exerciseName: 'Bench',
-            sets: [SetRecord(setNumber: 1, weightKg: 60, reps: 10, isCompleted: true)],
+            exerciseId: 'ex001',
+            exerciseName: 'Bench',
+            sets: [
+              SetRecord(
+                setNumber: 1,
+                weightKg: 60,
+                reps: 10,
+                isCompleted: true,
+              ),
+            ],
           ),
         ],
       );
       final s2 = WorkoutSession(
-        id: '2', dayType: WorkoutDayType.push, isCompleted: true,
+        id: '2',
+        dayType: WorkoutDayType.push,
+        isCompleted: true,
         date: DateTime(2026, 4, 12),
         exerciseRecords: [
           ExerciseRecord(
-            exerciseId: 'ex001', exerciseName: 'Bench',
-            sets: [SetRecord(setNumber: 1, weightKg: 65, reps: 8, isCompleted: true)],
+            exerciseId: 'ex001',
+            exerciseName: 'Bench',
+            sets: [
+              SetRecord(setNumber: 1, weightKg: 65, reps: 8, isCompleted: true),
+            ],
           ),
         ],
       );
@@ -84,12 +105,22 @@ void main() {
   group('lastRepsForExercise', () {
     test('returns reps from most recent session', () {
       final s1 = WorkoutSession(
-        id: '1', dayType: WorkoutDayType.push, isCompleted: true,
+        id: '1',
+        dayType: WorkoutDayType.push,
+        isCompleted: true,
         date: DateTime(2026, 4, 10),
         exerciseRecords: [
           ExerciseRecord(
-            exerciseId: 'ex001', exerciseName: 'Bench',
-            sets: [SetRecord(setNumber: 1, weightKg: 60, reps: 12, isCompleted: true)],
+            exerciseId: 'ex001',
+            exerciseName: 'Bench',
+            sets: [
+              SetRecord(
+                setNumber: 1,
+                weightKg: 60,
+                reps: 12,
+                isCompleted: true,
+              ),
+            ],
           ),
         ],
       );
@@ -103,10 +134,14 @@ void main() {
       state.saveProfile(UserProfile(goal: FitnessGoal.buildMuscle));
 
       for (var i = 0; i < 3; i++) {
-        state.saveSession(WorkoutSession(
-          id: 'w$i', dayType: WorkoutDayType.push, isCompleted: true,
-          date: DateTime(2026, 4, 1 + i),
-        ));
+        state.saveSession(
+          WorkoutSession(
+            id: 'w$i',
+            dayType: WorkoutDayType.push,
+            isCompleted: true,
+            date: DateTime(2026, 4, 1 + i),
+          ),
+        );
       }
 
       final totalWorkoutsAch = state.achievements
@@ -114,6 +149,26 @@ void main() {
           .first;
       expect(totalWorkoutsAch.currentProgress, 3);
     });
+  });
+
+  group('persistence debounce', () {
+    test(
+      'flushPendingPersistence writes debounced saveProfile immediately',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final state = AppState();
+
+        state.saveProfile(UserProfile(goal: FitnessGoal.loseFat));
+
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getString('profile'), isNull);
+
+        await state.flushPendingPersistence();
+
+        expect(prefs.getBool('hasCompletedOnboarding'), isTrue);
+        expect(prefs.getString('profile'), isNotNull);
+      },
+    );
   });
 
   group('setThemeMode', () {
@@ -130,9 +185,13 @@ void main() {
   group('resetAllData', () {
     test('clears all state', () async {
       state.saveProfile(UserProfile(goal: FitnessGoal.loseFat));
-      state.saveSession(WorkoutSession(
-        id: 'w1', dayType: WorkoutDayType.push, isCompleted: true,
-      ));
+      state.saveSession(
+        WorkoutSession(
+          id: 'w1',
+          dayType: WorkoutDayType.push,
+          isCompleted: true,
+        ),
+      );
 
       expect(state.hasCompletedOnboarding, true);
       expect(state.sessions.isNotEmpty, true);
@@ -150,9 +209,13 @@ void main() {
   group('restartOnboarding', () {
     test('clears onboarding flag but keeps data', () {
       state.saveProfile(UserProfile(goal: FitnessGoal.buildMuscle));
-      state.saveSession(WorkoutSession(
-        id: 'w1', dayType: WorkoutDayType.push, isCompleted: true,
-      ));
+      state.saveSession(
+        WorkoutSession(
+          id: 'w1',
+          dayType: WorkoutDayType.push,
+          isCompleted: true,
+        ),
+      );
 
       state.restartOnboarding();
 

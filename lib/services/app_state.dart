@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -39,10 +40,9 @@ class AppState extends ChangeNotifier {
 
   /// 已完成的训练记录（按日期降序），带缓存。
   List<WorkoutSession> get completedSessions {
-    return _completedSessionsCache ??= _sessions
-        .where((s) => s.isCompleted)
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    return _completedSessionsCache ??=
+        _sessions.where((s) => s.isCompleted).toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
   }
 
   int get streakDays {
@@ -60,7 +60,11 @@ class AppState extends ChangeNotifier {
     }
 
     for (final session in completedSessions) {
-      final sessionDay = DateTime(session.date.year, session.date.month, session.date.day);
+      final sessionDay = DateTime(
+        session.date.year,
+        session.date.month,
+        session.date.day,
+      );
       if (sessionDay == checkDate) {
         streak++;
         checkDate = checkDate.subtract(const Duration(days: 1));
@@ -74,7 +78,11 @@ class AppState extends ChangeNotifier {
   int get totalWorkoutsThisWeek {
     final now = DateTime.now();
     final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-    final start = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+    final start = DateTime(
+      startOfWeek.year,
+      startOfWeek.month,
+      startOfWeek.day,
+    );
     return completedSessions.where((s) => s.date.isAfter(start)).length;
   }
 
@@ -91,7 +99,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _loadExercises() async {
-    final jsonStr = await rootBundle.loadString('assets/data/exercise_library.json');
+    final jsonStr = await rootBundle.loadString(
+      'assets/data/exercise_library.json',
+    );
     final data = json.decode(jsonStr) as Map<String, dynamic>;
     _exercises = (data['exercises'] as List)
         .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
@@ -99,7 +109,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _loadFoods() async {
-    final jsonStr = await rootBundle.loadString('assets/data/food_database.json');
+    final jsonStr = await rootBundle.loadString(
+      'assets/data/food_database.json',
+    );
     final data = json.decode(jsonStr) as Map<String, dynamic>;
     _foods = (data['foods'] as List)
         .map((f) => Food.fromJson(f as Map<String, dynamic>))
@@ -170,7 +182,8 @@ class AppState extends ChangeNotifier {
     final weekday = DateTime.now().weekday; // 1=Monday
     try {
       final day = _activePlan!.days.firstWhere(
-          (d) => d.dayOfWeek == weekday && d.dayType != WorkoutDayType.rest);
+        (d) => d.dayOfWeek == weekday && d.dayType != WorkoutDayType.rest,
+      );
       return day;
     } catch (_) {
       return null;
@@ -205,7 +218,9 @@ class AppState extends ChangeNotifier {
     for (final session in completedSessions) {
       for (final record in session.exerciseRecords) {
         if (record.exerciseId == exerciseId) {
-          final completedSets = record.sets.where((s) => s.isCompleted && s.weightKg > 0);
+          final completedSets = record.sets.where(
+            (s) => s.isCompleted && s.weightKg > 0,
+          );
           if (completedSets.isNotEmpty) return completedSets.first.weightKg;
         }
       }
@@ -218,7 +233,9 @@ class AppState extends ChangeNotifier {
     for (final session in completedSessions) {
       for (final record in session.exerciseRecords) {
         if (record.exerciseId == exerciseId) {
-          final completedSets = record.sets.where((s) => s.isCompleted && s.reps > 0);
+          final completedSets = record.sets.where(
+            (s) => s.isCompleted && s.reps > 0,
+          );
           if (completedSets.isNotEmpty) return completedSets.first.reps;
         }
       }
@@ -279,8 +296,13 @@ class AppState extends ChangeNotifier {
           if (targetParts.isNotEmpty) {
             // Each completed session that hits a muscle group counts as 1 toward mastery.
             // Count all historical sessions for this body part group.
-            final bodyPartSessions = completedSessions.where((s) =>
-                s.dayType.targetBodyParts.any((bp) => targetParts.contains(bp))).length;
+            final bodyPartSessions = completedSessions
+                .where(
+                  (s) => s.dayType.targetBodyParts.any(
+                    (bp) => targetParts.contains(bp),
+                  ),
+                )
+                .length;
             a.currentProgress = bodyPartSessions;
             if (bodyPartSessions >= a.threshold) a.unlock();
           }
@@ -316,15 +338,45 @@ class AppState extends ChangeNotifier {
   static const _kThemeMode = 'themeMode';
   static const _kInProgressSession = 'inProgressSession';
 
-  bool _persistScheduled = false;
+  static const _persistDebounceDuration = Duration(milliseconds: 100);
+  Timer? _persistTimer;
+  Future<void>? _persistInFlight;
 
-  Future<void> _persist() async {
+  void _persist() {
     // Debounce: collapse rapid successive writes into one.
-    if (_persistScheduled) return;
-    _persistScheduled = true;
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-    _persistScheduled = false;
+    if (_persistTimer?.isActive ?? false) return;
+    _persistTimer = Timer(_persistDebounceDuration, () {
+      _persistTimer = null;
+      _startPersistWrite();
+    });
+  }
 
+  /// Immediately writes any pending debounced state to storage.
+  ///
+  /// Widget tests run inside a fake async zone and fail if a debounced timer is
+  /// still pending at teardown. This also gives production lifecycle hooks a
+  /// deterministic way to force persistence before shutdown.
+  Future<void> flushPendingPersistence() async {
+    final timer = _persistTimer;
+    if (timer != null) {
+      timer.cancel();
+      _persistTimer = null;
+      _startPersistWrite();
+    }
+    await _persistInFlight;
+  }
+
+  void _startPersistWrite() {
+    final write = _writePrefs();
+    _persistInFlight = write;
+    write.whenComplete(() {
+      if (identical(_persistInFlight, write)) {
+        _persistInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _writePrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (_profile != null) {
@@ -333,14 +385,30 @@ class AppState extends ChangeNotifier {
       if (_activePlan != null) {
         await prefs.setString(_kActivePlan, json.encode(_activePlan!.toJson()));
       }
-      await prefs.setString(_kSessions, json.encode(_sessions.map((s) => s.toJson()).toList()));
-      await prefs.setString(_kBodyMetrics, json.encode(_bodyMetrics.map((m) => m.toJson()).toList()));
-      await prefs.setString(_kAchievements, json.encode(_achievements.map((a) => a.toJson()).toList()));
+      await prefs.setString(
+        _kSessions,
+        json.encode(_sessions.map((s) => s.toJson()).toList()),
+      );
+      await prefs.setString(
+        _kBodyMetrics,
+        json.encode(_bodyMetrics.map((m) => m.toJson()).toList()),
+      );
+      await prefs.setString(
+        _kAchievements,
+        json.encode(_achievements.map((a) => a.toJson()).toList()),
+      );
       await prefs.setBool(_kOnboarding, _hasCompletedOnboarding);
       await prefs.setString(_kThemeMode, _themeMode.name);
     } catch (e) {
       debugPrint('FitForge: persist failed: $e');
     }
+  }
+
+  @override
+  void dispose() {
+    _persistTimer?.cancel();
+    _persistTimer = null;
+    super.dispose();
   }
 
   Future<void> _loadFromPrefs() async {
@@ -349,17 +417,23 @@ class AppState extends ChangeNotifier {
 
     final themeModeStr = prefs.getString(_kThemeMode);
     if (themeModeStr != null) {
-      _themeMode = ThemeMode.values.where((m) => m.name == themeModeStr).firstOrNull ?? ThemeMode.dark;
+      _themeMode =
+          ThemeMode.values.where((m) => m.name == themeModeStr).firstOrNull ??
+          ThemeMode.dark;
     }
 
     final profileStr = prefs.getString(_kProfile);
     if (profileStr != null) {
-      _profile = UserProfile.fromJson(json.decode(profileStr) as Map<String, dynamic>);
+      _profile = UserProfile.fromJson(
+        json.decode(profileStr) as Map<String, dynamic>,
+      );
     }
 
     final planStr = prefs.getString(_kActivePlan);
     if (planStr != null) {
-      _activePlan = WorkoutPlan.fromJson(json.decode(planStr) as Map<String, dynamic>);
+      _activePlan = WorkoutPlan.fromJson(
+        json.decode(planStr) as Map<String, dynamic>,
+      );
     }
 
     final sessionsStr = prefs.getString(_kSessions);
@@ -452,11 +526,15 @@ class AppState extends ChangeNotifier {
       if (data['version'] == null) return '无效的导出文件格式';
 
       if (data['profile'] != null) {
-        _profile = UserProfile.fromJson(data['profile'] as Map<String, dynamic>);
+        _profile = UserProfile.fromJson(
+          data['profile'] as Map<String, dynamic>,
+        );
         _hasCompletedOnboarding = true;
       }
       if (data['activePlan'] != null) {
-        _activePlan = WorkoutPlan.fromJson(data['activePlan'] as Map<String, dynamic>);
+        _activePlan = WorkoutPlan.fromJson(
+          data['activePlan'] as Map<String, dynamic>,
+        );
       }
       if (data['sessions'] != null) {
         _sessions = (data['sessions'] as List)
@@ -474,9 +552,11 @@ class AppState extends ChangeNotifier {
             .toList();
       }
       if (data['themeMode'] != null) {
-        _themeMode = ThemeMode.values
-            .where((m) => m.name == data['themeMode'])
-            .firstOrNull ?? ThemeMode.dark;
+        _themeMode =
+            ThemeMode.values
+                .where((m) => m.name == data['themeMode'])
+                .firstOrNull ??
+            ThemeMode.dark;
       }
 
       _invalidateCompletedCache();
