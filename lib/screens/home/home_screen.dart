@@ -352,6 +352,11 @@ class HomeScreen extends StatelessWidget {
       );
     }
 
+    // 有计划但今天是休息日：显示 rest day 卡片（不要误导成"没有计划"）
+    if (state.activePlan != null) {
+      return _restDayCard(context, state);
+    }
+
     // 没有计划
     return SectionCard(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl, horizontal: AppSpacing.lg),
@@ -496,5 +501,100 @@ class HomeScreen extends StatelessWidget {
         );
       }).toList(),
     );
+  }
+
+  // ════════════════════════════════════════════
+  //  休息日卡片
+  // ════════════════════════════════════════════
+  Widget _restDayCard(BuildContext context, AppState state) {
+    final theme = Theme.of(context);
+    final plan = state.activePlan!;
+    final nextDay = _findNextTrainingDay(plan);
+
+    return SectionCard(
+      borderColor: AppColors.textTertiary.withValues(alpha: 0.25),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.textTertiary.withValues(alpha: 0.18),
+                  borderRadius: AppRadius.brSm,
+                ),
+                child: const Icon(Icons.bedtime_outlined,
+                    color: AppColors.textSecondary, size: 20),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('今日休息', style: theme.textTheme.titleSmall),
+                    Text(
+                      '恢复是进步的一部分',
+                      style: theme.textTheme.bodySmall!
+                          .copyWith(color: AppColors.textTertiary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (nextDay != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            const Divider(),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '下一个训练日',
+              style: theme.textTheme.labelSmall!
+                  .copyWith(color: AppColors.textTertiary),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Text(
+                  _weekdayLabel(nextDay.dayOfWeek),
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  '· ${nextDay.dayType.displayName}',
+                  style: theme.textTheme.bodySmall!
+                      .copyWith(color: AppColors.primary),
+                ),
+                const Spacer(),
+                Text(
+                  '${nextDay.exercises.length} 个动作',
+                  style: theme.textTheme.labelSmall!
+                      .copyWith(color: AppColors.textTertiary),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  WorkoutDay? _findNextTrainingDay(WorkoutPlan plan) {
+    final today = DateTime.now().weekday; // 1..7 (Mon..Sun)
+    for (var offset = 1; offset <= 7; offset++) {
+      final target = ((today - 1 + offset) % 7) + 1;
+      for (final d in plan.days) {
+        if (d.dayOfWeek == target && d.dayType != WorkoutDayType.rest) {
+          return d;
+        }
+      }
+    }
+    return null;
+  }
+
+  String _weekdayLabel(int dayOfWeek) {
+    const labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    return labels[(dayOfWeek - 1).clamp(0, 6).toInt()];
   }
 }
