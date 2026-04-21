@@ -14,6 +14,7 @@ import '../../widgets/cards/section_card.dart';
 import '../../widgets/cards/chip_tag.dart';
 import 'exercise_detail_screen.dart';
 import 'rest_timer_screen.dart';
+import 'workout_session_controller.dart';
 
 class WorkoutSessionScreen extends StatefulWidget {
   const WorkoutSessionScreen({super.key, required this.workoutDay});
@@ -25,19 +26,15 @@ class WorkoutSessionScreen extends StatefulWidget {
 
 class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   static const _uuid = Uuid();
-  int _currentIndex = 0;
-  bool _showWarmup = true;
-  bool _isCompleted = false;
-  late DateTime _startTime;
-  final Map<String, ExerciseRecord> _records = {};
+  late WorkoutSessionController _controller;
 
-  List<PlannedExercise> get _exercises => widget.workoutDay.exercises;
-  PlannedExercise? get _current => _currentIndex < _exercises.length ? _exercises[_currentIndex] : null;
+  List<PlannedExercise> get _exercises => _controller.exercises;
+  PlannedExercise? get _current => _controller.current;
 
   @override
   void initState() {
     super.initState();
-    _startTime = DateTime.now();
+    _controller = WorkoutSessionController(workoutDay: widget.workoutDay);
     // If recovering, restore records from saved data
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tryRestoreFromRecovery();
@@ -53,60 +50,36 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     final savedDayType = data['dayType'] as String?;
     if (savedDayType != widget.workoutDay.dayType.name) return;
 
-    final savedRecords = data['records'] as Map<String, dynamic>?;
-    if (savedRecords == null) return;
-
     setState(() {
-      _currentIndex = (data['currentIndex'] as int?) ?? 0;
-      _showWarmup = false;
-      final savedStart = data['startTime'] as String?;
-      if (savedStart != null) _startTime = DateTime.parse(savedStart);
-
-      for (final entry in savedRecords.entries) {
-        final record = ExerciseRecord.fromJson(entry.value as Map<String, dynamic>);
-        _records[entry.key] = record;
-      }
+      _controller = WorkoutSessionController.fromRecovery(
+        workoutDay: widget.workoutDay,
+        data: data,
+      );
     });
 
-    state.dismissRecoverableSession();
+    state.markRecoverableSessionRestored();
   }
 
   ExerciseRecord _getRecord(PlannedExercise planned) {
-    return _records.putIfAbsent(planned.exerciseId, () {
-      final state = context.read<AppState>();
-      final lastWeight = state.lastWeightForExercise(planned.exerciseId);
-      final lastReps = state.lastRepsForExercise(planned.exerciseId);
-      final record = ExerciseRecord(exerciseId: planned.exerciseId, exerciseName: planned.exerciseName);
-      for (var i = 1; i <= planned.targetSets; i++) {
-        record.sets.add(SetRecord(
-          setNumber: i,
-          weightKg: lastWeight,
-          reps: lastReps > 0 ? lastReps : planned.targetReps,
-        ));
-      }
-      return record;
-    });
+    final state = context.read<AppState>();
+    return _controller.getRecord(
+      planned,
+      lastWeight: state.lastWeightForExercise(planned.exerciseId),
+      lastReps: state.lastRepsForExercise(planned.exerciseId),
+    );
   }
 
   void _nextExercise() {
-    if (_currentIndex < _exercises.length - 1) {
-      setState(() => _currentIndex++);
-    } else {
-      setState(() => _isCompleted = true);
-    }
+    setState(_controller.nextExercise);
+    _autoSave();
   }
 
-  int get _completedSetsCount =>
-      _records.values.expand((r) => r.sets).where((s) => s.isCompleted).length;
+  int get _completedSetsCount => _controller.completedSetsCount;
 
   void _autoSave() {
-    final data = {
-      'dayType': widget.workoutDay.dayType.name,
-      'currentIndex': _currentIndex,
-      'startTime': _startTime.toIso8601String(),
-      'records': _records.map((k, v) => MapEntry(k, v.toJson())),
-    };
-    context.read<AppState>().saveInProgressSession(data);
+    context.read<AppState>().saveInProgressSession(
+      _controller.toRecoveryJson(),
+    );
   }
 
   Future<void> _saveAndExit() async {
@@ -119,39 +92,51 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           title: const Text('未完成训练'),
           content: const Text('你还没有完成任何一组，确定要结束吗？\n本次训练将记录为未完成。'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('继续训练')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('结束')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('继续训练'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('结束'),
+            ),
           ],
         ),
       );
       if (confirm != true || !mounted) return;
     }
 
-    final duration = DateTime.now().difference(_startTime).inMinutes;
-    final session = WorkoutSession(
+    final session = _controller.buildSession(
       id: _uuid.v4(),
-      dayType: widget.workoutDay.dayType,
-      durationMinutes: duration,
-      isCompleted: hasCompletedSets,
-      exerciseRecords: _records.values.toList(),
+      endedAt: DateTime.now(),
     );
-    context.read<AppState>().saveSession(session);
-    await context.read<AppState>().clearInProgressSession();
+    final state = context.read<AppState>();
+    state.saveSession(session);
+    await state.clearInProgressSession();
     if (!mounted) return;
     Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.workoutDay.dayType.displayName),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: _saveAndExit,
+    return PopScope<void>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _saveAndExit();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.workoutDay.dayType.displayName),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: _saveAndExit,
+          ),
         ),
+        body: _controller.showWarmup
+            ? _warmupView()
+            : (_controller.isCompleted ? _completedView() : _exerciseView()),
       ),
-      body: _showWarmup ? _warmupView() : (_isCompleted ? _completedView() : _exerciseView()),
     );
   }
 
@@ -168,12 +153,17 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         children: [
           const SizedBox(height: AppSpacing.xl),
           Container(
-            width: 72, height: 72,
+            width: 72,
+            height: 72,
             decoration: const BoxDecoration(
               gradient: AppColors.coolGradient,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.self_improvement, color: Colors.white, size: 36),
+            child: const Icon(
+              Icons.self_improvement,
+              color: Colors.white,
+              size: 36,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           Text('热身建议', style: theme.textTheme.headlineMedium),
@@ -181,16 +171,28 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
 
           SectionCard(
             child: Column(
-              children: warmups.map((w) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle_outline, color: AppColors.accent, size: 20),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: Text(w, style: theme.textTheme.bodyMedium)),
-                  ],
-                ),
-              )).toList(),
+              children: warmups
+                  .map(
+                    (w) => Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.xs,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle_outline,
+                            color: AppColors.accent,
+                            size: 20,
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(w, style: theme.textTheme.bodyMedium),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
             ),
           ),
 
@@ -198,11 +200,17 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           GlowButton(
             label: '热身完成，开始训练',
             icon: Icons.play_arrow_rounded,
-            onPressed: () => setState(() => _showWarmup = false),
+            onPressed: () {
+              setState(_controller.startWorkout);
+              _autoSave();
+            },
           ),
           const SizedBox(height: AppSpacing.sm),
           TextButton(
-            onPressed: () => setState(() => _showWarmup = false),
+            onPressed: () {
+              setState(_controller.startWorkout);
+              _autoSave();
+            },
             child: Text('跳过热身', style: theme.textTheme.bodySmall),
           ),
         ],
@@ -218,7 +226,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     final planned = _current;
     if (planned == null) return const SizedBox();
     final record = _getRecord(planned);
-    final progress = (_currentIndex + 1) / _exercises.length;
+    final progress = (_controller.currentIndex + 1) / _exercises.length;
 
     return Column(
       children: [
@@ -245,7 +253,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '动作 ${_currentIndex + 1}/${_exercises.length}',
+                            '动作 ${_controller.currentIndex + 1}/${_exercises.length}',
                             style: theme.textTheme.labelSmall,
                           ),
                           const SizedBox(height: AppSpacing.xs),
@@ -260,8 +268,14 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.info_outline),
-                      onPressed: () => Navigator.push(context, MaterialPageRoute<void>(
-                          builder: (_) => ExerciseDetailScreen(exerciseId: planned.exerciseId))),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => ExerciseDetailScreen(
+                            exerciseId: planned.exerciseId,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -305,7 +319,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           ),
           decoration: const BoxDecoration(
             color: AppColors.bgSurface,
-            border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
+            border: Border(
+              top: BorderSide(color: AppColors.border, width: 0.5),
+            ),
           ),
           child: Row(
             children: [
@@ -313,15 +329,24 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.timer_outlined, size: 18),
                   label: const Text('休息计时'),
-                  onPressed: () => Navigator.push(context, MaterialPageRoute<void>(
-                      builder: (_) => RestTimerScreen(seconds: planned.restSeconds))),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          RestTimerScreen(seconds: planned.restSeconds),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.cardGap),
               Expanded(
                 child: GlowButton(
-                  label: _currentIndex < _exercises.length - 1 ? '下一动作' : '完成训练',
-                  icon: _currentIndex < _exercises.length - 1 ? Icons.skip_next : Icons.check,
+                  label: _controller.currentIndex < _exercises.length - 1
+                      ? '下一动作'
+                      : '完成训练',
+                  icon: _controller.currentIndex < _exercises.length - 1
+                      ? Icons.skip_next
+                      : Icons.check,
                   onPressed: _nextExercise,
                   fullWidth: true,
                 ),
@@ -363,7 +388,12 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         borderRadius: AppRadius.brLg,
         border: Border.all(color: borderColor, width: isCurrent ? 1.5 : 0.5),
         boxShadow: isCurrent
-            ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.1), blurRadius: 12)]
+            ? [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  blurRadius: 12,
+                ),
+              ]
             : null,
       ),
       child: Column(
@@ -379,13 +409,19 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               ),
               if (isCompleted) ...[
                 const SizedBox(width: AppSpacing.sm),
-                const Icon(Icons.check_circle, color: AppColors.accent, size: 18),
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.accent,
+                  size: 18,
+                ),
               ],
               const Spacer(),
               if (isCompleted)
                 Text(
                   '${s.weightKg}kg × ${s.reps}',
-                  style: theme.textTheme.labelLarge!.copyWith(color: AppColors.accent),
+                  style: theme.textTheme.labelLarge!.copyWith(
+                    color: AppColors.accent,
+                  ),
                 ),
             ],
           ),
@@ -401,7 +437,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                     label: '重量 (kg)',
                     value: s.weightKg,
                     step: 2.5,
-                    onChanged: (v) => setState(() => s.weightKg = v),
+                    onChanged: (v) {
+                      setState(() => s.weightKg = v);
+                      _autoSave();
+                    },
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
@@ -411,7 +450,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                     label: '次数',
                     value: s.reps.toDouble(),
                     step: 1,
-                    onChanged: (v) => setState(() => s.reps = v.round()),
+                    onChanged: (v) {
+                      setState(() => s.reps = v.round());
+                      _autoSave();
+                    },
                   ),
                 ),
               ],
@@ -484,15 +526,22 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
             children: [
               // 减
               InkWell(
-                borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(12),
+                ),
                 onTap: () {
                   final newVal = value - step;
                   if (newVal >= 0) onChanged(newVal);
                 },
                 child: Container(
-                  width: 40, height: 44,
+                  width: 40,
+                  height: 44,
                   alignment: Alignment.center,
-                  child: const Icon(Icons.remove, size: 18, color: AppColors.textSecondary),
+                  child: const Icon(
+                    Icons.remove,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
               // 值
@@ -507,12 +556,19 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               ),
               // 加
               InkWell(
-                borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
+                borderRadius: const BorderRadius.horizontal(
+                  right: Radius.circular(12),
+                ),
                 onTap: () => onChanged(value + step),
                 child: Container(
-                  width: 40, height: 44,
+                  width: 40,
+                  height: 44,
                   alignment: Alignment.center,
-                  child: const Icon(Icons.add, size: 18, color: AppColors.primary),
+                  child: const Icon(
+                    Icons.add,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
             ],
@@ -527,10 +583,15 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   // ════════════════════════════════════════════
   Widget _completedView() {
     final theme = Theme.of(context);
-    final duration = DateTime.now().difference(_startTime).inMinutes;
+    final duration = DateTime.now().difference(_controller.startTime).inMinutes;
     final totalSets = _completedSetsCount;
-    final totalVolume = _records.values.fold<double>(0, (sum, r) => sum + r.totalVolume);
-    final cooldowns = PlanEngine.cooldownRecommendation(widget.workoutDay.dayType);
+    final totalVolume = _controller.records.values.fold<double>(
+      0,
+      (sum, r) => sum + r.totalVolume,
+    );
+    final cooldowns = PlanEngine.cooldownRecommendation(
+      widget.workoutDay.dayType,
+    );
     final hasWork = totalSets > 0;
 
     return SingleChildScrollView(
@@ -556,7 +617,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           const SizedBox(height: AppSpacing.md),
           Text(
             hasWork ? '训练完成!' : '训练未完成',
-            style: theme.textTheme.headlineMedium!.copyWith(fontWeight: FontWeight.w800),
+            style: theme.textTheme.headlineMedium!.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
           ),
           if (!hasWork)
             Padding(
@@ -569,26 +632,39 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           // 数据汇总
           Row(
             children: [
-              Expanded(child: SectionCard(
-                child: StatNumber(value: '$duration', label: '分钟', fontSize: 24),
-              )),
-              const SizedBox(width: AppSpacing.cardGap),
-              Expanded(child: SectionCard(
-                child: StatNumber(
-                  value: '$totalSets', label: '组', fontSize: 24,
-                  valueColor: AppColors.accent,
+              Expanded(
+                child: SectionCard(
+                  child: StatNumber(
+                    value: '$duration',
+                    label: '分钟',
+                    fontSize: 24,
+                  ),
                 ),
-              )),
+              ),
               const SizedBox(width: AppSpacing.cardGap),
-              Expanded(child: SectionCard(
-                child: StatNumber(
-                  value: totalVolume >= 1000
-                      ? '${(totalVolume / 1000).toStringAsFixed(1)}t'
-                      : '${totalVolume.toStringAsFixed(0)}kg',
-                  label: '总容量', fontSize: 24,
-                  valueColor: AppColors.warning,
+              Expanded(
+                child: SectionCard(
+                  child: StatNumber(
+                    value: '$totalSets',
+                    label: '组',
+                    fontSize: 24,
+                    valueColor: AppColors.accent,
+                  ),
                 ),
-              )),
+              ),
+              const SizedBox(width: AppSpacing.cardGap),
+              Expanded(
+                child: SectionCard(
+                  child: StatNumber(
+                    value: totalVolume >= 1000
+                        ? '${(totalVolume / 1000).toStringAsFixed(1)}t'
+                        : '${totalVolume.toStringAsFixed(0)}kg',
+                    label: '总容量',
+                    fontSize: 24,
+                    valueColor: AppColors.warning,
+                  ),
+                ),
+              ),
             ],
           ),
 
@@ -601,16 +677,24 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               children: [
                 Text('拉伸建议', style: theme.textTheme.titleSmall),
                 const SizedBox(height: AppSpacing.sm),
-                ...cooldowns.map((c) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.spa_outlined, color: AppColors.accent, size: 16),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(child: Text(c, style: theme.textTheme.bodySmall)),
-                    ],
+                ...cooldowns.map(
+                  (c) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.spa_outlined,
+                          color: AppColors.accent,
+                          size: 16,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(c, style: theme.textTheme.bodySmall),
+                        ),
+                      ],
+                    ),
                   ),
-                )),
+                ),
               ],
             ),
           ),

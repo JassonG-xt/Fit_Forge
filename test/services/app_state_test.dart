@@ -149,6 +149,38 @@ void main() {
           .first;
       expect(totalWorkoutsAch.currentProgress, 3);
     });
+
+    test('body part mastery progresses only for its target body part', () {
+      state.saveProfile(UserProfile(goal: FitnessGoal.buildMuscle));
+
+      state.saveSession(
+        WorkoutSession(
+          id: 'legs-1',
+          dayType: WorkoutDayType.legs,
+          isCompleted: true,
+          date: DateTime(2026, 4, 20),
+        ),
+      );
+
+      final chestMastery = state.achievements.firstWhere((a) => a.id == 'a10');
+      final backMastery = state.achievements.firstWhere((a) => a.id == 'a11');
+      final legMastery = state.achievements.firstWhere((a) => a.id == 'a12');
+
+      expect(chestMastery.currentProgress, 0);
+      expect(backMastery.currentProgress, 0);
+      expect(legMastery.currentProgress, 1);
+    });
+  });
+
+  group('collection safety', () {
+    test('public list getters cannot mutate AppState directly', () {
+      expect(
+        () => state.sessions.add(
+          WorkoutSession(id: 'direct', dayType: WorkoutDayType.push),
+        ),
+        throwsUnsupportedError,
+      );
+    });
   });
 
   group('persistence debounce', () {

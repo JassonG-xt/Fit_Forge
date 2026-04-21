@@ -1,13 +1,19 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../engines/plan_engine.dart';
+import 'app_state_store.dart';
+import 'session_queries.dart';
 
 /// 全局应用状态（Provider ChangeNotifier）
 class AppState extends ChangeNotifier {
+  AppState({AppStateStore store = const AppStateStore()}) : _store = store;
+
+  final AppStateStore _store;
+
   // ──── 状态 ────
   UserProfile? _profile;
   List<Exercise> _exercises = [];
@@ -29,62 +35,29 @@ class AppState extends ChangeNotifier {
 
   // ──── Getters ────
   UserProfile? get profile => _profile;
-  List<Exercise> get exercises => _exercises;
-  List<Food> get foods => _foods;
+  List<Exercise> get exercises => UnmodifiableListView(_exercises);
+  List<Food> get foods => UnmodifiableListView(_foods);
   WorkoutPlan? get activePlan => _activePlan;
-  List<WorkoutSession> get sessions => _sessions;
-  List<BodyMetric> get bodyMetrics => _bodyMetrics;
-  List<Achievement> get achievements => _achievements;
+  List<WorkoutSession> get sessions => UnmodifiableListView(_sessions);
+  List<BodyMetric> get bodyMetrics => UnmodifiableListView(_bodyMetrics);
+  List<Achievement> get achievements => UnmodifiableListView(_achievements);
   bool get hasCompletedOnboarding => _hasCompletedOnboarding;
   ThemeMode get themeMode => _themeMode;
 
   /// 已完成的训练记录（按日期降序），带缓存。
   List<WorkoutSession> get completedSessions {
-    return _completedSessionsCache ??=
-        _sessions.where((s) => s.isCompleted).toList()
-          ..sort((a, b) => b.date.compareTo(a.date));
-  }
-
-  int get streakDays {
-    var streak = 0;
-    var checkDate = DateTime.now();
-    checkDate = DateTime(checkDate.year, checkDate.month, checkDate.day);
-
-    // If no workout today, check if yesterday had one — don't break streak at midnight.
-    final hasTodayWorkout = completedSessions.any((s) {
-      final d = DateTime(s.date.year, s.date.month, s.date.day);
-      return d == checkDate;
-    });
-    if (!hasTodayWorkout) {
-      checkDate = checkDate.subtract(const Duration(days: 1));
-    }
-
-    for (final session in completedSessions) {
-      final sessionDay = DateTime(
-        session.date.year,
-        session.date.month,
-        session.date.day,
-      );
-      if (sessionDay == checkDate) {
-        streak++;
-        checkDate = checkDate.subtract(const Duration(days: 1));
-      } else if (sessionDay.isBefore(checkDate)) {
-        break;
-      }
-    }
-    return streak;
-  }
-
-  int get totalWorkoutsThisWeek {
-    final now = DateTime.now();
-    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-    final start = DateTime(
-      startOfWeek.year,
-      startOfWeek.month,
-      startOfWeek.day,
+    return UnmodifiableListView(
+      _completedSessionsCache ??= SessionQueries.completedSessions(_sessions),
     );
-    return completedSessions.where((s) => s.date.isAfter(start)).length;
   }
+
+  int get streakDays => SessionQueries.streakDays(completedSessions);
+
+  int get totalWorkoutsThisWeek =>
+      SessionQueries.totalWorkoutsThisWeek(completedSessions);
+
+  List<double> weekActivityForCurrentWeek({DateTime? now}) =>
+      SessionQueries.weekActivity(completedSessions, now: now);
 
   // ──── 初始化 ────
   Future<void> init() async {
@@ -141,8 +114,7 @@ class AppState extends ChangeNotifier {
 
   // ──── 重置 ────
   Future<void> resetAllData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await _store.clear();
     _profile = null;
     _activePlan = null;
     _sessions = [];
@@ -198,7 +170,7 @@ class AppState extends ChangeNotifier {
     final prSnapshot = Map<String, double>.from(_prCache);
     _updatePrCache(session);
     final newPRCount = _countNewPRs(session, prSnapshot);
-    _updateAchievements(session, newPRCount);
+    _updateAchievements(newPRCount);
     notifyListeners();
     _persist();
   }
@@ -215,32 +187,12 @@ class AppState extends ChangeNotifier {
 
   /// 返回该动作上次使用的重量，若无历史返回 0。
   double lastWeightForExercise(String exerciseId) {
-    for (final session in completedSessions) {
-      for (final record in session.exerciseRecords) {
-        if (record.exerciseId == exerciseId) {
-          final completedSets = record.sets.where(
-            (s) => s.isCompleted && s.weightKg > 0,
-          );
-          if (completedSets.isNotEmpty) return completedSets.first.weightKg;
-        }
-      }
-    }
-    return 0;
+    return SessionQueries.lastWeightForExercise(completedSessions, exerciseId);
   }
 
   /// 返回该动作上次使用的次数，若无历史返回 0。
   int lastRepsForExercise(String exerciseId) {
-    for (final session in completedSessions) {
-      for (final record in session.exerciseRecords) {
-        if (record.exerciseId == exerciseId) {
-          final completedSets = record.sets.where(
-            (s) => s.isCompleted && s.reps > 0,
-          );
-          if (completedSets.isNotEmpty) return completedSets.first.reps;
-        }
-      }
-    }
-    return 0;
+    return SessionQueries.lastRepsForExercise(completedSessions, exerciseId);
   }
 
   // ──── 缓存管理 ────
@@ -271,7 +223,7 @@ class AppState extends ChangeNotifier {
   }
 
   // ──── 成就 ────
-  void _updateAchievements(WorkoutSession latestSession, int newPRCount) {
+  void _updateAchievements(int newPRCount) {
     final totalCompleted = completedSessions.length;
     final streak = streakDays;
 
@@ -290,22 +242,13 @@ class AppState extends ChangeNotifier {
             if (a.currentProgress >= a.threshold) a.unlock();
           }
         case AchievementType.bodyPartMastery:
-          // Count sessions targeting any body part in this achievement's tracked group.
-          // Use the session dayType -> targetBodyParts mapping.
-          final targetParts = latestSession.dayType.targetBodyParts;
-          if (targetParts.isNotEmpty) {
-            // Each completed session that hits a muscle group counts as 1 toward mastery.
-            // Count all historical sessions for this body part group.
-            final bodyPartSessions = completedSessions
-                .where(
-                  (s) => s.dayType.targetBodyParts.any(
-                    (bp) => targetParts.contains(bp),
-                  ),
-                )
-                .length;
-            a.currentProgress = bodyPartSessions;
-            if (bodyPartSessions >= a.threshold) a.unlock();
-          }
+          final targetBodyPart = a.targetBodyPart;
+          if (targetBodyPart == null) break;
+          final bodyPartSessions = completedSessions
+              .where((s) => s.dayType.targetBodyParts.contains(targetBodyPart))
+              .length;
+          a.currentProgress = bodyPartSessions;
+          if (bodyPartSessions >= a.threshold) a.unlock();
         case AchievementType.nutritionStreak:
           // Nutrition tracking not yet implemented; skip silently.
           break;
@@ -329,15 +272,6 @@ class AppState extends ChangeNotifier {
   }
 
   // ──── 持久化 ────
-  static const _kProfile = 'profile';
-  static const _kActivePlan = 'activePlan';
-  static const _kSessions = 'sessions';
-  static const _kBodyMetrics = 'bodyMetrics';
-  static const _kAchievements = 'achievements';
-  static const _kOnboarding = 'hasCompletedOnboarding';
-  static const _kThemeMode = 'themeMode';
-  static const _kInProgressSession = 'inProgressSession';
-
   static const _persistDebounceDuration = Duration(milliseconds: 100);
   Timer? _persistTimer;
   Future<void>? _persistInFlight;
@@ -378,27 +312,17 @@ class AppState extends ChangeNotifier {
 
   Future<void> _writePrefs() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      if (_profile != null) {
-        await prefs.setString(_kProfile, json.encode(_profile!.toJson()));
-      }
-      if (_activePlan != null) {
-        await prefs.setString(_kActivePlan, json.encode(_activePlan!.toJson()));
-      }
-      await prefs.setString(
-        _kSessions,
-        json.encode(_sessions.map((s) => s.toJson()).toList()),
+      await _store.write(
+        AppStateSnapshot(
+          profile: _profile,
+          activePlan: _activePlan,
+          sessions: _sessions,
+          bodyMetrics: _bodyMetrics,
+          achievements: _achievements,
+          hasCompletedOnboarding: _hasCompletedOnboarding,
+          themeMode: _themeMode,
+        ),
       );
-      await prefs.setString(
-        _kBodyMetrics,
-        json.encode(_bodyMetrics.map((m) => m.toJson()).toList()),
-      );
-      await prefs.setString(
-        _kAchievements,
-        json.encode(_achievements.map((a) => a.toJson()).toList()),
-      );
-      await prefs.setBool(_kOnboarding, _hasCompletedOnboarding);
-      await prefs.setString(_kThemeMode, _themeMode.name);
     } catch (e) {
       debugPrint('FitForge: persist failed: $e');
     }
@@ -412,50 +336,14 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _loadFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    _hasCompletedOnboarding = prefs.getBool(_kOnboarding) ?? false;
-
-    final themeModeStr = prefs.getString(_kThemeMode);
-    if (themeModeStr != null) {
-      _themeMode =
-          ThemeMode.values.where((m) => m.name == themeModeStr).firstOrNull ??
-          ThemeMode.dark;
-    }
-
-    final profileStr = prefs.getString(_kProfile);
-    if (profileStr != null) {
-      _profile = UserProfile.fromJson(
-        json.decode(profileStr) as Map<String, dynamic>,
-      );
-    }
-
-    final planStr = prefs.getString(_kActivePlan);
-    if (planStr != null) {
-      _activePlan = WorkoutPlan.fromJson(
-        json.decode(planStr) as Map<String, dynamic>,
-      );
-    }
-
-    final sessionsStr = prefs.getString(_kSessions);
-    if (sessionsStr != null) {
-      _sessions = (json.decode(sessionsStr) as List)
-          .map((s) => WorkoutSession.fromJson(s as Map<String, dynamic>))
-          .toList();
-    }
-
-    final metricsStr = prefs.getString(_kBodyMetrics);
-    if (metricsStr != null) {
-      _bodyMetrics = (json.decode(metricsStr) as List)
-          .map((m) => BodyMetric.fromJson(m as Map<String, dynamic>))
-          .toList();
-    }
-
-    final achievementsStr = prefs.getString(_kAchievements);
-    if (achievementsStr != null) {
-      _achievements = (json.decode(achievementsStr) as List)
-          .map((a) => Achievement.fromJson(a as Map<String, dynamic>))
-          .toList();
-    }
+    final snapshot = await _store.load();
+    _hasCompletedOnboarding = snapshot.hasCompletedOnboarding;
+    _themeMode = snapshot.themeMode;
+    _profile = snapshot.profile;
+    _activePlan = snapshot.activePlan;
+    _sessions = snapshot.sessions;
+    _bodyMetrics = snapshot.bodyMetrics;
+    _achievements = snapshot.achievements;
 
     notifyListeners();
   }
@@ -464,22 +352,17 @@ class AppState extends ChangeNotifier {
 
   /// 保存进行中的训练状态，用于崩溃恢复。
   Future<void> saveInProgressSession(Map<String, dynamic> sessionData) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kInProgressSession, json.encode(sessionData));
+    await _store.saveInProgressSession(sessionData);
   }
 
   /// 读取崩溃前保存的训练状态，返回 null 表示没有。
   Future<Map<String, dynamic>?> loadInProgressSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final str = prefs.getString(_kInProgressSession);
-    if (str == null) return null;
-    return json.decode(str) as Map<String, dynamic>;
+    return _store.loadInProgressSession();
   }
 
   /// 清除进行中的训练状态（训练完成或用户放弃恢复时调用）。
   Future<void> clearInProgressSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kInProgressSession);
+    await _store.clearInProgressSession();
   }
 
   /// 是否有未完成的训练可恢复。
@@ -499,6 +382,12 @@ class AppState extends ChangeNotifier {
     _hasRecoverableSession = false;
     _recoverableSessionData = null;
     clearInProgressSession();
+    notifyListeners();
+  }
+
+  void markRecoverableSessionRestored() {
+    _hasRecoverableSession = false;
+    _recoverableSessionData = null;
     notifyListeners();
   }
 

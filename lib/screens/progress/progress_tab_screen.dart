@@ -52,14 +52,32 @@ class ProgressTabScreen extends StatelessWidget {
             // ─── 导航入口 ───
             Text('详细数据', style: theme.textTheme.titleSmall),
             const SizedBox(height: AppSpacing.sm),
-            _navCard(context, '身体数据', '记录体重、体脂、围度变化',
-                Icons.show_chart, AppColors.arms, const BodyMetricsScreen()),
+            _navCard(
+              context,
+              '身体数据',
+              '记录体重、体脂、围度变化',
+              Icons.show_chart,
+              AppColors.arms,
+              const BodyMetricsScreen(),
+            ),
             const SizedBox(height: AppSpacing.cardGap),
-            _navCard(context, '训练日历', '查看训练历史和安排',
-                Icons.calendar_month, AppColors.back, const CalendarScreen()),
+            _navCard(
+              context,
+              '训练日历',
+              '查看训练历史和安排',
+              Icons.calendar_month,
+              AppColors.back,
+              const CalendarScreen(),
+            ),
             const SizedBox(height: AppSpacing.cardGap),
-            _navCard(context, '全部成就', '你的健身里程碑',
-                Icons.emoji_events, AppColors.primary, const AchievementsScreen()),
+            _navCard(
+              context,
+              '全部成就',
+              '你的健身里程碑',
+              Icons.emoji_events,
+              AppColors.primary,
+              const AchievementsScreen(),
+            ),
             const SizedBox(height: AppSpacing.xl),
           ],
         ),
@@ -72,11 +90,16 @@ class ProgressTabScreen extends StatelessWidget {
   // ════════════════════════════════════════════
   Widget _monthlySummary(BuildContext context, AppState state) {
     final now = DateTime.now();
-    final monthSessions = state.completedSessions.where((s) =>
-        s.date.year == now.year && s.date.month == now.month).toList();
+    final monthSessions = state.completedSessions
+        .where((s) => s.date.year == now.year && s.date.month == now.month)
+        .toList();
     final totalWorkouts = monthSessions.length;
     final totalVolume = monthSessions.fold<double>(
-        0, (sum, s) => sum + s.exerciseRecords.fold<double>(0, (rs, r) => rs + r.totalVolume));
+      0,
+      (sum, s) =>
+          sum +
+          s.exerciseRecords.fold<double>(0, (rs, r) => rs + r.totalVolume),
+    );
 
     return Row(
       children: [
@@ -123,10 +146,9 @@ class ProgressTabScreen extends StatelessWidget {
     final metrics = state.bodyMetrics;
     final points = metrics.reversed
         .where((m) => m.weightKg != null)
-        .map((m) => FlSpot(
-              m.date.millisecondsSinceEpoch.toDouble(),
-              m.weightKg!,
-            ))
+        .map(
+          (m) => FlSpot(m.date.millisecondsSinceEpoch.toDouble(), m.weightKg!),
+        )
         .toList();
 
     return SectionCard(
@@ -140,7 +162,9 @@ class ProgressTabScreen extends StatelessWidget {
               if (points.isNotEmpty)
                 Text(
                   '${points.last.y.toStringAsFixed(1)} kg',
-                  style: theme.textTheme.labelLarge!.copyWith(color: AppColors.primary),
+                  style: theme.textTheme.labelLarge!.copyWith(
+                    color: AppColors.primary,
+                  ),
                 ),
             ],
           ),
@@ -176,11 +200,11 @@ class ProgressTabScreen extends StatelessWidget {
                             show: true,
                             getDotPainter: (spot, percent, barData, index) =>
                                 FlDotCirclePainter(
-                              radius: 3,
-                              color: AppColors.primary,
-                              strokeColor: AppColors.bgElevated,
-                              strokeWidth: 2,
-                            ),
+                                  radius: 3,
+                                  color: AppColors.primary,
+                                  strokeColor: AppColors.bgElevated,
+                                  strokeWidth: 2,
+                                ),
                           ),
                           belowBarData: BarAreaData(
                             show: true,
@@ -209,15 +233,7 @@ class ProgressTabScreen extends StatelessWidget {
   Widget _weekHeatSection(BuildContext context, AppState state) {
     final theme = Theme.of(context);
     final now = DateTime.now();
-    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-    final weekActivity = List.generate(7, (i) {
-      final day = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day + i);
-      final hasWorkout = state.completedSessions.any((s) =>
-          s.date.year == day.year &&
-          s.date.month == day.month &&
-          s.date.day == day.day);
-      return hasWorkout ? 1.0 : 0.0;
-    });
+    final weekActivity = state.weekActivityForCurrentWeek(now: now);
 
     return SectionCard(
       child: Column(
@@ -249,7 +265,9 @@ class ProgressTabScreen extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         ...recent.map((s) {
           final totalVolume = s.exerciseRecords.fold<double>(
-              0, (sum, r) => sum + r.totalVolume);
+            0,
+            (sum, r) => sum + r.totalVolume,
+          );
           final exerciseNames = s.exerciseRecords
               .take(3)
               .map((r) => r.exerciseName)
@@ -264,16 +282,21 @@ class ProgressTabScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    Text(s.dayType.displayName, style: theme.textTheme.titleSmall),
-                    const Spacer(),
-                    Text(
-                      '${s.date.month}/${s.date.day}',
-                      style: theme.textTheme.labelSmall!.copyWith(
-                        color: AppColors.textTertiary,
+                  Row(
+                    children: [
+                      Text(
+                        s.dayType.displayName,
+                        style: theme.textTheme.titleSmall,
                       ),
-                    ),
-                  ]),
+                      const Spacer(),
+                      Text(
+                        '${s.date.month}/${s.date.day}',
+                        style: theme.textTheme.labelSmall!.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     '$exerciseNames$extra',
@@ -282,13 +305,23 @@ class ProgressTabScreen extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: AppSpacing.xs),
-                  Row(children: [
-                    Text('${s.durationMinutes} 分钟',
-                        style: theme.textTheme.labelSmall!.copyWith(color: AppColors.textTertiary)),
-                    const SizedBox(width: AppSpacing.md),
-                    Text('${totalVolume.toStringAsFixed(0)} kg',
-                        style: theme.textTheme.labelSmall!.copyWith(color: AppColors.accent)),
-                  ]),
+                  Row(
+                    children: [
+                      Text(
+                        '${s.durationMinutes} 分钟',
+                        style: theme.textTheme.labelSmall!.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Text(
+                        '${totalVolume.toStringAsFixed(0)} kg',
+                        style: theme.textTheme.labelSmall!.copyWith(
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -305,7 +338,8 @@ class ProgressTabScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final achievements = state.achievements;
     // 优先显示已解锁的，再显示进度最高的未解锁
-    final sorted = [...achievements]..sort((a, b) {
+    final sorted = [...achievements]
+      ..sort((a, b) {
         if (a.isUnlocked != b.isUnlocked) return a.isUnlocked ? -1 : 1;
         return b.progressPercentage.compareTo(a.progressPercentage);
       });
@@ -319,8 +353,12 @@ class ProgressTabScreen extends StatelessWidget {
             Text('成就', style: theme.textTheme.titleSmall),
             const Spacer(),
             TextButton(
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute<void>(builder: (_) => const AchievementsScreen())),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const AchievementsScreen(),
+                ),
+              ),
               child: const Text('查看全部'),
             ),
           ],
@@ -331,7 +369,8 @@ class ProgressTabScreen extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: highlights.length,
-            separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.cardGap),
+            separatorBuilder: (_, _) =>
+                const SizedBox(width: AppSpacing.cardGap),
             itemBuilder: (context, index) {
               final a = highlights[index];
               return Container(
@@ -347,10 +386,12 @@ class ProgressTabScreen extends StatelessWidget {
                     width: a.isUnlocked ? 1.5 : 0.5,
                   ),
                   boxShadow: a.isUnlocked
-                      ? [BoxShadow(
-                          color: AppColors.accent.withValues(alpha: 0.15),
-                          blurRadius: 12,
-                        )]
+                      ? [
+                          BoxShadow(
+                            color: AppColors.accent.withValues(alpha: 0.15),
+                            blurRadius: 12,
+                          ),
+                        ]
                       : null,
                 ),
                 child: Column(
@@ -369,9 +410,13 @@ class ProgressTabScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     if (a.isUnlocked)
-                      Text('已解锁',
-                          style: theme.textTheme.labelSmall!
-                              .copyWith(color: AppColors.accent, fontSize: 10))
+                      Text(
+                        '已解锁',
+                        style: theme.textTheme.labelSmall!.copyWith(
+                          color: AppColors.accent,
+                          fontSize: 10,
+                        ),
+                      )
                     else
                       SizedBox(
                         width: 50,
@@ -396,8 +441,14 @@ class ProgressTabScreen extends StatelessWidget {
   // ════════════════════════════════════════════
   //  导航卡片
   // ════════════════════════════════════════════
-  Widget _navCard(BuildContext ctx, String title, String subtitle,
-      IconData icon, Color color, Widget screen) {
+  Widget _navCard(
+    BuildContext ctx,
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+    Widget screen,
+  ) {
     final theme = Theme.of(ctx);
     return SectionCard(
       padding: EdgeInsets.zero,
@@ -407,7 +458,8 @@ class ProgressTabScreen extends StatelessWidget {
           vertical: AppSpacing.xs,
         ),
         leading: Container(
-          width: 40, height: 40,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.15),
             borderRadius: AppRadius.brMd,
@@ -416,8 +468,15 @@ class ProgressTabScreen extends StatelessWidget {
         ),
         title: Text(title, style: theme.textTheme.titleSmall),
         subtitle: Text(subtitle, style: theme.textTheme.bodySmall),
-        trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
-        onTap: () => Navigator.push(ctx, MaterialPageRoute<void>(builder: (_) => screen)),
+        trailing: const Icon(
+          Icons.chevron_right,
+          color: AppColors.textTertiary,
+          size: 20,
+        ),
+        onTap: () => Navigator.push(
+          ctx,
+          MaterialPageRoute<void>(builder: (_) => screen),
+        ),
       ),
     );
   }
