@@ -115,7 +115,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.bgSurface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: AppRadius.brMd,
           borderSide: const BorderSide(color: AppColors.border),
@@ -128,7 +131,9 @@ class AppTheme {
           borderRadius: AppRadius.brMd,
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
-        hintStyle: textTheme.bodyMedium!.copyWith(color: AppColors.textTertiary),
+        hintStyle: textTheme.bodyMedium!.copyWith(
+          color: AppColors.textTertiary,
+        ),
         labelStyle: textTheme.bodySmall,
       ),
 
@@ -270,7 +275,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.bgBaseLight,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: AppRadius.brMd,
           borderSide: const BorderSide(color: AppColors.borderLight),
@@ -283,7 +291,9 @@ class AppTheme {
           borderRadius: AppRadius.brMd,
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
-        hintStyle: textTheme.bodyMedium!.copyWith(color: AppColors.textTertiaryLight),
+        hintStyle: textTheme.bodyMedium!.copyWith(
+          color: AppColors.textTertiaryLight,
+        ),
       ),
 
       dividerTheme: const DividerThemeData(

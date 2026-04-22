@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,6 +38,24 @@ void main() {
 
     expect(loaded.profile!.goal, FitnessGoal.loseFat);
     expect(loaded.sessions.single.id, 's1');
+    expect(loaded.hasCompletedOnboarding, isTrue);
+    expect(loaded.themeMode, ThemeMode.light);
+  });
+
+  test('keeps valid persisted fields when one field is corrupt', () async {
+    final profile = UserProfile(goal: FitnessGoal.loseFat);
+    SharedPreferences.setMockInitialValues({
+      'profile': json.encode(profile.toJson()),
+      'sessions': 'not-json',
+      'hasCompletedOnboarding': true,
+      'themeMode': ThemeMode.light.name,
+    });
+
+    const store = AppStateStore();
+    final loaded = await store.load();
+
+    expect(loaded.profile!.goal, FitnessGoal.loseFat);
+    expect(loaded.sessions, isEmpty);
     expect(loaded.hasCompletedOnboarding, isTrue);
     expect(loaded.themeMode, ThemeMode.light);
   });

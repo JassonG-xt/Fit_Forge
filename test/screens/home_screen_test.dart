@@ -21,57 +21,45 @@ import '../helpers/app_state_fixtures.dart';
 // ════════════════════════════════════════════════════════════════════
 
 void main() {
-  testWidgets(
-    '已 onboard 但无计划 → 显示"还没有训练计划"空态',
-    (tester) async {
-      final appState = await primedAppStateWithProfile();
-      await pumpFitForgeApp(tester, appState);
+  testWidgets('已 onboard 但无计划 → 显示"还没有训练计划"空态', (tester) async {
+    final appState = await primedAppStateWithProfile();
+    await pumpFitForgeApp(tester, appState);
 
-      expect(find.byType(HomeScreen), findsOneWidget);
-      expect(find.text('还没有训练计划'), findsOneWidget);
-      expect(find.text('点击生成个性化训练计划'), findsOneWidget);
-      // 今日训练 CTA 不该出现（没有计划无法开始训练）
-      expect(find.text('开始训练'), findsNothing);
-    },
-  );
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.text('还没有训练计划'), findsOneWidget);
+    expect(find.text('点击生成个性化训练计划'), findsOneWidget);
+    // 今日训练 CTA 不该出现（没有计划无法开始训练）
+    expect(find.text('开始训练'), findsNothing);
+  });
 
-  testWidgets(
-    'AppBar 显示 FitForge 标题和 settings 入口',
-    (tester) async {
-      final appState = await primedAppStateWithProfile();
-      await pumpFitForgeApp(tester, appState);
+  testWidgets('AppBar 显示 FitForge 标题和 settings 入口', (tester) async {
+    final appState = await primedAppStateWithProfile();
+    await pumpFitForgeApp(tester, appState);
 
-      expect(find.text('FitForge'), findsOneWidget);
-      // IndexedStack 挂载了 MoreScreen，里面也有 Icons.settings_outlined 入口；
-      // 用 descendant 把查找范围收到 HomeScreen 子树，避免 2 个匹配。
-      expect(
-        find.descendant(
-          of: find.byType(HomeScreen),
-          matching: find.byIcon(Icons.settings_outlined),
-        ),
-        findsOneWidget,
-      );
-    },
-  );
+    expect(find.text('FitForge'), findsOneWidget);
+    // IndexedStack 挂载了 MoreScreen，里面也有 Icons.settings_outlined 入口；
+    // 用 descendant 把查找范围收到 HomeScreen 子树，避免 2 个匹配。
+    expect(
+      find.descendant(
+        of: find.byType(HomeScreen),
+        matching: find.byIcon(Icons.settings_outlined),
+      ),
+      findsOneWidget,
+    );
+  });
 
-  testWidgets(
-    '快捷入口区域存在',
-    (tester) async {
-      final appState = await primedAppStateWithProfile();
-      await pumpFitForgeApp(tester, appState);
+  testWidgets('快捷入口区域存在', (tester) async {
+    final appState = await primedAppStateWithProfile();
+    await pumpFitForgeApp(tester, appState);
 
-      expect(find.text('快捷入口'), findsOneWidget);
-    },
-  );
+    expect(find.text('快捷入口'), findsOneWidget);
+  });
 
-  testWidgets(
-    '首页默认不显示崩溃恢复提示（无未完成训练）',
-    (tester) async {
-      final appState = await primedAppStateWithProfile();
-      await pumpFitForgeApp(tester, appState);
+  testWidgets('首页默认不显示崩溃恢复提示（无未完成训练）', (tester) async {
+    final appState = await primedAppStateWithProfile();
+    await pumpFitForgeApp(tester, appState);
 
-      expect(appState.hasRecoverableSession, isFalse);
-      expect(find.byIcon(Icons.restore), findsNothing);
-    },
-  );
+    expect(appState.hasRecoverableSession, isFalse);
+    expect(find.byIcon(Icons.restore), findsNothing);
+  });
 }

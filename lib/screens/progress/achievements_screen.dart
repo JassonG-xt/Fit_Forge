@@ -36,39 +36,63 @@ class AchievementsScreen extends StatelessWidget {
         color: AppColors.bgElevated,
         borderRadius: AppRadius.brLg,
         border: Border.all(
-          color: isUnlocked ? AppColors.accent.withValues(alpha: 0.5) : AppColors.border,
+          color: isUnlocked
+              ? AppColors.accent.withValues(alpha: 0.5)
+              : AppColors.border,
           width: isUnlocked ? 1.5 : 0.5,
         ),
         boxShadow: isUnlocked
-            ? [BoxShadow(color: AppColors.accent.withValues(alpha: 0.15), blurRadius: 16)]
+            ? [
+                BoxShadow(
+                  color: AppColors.accent.withValues(alpha: 0.15),
+                  blurRadius: 16,
+                ),
+              ]
             : null,
       ),
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        ProgressRing(
-          progress: isUnlocked ? 1.0 : achievement.progressPercentage,
-          size: 54,
-          strokeWidth: 4,
-          gradientColors: isUnlocked
-              ? const [AppColors.accent, AppColors.accent]
-              : const [AppColors.primary, AppColors.primaryGlow],
-          child: Text(achievement.icon, style: const TextStyle(fontSize: 22)),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(achievement.title,
-            style: theme.textTheme.labelMedium!.copyWith(fontWeight: FontWeight.w700),
-            textAlign: TextAlign.center),
-        Text(achievement.description,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ProgressRing(
+            progress: isUnlocked ? 1.0 : achievement.progressPercentage,
+            size: 54,
+            strokeWidth: 4,
+            gradientColors: isUnlocked
+                ? const [AppColors.accent, AppColors.accent]
+                : const [AppColors.primary, AppColors.primaryGlow],
+            child: Text(achievement.icon, style: const TextStyle(fontSize: 22)),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            achievement.title,
+            style: theme.textTheme.labelMedium!.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            achievement.description,
             style: theme.textTheme.labelSmall,
-            textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: AppSpacing.xs),
-        if (isUnlocked)
-          Text('已解锁', style: theme.textTheme.labelSmall!.copyWith(
-            color: AppColors.accent, fontWeight: FontWeight.w700,
-          ))
-        else
-          Text('${achievement.currentProgress}/${achievement.threshold}',
-              style: theme.textTheme.labelSmall),
-      ]),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          if (isUnlocked)
+            Text(
+              '已解锁',
+              style: theme.textTheme.labelSmall!.copyWith(
+                color: AppColors.accent,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            Text(
+              '${achievement.currentProgress}/${achievement.threshold}',
+              style: theme.textTheme.labelSmall,
+            ),
+        ],
+      ),
     );
   }
 }

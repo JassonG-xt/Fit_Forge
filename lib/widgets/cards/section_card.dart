@@ -25,10 +25,11 @@ class SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = backgroundColor ??
+    final bg =
+        backgroundColor ??
         (isDark ? AppColors.bgElevated : AppColors.bgElevatedLight);
-    final border = borderColor ??
-        (isDark ? AppColors.border : AppColors.borderLight);
+    final border =
+        borderColor ?? (isDark ? AppColors.border : AppColors.borderLight);
 
     return Container(
       padding: padding ?? const EdgeInsets.all(AppSpacing.cardPad),

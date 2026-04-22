@@ -2,7 +2,6 @@ import 'enums.dart';
 
 /// 用户画像（不可变——修改请用 copyWith）
 class UserProfile {
-
   UserProfile({
     this.heightCm = 170,
     this.weightKg = 70,
@@ -13,22 +12,25 @@ class UserProfile {
     this.experienceLevel = ExperienceLevel.beginner,
     List<Equipment>? availableEquipment,
     DateTime? createdAt,
-  })  : availableEquipment = availableEquipment ?? [Equipment.bodyweight, Equipment.dumbbell],
-        createdAt = createdAt ?? DateTime.now();
+  }) : availableEquipment =
+           availableEquipment ?? [Equipment.bodyweight, Equipment.dumbbell],
+       createdAt = createdAt ?? DateTime.now();
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
-        heightCm: (json['heightCm'] as num).toDouble(),
-        weightKg: (json['weightKg'] as num).toDouble(),
-        age: json['age'] as int,
-        gender: Gender.values.byName(json['gender'] as String),
-        goal: FitnessGoal.values.byName(json['goal'] as String),
-        weeklyFrequency: json['weeklyFrequency'] as int,
-        experienceLevel: ExperienceLevel.values.byName(json['experienceLevel'] as String),
-        availableEquipment: (json['availableEquipment'] as List)
-            .map((e) => Equipment.values.byName(e as String))
-            .toList(),
-        createdAt: DateTime.parse(json['createdAt'] as String),
-      );
+    heightCm: (json['heightCm'] as num).toDouble(),
+    weightKg: (json['weightKg'] as num).toDouble(),
+    age: json['age'] as int,
+    gender: Gender.values.byName(json['gender'] as String),
+    goal: FitnessGoal.values.byName(json['goal'] as String),
+    weeklyFrequency: json['weeklyFrequency'] as int,
+    experienceLevel: ExperienceLevel.values.byName(
+      json['experienceLevel'] as String,
+    ),
+    availableEquipment: (json['availableEquipment'] as List)
+        .map((e) => Equipment.values.byName(e as String))
+        .toList(),
+    createdAt: DateTime.parse(json['createdAt'] as String),
+  );
   final double heightCm;
   final double weightKg;
   final int age;
@@ -87,14 +89,14 @@ class UserProfile {
   double get tdee => bmr * activityMultiplier;
 
   Map<String, dynamic> toJson() => {
-        'heightCm': heightCm,
-        'weightKg': weightKg,
-        'age': age,
-        'gender': gender.name,
-        'goal': goal.name,
-        'weeklyFrequency': weeklyFrequency,
-        'experienceLevel': experienceLevel.name,
-        'availableEquipment': availableEquipment.map((e) => e.name).toList(),
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'heightCm': heightCm,
+    'weightKg': weightKg,
+    'age': age,
+    'gender': gender.name,
+    'goal': goal.name,
+    'weeklyFrequency': weeklyFrequency,
+    'experienceLevel': experienceLevel.name,
+    'availableEquipment': availableEquipment.map((e) => e.name).toList(),
+    'createdAt': createdAt.toIso8601String(),
+  };
 }

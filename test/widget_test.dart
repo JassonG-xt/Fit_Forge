@@ -7,7 +7,9 @@ import 'package:fit_forge/main.dart';
 import 'package:fit_forge/services/app_state.dart';
 
 void main() {
-  testWidgets('App should build and show onboarding', (WidgetTester tester) async {
+  testWidgets('App should build and show onboarding', (
+    WidgetTester tester,
+  ) async {
     // Mock SharedPreferences — 必须在 getInstance() 之前调用，
     // 否则测试环境没有原生平台响应，会永远挂起。
     SharedPreferences.setMockInitialValues({});
@@ -16,10 +18,7 @@ void main() {
     await appState.init();
 
     await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: appState,
-        child: const FitForgeApp(),
-      ),
+      ChangeNotifierProvider.value(value: appState, child: const FitForgeApp()),
     );
 
     // 首次启动应显示 Onboarding（未完成过）

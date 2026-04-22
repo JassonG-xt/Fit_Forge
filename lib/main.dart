@@ -12,10 +12,7 @@ void main() async {
   await appState.init();
 
   runApp(
-    ChangeNotifierProvider.value(
-      value: appState,
-      child: const FitForgeApp(),
-    ),
+    ChangeNotifierProvider.value(value: appState, child: const FitForgeApp()),
   );
 }
 

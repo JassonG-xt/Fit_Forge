@@ -80,6 +80,21 @@ void main() {
       },
     );
 
+    test('ignores malformed recovery fields instead of throwing', () {
+      final restored = WorkoutSessionController.fromRecovery(
+        workoutDay: _twoExerciseDay(),
+        data: {
+          'currentIndex': 'bad-index',
+          'startTime': 'bad-date',
+          'records': {'ex001': 'bad-record'},
+        },
+      );
+
+      expect(restored.currentIndex, 0);
+      expect(restored.showWarmup, isFalse);
+      expect(restored.completedSetsCount, 0);
+    });
+
     test('builds a completed session from controller state', () {
       final controller = WorkoutSessionController(
         workoutDay: _twoExerciseDay(),

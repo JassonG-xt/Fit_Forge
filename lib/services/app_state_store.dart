@@ -66,19 +66,15 @@ class AppStateStore {
 
   Future<AppStateSnapshot> load() async {
     final prefs = await SharedPreferences.getInstance();
-    try {
-      return AppStateSnapshot(
-        hasCompletedOnboarding: prefs.getBool(_kOnboarding) ?? false,
-        themeMode: _loadThemeMode(prefs),
-        profile: _loadProfile(prefs),
-        activePlan: _loadPlan(prefs),
-        sessions: _loadSessions(prefs),
-        bodyMetrics: _loadBodyMetrics(prefs),
-        achievements: _loadAchievements(prefs),
-      );
-    } catch (_) {
-      return const AppStateSnapshot();
-    }
+    return AppStateSnapshot(
+      hasCompletedOnboarding: prefs.getBool(_kOnboarding) ?? false,
+      themeMode: _safeLoad(() => _loadThemeMode(prefs), ThemeMode.dark),
+      profile: _safeLoad<UserProfile?>(() => _loadProfile(prefs), null),
+      activePlan: _safeLoad<WorkoutPlan?>(() => _loadPlan(prefs), null),
+      sessions: _safeLoad(() => _loadSessions(prefs), const []),
+      bodyMetrics: _safeLoad(() => _loadBodyMetrics(prefs), const []),
+      achievements: _safeLoad(() => _loadAchievements(prefs), const []),
+    );
   }
 
   Future<void> saveInProgressSession(Map<String, dynamic> sessionData) async {
@@ -101,6 +97,14 @@ class AppStateStore {
   Future<void> clearInProgressSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kInProgressSession);
+  }
+
+  T _safeLoad<T>(T Function() load, T fallback) {
+    try {
+      return load();
+    } catch (_) {
+      return fallback;
+    }
   }
 
   Future<void> _setJsonOrRemove(

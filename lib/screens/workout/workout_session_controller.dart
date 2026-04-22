@@ -19,19 +19,36 @@ class WorkoutSessionController {
     required WorkoutDay workoutDay,
     required Map<String, dynamic> data,
   }) {
-    final savedRecords = data['records'] as Map<String, dynamic>? ?? {};
     final records = <String, ExerciseRecord>{};
-    for (final entry in savedRecords.entries) {
-      records[entry.key] = ExerciseRecord.fromJson(
-        entry.value as Map<String, dynamic>,
-      );
+    final savedRecords = data['records'];
+    if (savedRecords is Map<String, dynamic>) {
+      for (final entry in savedRecords.entries) {
+        final value = entry.value;
+        if (value is! Map<String, dynamic>) continue;
+        try {
+          records[entry.key] = ExerciseRecord.fromJson(value);
+        } catch (_) {
+          continue;
+        }
+      }
     }
 
-    final savedStart = data['startTime'] as String?;
+    final savedStart = data['startTime'];
+    final startTime = savedStart is String
+        ? DateTime.tryParse(savedStart)
+        : null;
+    final rawIndex = data['currentIndex'];
+    final maxIndex = workoutDay.exercises.isEmpty
+        ? 0
+        : workoutDay.exercises.length - 1;
+    final currentIndex = rawIndex is int
+        ? rawIndex.clamp(0, maxIndex).toInt()
+        : 0;
+
     return WorkoutSessionController(
       workoutDay: workoutDay,
-      startTime: savedStart != null ? DateTime.parse(savedStart) : null,
-      currentIndex: data['currentIndex'] as int? ?? 0,
+      startTime: startTime,
+      currentIndex: currentIndex,
       showWarmup: false,
       records: records,
     );

@@ -750,6 +750,24 @@
       "recommendedSetsMax": 4,
       "recommendedRepsMin": 10,
       "recommendedRepsMax": 15
+    },
+    {
+      "id": "ex040",
+      "name": "俯卧超人式",
+      "bodyPart": "back",
+      "muscleGroups": ["erectorSpinae", "latissimusDorsi"],
+      "equipment": "bodyweight",
+      "difficulty": "beginner",
+      "isCompound": false,
+      "formCues": ["俯卧在垫上", "同时抬起胸部和双腿", "顶峰停顿并夹紧背部"],
+      "commonMistakes": ["抬头过度", "用惯性甩起", "下放太快"],
+      "instructions": "俯卧，双臂向前伸直。收紧核心，同时抬起胸部、手臂和双腿，感受下背和背阔肌发力，停顿 1 秒后缓慢回到起始位置。",
+      "antiCheatTips": ["保持颈部中立", "缓慢抬起和下放", "不要用腰部猛甩借力"],
+      "alternativeIds": [],
+      "recommendedSetsMin": 3,
+      "recommendedSetsMax": 4,
+      "recommendedRepsMin": 10,
+      "recommendedRepsMax": 15
     }
   ]
 }

@@ -46,8 +46,7 @@ class ChipTag extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: textStyle ??
-            theme.textTheme.labelMedium!.copyWith(color: fg),
+        style: textStyle ?? theme.textTheme.labelMedium!.copyWith(color: fg),
       ),
     );
 

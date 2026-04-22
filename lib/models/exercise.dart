@@ -2,7 +2,6 @@ import 'enums.dart';
 
 /// 动作定义
 class Exercise {
-
   const Exercise({
     required this.id,
     required this.name,
@@ -31,7 +30,8 @@ class Exercise {
       bodyPart: BodyPart.values.byName(json['bodyPart'] as String),
       muscleGroups: List<String>.from(json['muscleGroups'] as List),
       equipment: mainEquipment,
-      requiredEquipment: (json['requiredEquipment'] as List?)
+      requiredEquipment:
+          (json['requiredEquipment'] as List?)
               ?.map((e) => Equipment.values.byName(e as String))
               .toList() ??
           [],
@@ -53,6 +53,7 @@ class Exercise {
   final BodyPart bodyPart;
   final List<String> muscleGroups;
   final Equipment equipment;
+
   /// 完成此动作所需的全部器械（含主器械）。
   /// 计划引擎会检查用户是否拥有所有��需器械。
   final List<Equipment> requiredEquipment;

@@ -2,7 +2,6 @@ import 'enums.dart';
 
 /// 单次训练记录
 class WorkoutSession {
-
   WorkoutSession({
     required this.id,
     DateTime? date,
@@ -10,19 +9,19 @@ class WorkoutSession {
     this.durationMinutes = 0,
     this.isCompleted = false,
     List<ExerciseRecord>? exerciseRecords,
-  })  : date = date ?? DateTime.now(),
-        exerciseRecords = exerciseRecords ?? [];
+  }) : date = date ?? DateTime.now(),
+       exerciseRecords = exerciseRecords ?? [];
 
   factory WorkoutSession.fromJson(Map<String, dynamic> json) => WorkoutSession(
-        id: json['id'] as String,
-        date: DateTime.parse(json['date'] as String),
-        dayType: WorkoutDayType.values.byName(json['dayType'] as String),
-        durationMinutes: json['durationMinutes'] as int,
-        isCompleted: json['isCompleted'] as bool,
-        exerciseRecords: (json['exerciseRecords'] as List)
-            .map((r) => ExerciseRecord.fromJson(r as Map<String, dynamic>))
-            .toList(),
-      );
+    id: json['id'] as String,
+    date: DateTime.parse(json['date'] as String),
+    dayType: WorkoutDayType.values.byName(json['dayType'] as String),
+    durationMinutes: json['durationMinutes'] as int,
+    isCompleted: json['isCompleted'] as bool,
+    exerciseRecords: (json['exerciseRecords'] as List)
+        .map((r) => ExerciseRecord.fromJson(r as Map<String, dynamic>))
+        .toList(),
+  );
   final String id;
   final DateTime date;
   final WorkoutDayType dayType;
@@ -31,18 +30,17 @@ class WorkoutSession {
   final List<ExerciseRecord> exerciseRecords;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'date': date.toIso8601String(),
-        'dayType': dayType.name,
-        'durationMinutes': durationMinutes,
-        'isCompleted': isCompleted,
-        'exerciseRecords': exerciseRecords.map((r) => r.toJson()).toList(),
-      };
+    'id': id,
+    'date': date.toIso8601String(),
+    'dayType': dayType.name,
+    'durationMinutes': durationMinutes,
+    'isCompleted': isCompleted,
+    'exerciseRecords': exerciseRecords.map((r) => r.toJson()).toList(),
+  };
 }
 
 /// 单个动作的训练记录
 class ExerciseRecord {
-
   ExerciseRecord({
     required this.exerciseId,
     required this.exerciseName,
@@ -50,29 +48,29 @@ class ExerciseRecord {
   }) : sets = sets ?? [];
 
   factory ExerciseRecord.fromJson(Map<String, dynamic> json) => ExerciseRecord(
-        exerciseId: json['exerciseId'] as String,
-        exerciseName: json['exerciseName'] as String,
-        sets: (json['sets'] as List)
-            .map((s) => SetRecord.fromJson(s as Map<String, dynamic>))
-            .toList(),
-      );
+    exerciseId: json['exerciseId'] as String,
+    exerciseName: json['exerciseName'] as String,
+    sets: (json['sets'] as List)
+        .map((s) => SetRecord.fromJson(s as Map<String, dynamic>))
+        .toList(),
+  );
   final String exerciseId;
   final String exerciseName;
   final List<SetRecord> sets;
 
-  double get totalVolume =>
-      sets.fold(0, (sum, s) => sum + s.weightKg * s.reps);
+  double get totalVolume => sets
+      .where((s) => s.isCompleted)
+      .fold(0, (sum, s) => sum + s.weightKg * s.reps);
 
   Map<String, dynamic> toJson() => {
-        'exerciseId': exerciseId,
-        'exerciseName': exerciseName,
-        'sets': sets.map((s) => s.toJson()).toList(),
-      };
+    'exerciseId': exerciseId,
+    'exerciseName': exerciseName,
+    'sets': sets.map((s) => s.toJson()).toList(),
+  };
 }
 
 /// 单组记录
 class SetRecord {
-
   SetRecord({
     required this.setNumber,
     this.weightKg = 0,
@@ -81,20 +79,20 @@ class SetRecord {
   });
 
   factory SetRecord.fromJson(Map<String, dynamic> json) => SetRecord(
-        setNumber: json['setNumber'] as int,
-        weightKg: (json['weightKg'] as num).toDouble(),
-        reps: json['reps'] as int,
-        isCompleted: json['isCompleted'] as bool,
-      );
+    setNumber: json['setNumber'] as int,
+    weightKg: (json['weightKg'] as num).toDouble(),
+    reps: json['reps'] as int,
+    isCompleted: json['isCompleted'] as bool,
+  );
   final int setNumber;
   double weightKg;
   int reps;
   bool isCompleted;
 
   Map<String, dynamic> toJson() => {
-        'setNumber': setNumber,
-        'weightKg': weightKg,
-        'reps': reps,
-        'isCompleted': isCompleted,
-      };
+    'setNumber': setNumber,
+    'weightKg': weightKg,
+    'reps': reps,
+    'isCompleted': isCompleted,
+  };
 }

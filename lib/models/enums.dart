@@ -239,11 +239,23 @@ enum WorkoutDayType {
       case WorkoutDayType.legs:
         return [BodyPart.legs, BodyPart.glutes, BodyPart.calves];
       case WorkoutDayType.upper:
-        return [BodyPart.chest, BodyPart.back, BodyPart.shoulders, BodyPart.biceps, BodyPart.triceps];
+        return [
+          BodyPart.chest,
+          BodyPart.back,
+          BodyPart.shoulders,
+          BodyPart.biceps,
+          BodyPart.triceps,
+        ];
       case WorkoutDayType.lower:
         return [BodyPart.legs, BodyPart.glutes, BodyPart.calves];
       case WorkoutDayType.fullBody:
-        return [BodyPart.chest, BodyPart.back, BodyPart.shoulders, BodyPart.legs, BodyPart.abs];
+        return [
+          BodyPart.chest,
+          BodyPart.back,
+          BodyPart.shoulders,
+          BodyPart.legs,
+          BodyPart.abs,
+        ];
       case WorkoutDayType.rest:
         return [];
       case WorkoutDayType.cardio:

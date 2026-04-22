@@ -8,7 +8,10 @@ class PlanEngine {
 
   // ══════════ 主入口 ══════════
 
-  static WorkoutPlan generatePlan(UserProfile profile, List<Exercise> exercises) {
+  static WorkoutPlan generatePlan(
+    UserProfile profile,
+    List<Exercise> exercises,
+  ) {
     final split = determineSplit(profile.weeklyFrequency);
     final schedule = buildWeeklySchedule(split, profile.weeklyFrequency);
     final params = trainingParameters(profile.goal, profile.experienceLevel);
@@ -29,15 +32,21 @@ class PlanEngine {
         params,
       );
 
-      final planned = selected.map((ex) => PlannedExercise(
-            exerciseId: ex.id,
-            exerciseName: ex.name,
-            targetSets: params.sets,
-            targetReps: params.reps,
-            restSeconds: params.restSeconds,
-          )).toList();
+      final planned = selected
+          .map(
+            (ex) => PlannedExercise(
+              exerciseId: ex.id,
+              exerciseName: ex.name,
+              targetSets: params.sets,
+              targetReps: params.reps,
+              restSeconds: params.restSeconds,
+            ),
+          )
+          .toList();
 
-      days.add(WorkoutDay(dayOfWeek: i + 1, dayType: dayType, exercises: planned));
+      days.add(
+        WorkoutDay(dayOfWeek: i + 1, dayType: dayType, exercises: planned),
+      );
     }
 
     return WorkoutPlan(
@@ -61,66 +70,148 @@ class PlanEngine {
 
   // ══════════ Step 2: 构建一周日程 ══════════
 
-  static List<WorkoutDayType> buildWeeklySchedule(TrainingSplit split, int frequency) {
+  static List<WorkoutDayType> buildWeeklySchedule(
+    TrainingSplit split,
+    int frequency,
+  ) {
     switch (split) {
       case TrainingSplit.fullBody:
         if (frequency == 1) {
-          return [WorkoutDayType.fullBody, ...List.filled(6, WorkoutDayType.rest)];
+          return [
+            WorkoutDayType.fullBody,
+            ...List.filled(6, WorkoutDayType.rest),
+          ];
         }
-        return [WorkoutDayType.fullBody, WorkoutDayType.rest, WorkoutDayType.rest,
-                WorkoutDayType.fullBody, WorkoutDayType.rest, WorkoutDayType.rest, WorkoutDayType.rest];
+        return [
+          WorkoutDayType.fullBody,
+          WorkoutDayType.rest,
+          WorkoutDayType.rest,
+          WorkoutDayType.fullBody,
+          WorkoutDayType.rest,
+          WorkoutDayType.rest,
+          WorkoutDayType.rest,
+        ];
 
       case TrainingSplit.upperLower:
-        return [WorkoutDayType.upper, WorkoutDayType.lower, WorkoutDayType.rest,
-                WorkoutDayType.upper, WorkoutDayType.lower, WorkoutDayType.rest, WorkoutDayType.rest];
+        return [
+          WorkoutDayType.upper,
+          WorkoutDayType.lower,
+          WorkoutDayType.rest,
+          WorkoutDayType.upper,
+          WorkoutDayType.lower,
+          WorkoutDayType.rest,
+          WorkoutDayType.rest,
+        ];
 
       case TrainingSplit.pushPullLegs:
         switch (frequency) {
           case 3:
-            return [WorkoutDayType.push, WorkoutDayType.rest, WorkoutDayType.pull,
-                    WorkoutDayType.rest, WorkoutDayType.legs, WorkoutDayType.rest, WorkoutDayType.rest];
+            return [
+              WorkoutDayType.push,
+              WorkoutDayType.rest,
+              WorkoutDayType.pull,
+              WorkoutDayType.rest,
+              WorkoutDayType.legs,
+              WorkoutDayType.rest,
+              WorkoutDayType.rest,
+            ];
           case 4:
-            return [WorkoutDayType.push, WorkoutDayType.pull, WorkoutDayType.rest,
-                    WorkoutDayType.legs, WorkoutDayType.push, WorkoutDayType.rest, WorkoutDayType.rest];
+            return [
+              WorkoutDayType.push,
+              WorkoutDayType.pull,
+              WorkoutDayType.rest,
+              WorkoutDayType.legs,
+              WorkoutDayType.push,
+              WorkoutDayType.rest,
+              WorkoutDayType.rest,
+            ];
           case 5:
-            return [WorkoutDayType.push, WorkoutDayType.pull, WorkoutDayType.legs,
-                    WorkoutDayType.rest, WorkoutDayType.push, WorkoutDayType.pull, WorkoutDayType.rest];
+            return [
+              WorkoutDayType.push,
+              WorkoutDayType.pull,
+              WorkoutDayType.legs,
+              WorkoutDayType.rest,
+              WorkoutDayType.push,
+              WorkoutDayType.pull,
+              WorkoutDayType.rest,
+            ];
           case 6:
-            return [WorkoutDayType.push, WorkoutDayType.pull, WorkoutDayType.legs,
-                    WorkoutDayType.push, WorkoutDayType.pull, WorkoutDayType.legs, WorkoutDayType.rest];
+            return [
+              WorkoutDayType.push,
+              WorkoutDayType.pull,
+              WorkoutDayType.legs,
+              WorkoutDayType.push,
+              WorkoutDayType.pull,
+              WorkoutDayType.legs,
+              WorkoutDayType.rest,
+            ];
           default:
-            return [WorkoutDayType.push, WorkoutDayType.rest, WorkoutDayType.pull,
-                    WorkoutDayType.rest, WorkoutDayType.legs, WorkoutDayType.rest, WorkoutDayType.rest];
+            return [
+              WorkoutDayType.push,
+              WorkoutDayType.rest,
+              WorkoutDayType.pull,
+              WorkoutDayType.rest,
+              WorkoutDayType.legs,
+              WorkoutDayType.rest,
+              WorkoutDayType.rest,
+            ];
         }
 
       case TrainingSplit.custom:
-        return [WorkoutDayType.fullBody, WorkoutDayType.rest, WorkoutDayType.fullBody,
-                WorkoutDayType.rest, WorkoutDayType.fullBody, WorkoutDayType.rest, WorkoutDayType.rest];
+        return [
+          WorkoutDayType.fullBody,
+          WorkoutDayType.rest,
+          WorkoutDayType.fullBody,
+          WorkoutDayType.rest,
+          WorkoutDayType.fullBody,
+          WorkoutDayType.rest,
+          WorkoutDayType.rest,
+        ];
     }
   }
 
   // ══════════ Step 3: 训练参数 ══════════
 
-  static TrainingParams trainingParameters(FitnessGoal goal, ExperienceLevel level) {
-    final baseEx = level == ExperienceLevel.beginner ? 4 : (level == ExperienceLevel.intermediate ? 5 : 6);
+  static TrainingParams trainingParameters(
+    FitnessGoal goal,
+    ExperienceLevel level,
+  ) {
+    final baseEx = level == ExperienceLevel.beginner
+        ? 4
+        : (level == ExperienceLevel.intermediate ? 5 : 6);
 
     switch (goal) {
       case FitnessGoal.buildMuscle:
         return TrainingParams(
           sets: level == ExperienceLevel.beginner ? 3 : 4,
-          reps: 10, restSeconds: 75, exercisesPerSession: baseEx, compoundFirst: true,
+          reps: 10,
+          restSeconds: 75,
+          exercisesPerSession: baseEx,
+          compoundFirst: true,
         );
       case FitnessGoal.loseFat:
         return TrainingParams(
-          sets: 3, reps: 14, restSeconds: 40, exercisesPerSession: baseEx + 1, compoundFirst: true,
+          sets: 3,
+          reps: 14,
+          restSeconds: 40,
+          exercisesPerSession: baseEx + 1,
+          compoundFirst: true,
         );
       case FitnessGoal.maintain:
         return TrainingParams(
-          sets: 3, reps: 10, restSeconds: 60, exercisesPerSession: baseEx, compoundFirst: true,
+          sets: 3,
+          reps: 10,
+          restSeconds: 60,
+          exercisesPerSession: baseEx,
+          compoundFirst: true,
         );
       case FitnessGoal.endurance:
         return TrainingParams(
-          sets: 3, reps: 18, restSeconds: 30, exercisesPerSession: baseEx + 1, compoundFirst: false,
+          sets: 3,
+          reps: 18,
+          restSeconds: 30,
+          exercisesPerSession: baseEx + 1,
+          compoundFirst: false,
         );
     }
   }
@@ -139,18 +230,28 @@ class PlanEngine {
     final levelIndex = ExperienceLevel.values.indexOf(level);
 
     for (final part in bodyParts) {
-      final candidates = allExercises.where((e) =>
-          e.bodyPart == part &&
-          !pickedIds.contains(e.id) &&
-          e.allRequiredEquipment.every((req) => availableEquipment.contains(req)) &&
-          ExperienceLevel.values.indexOf(e.difficulty) <= levelIndex).toList();
+      final candidates = allExercises
+          .where(
+            (e) =>
+                e.bodyPart == part &&
+                !pickedIds.contains(e.id) &&
+                e.allRequiredEquipment.every(
+                  (req) => availableEquipment.contains(req),
+                ) &&
+                ExperienceLevel.values.indexOf(e.difficulty) <= levelIndex,
+          )
+          .toList();
 
       if (candidates.isEmpty) {
         // 兜底：同部位自重动作（也需去重）
-        final fallback = allExercises.where((e) =>
-            e.bodyPart == part &&
-            !pickedIds.contains(e.id) &&
-            e.equipment == Equipment.bodyweight).toList();
+        final fallback = allExercises
+            .where(
+              (e) =>
+                  e.bodyPart == part &&
+                  !pickedIds.contains(e.id) &&
+                  e.equipment == Equipment.bodyweight,
+            )
+            .toList();
         if (fallback.isNotEmpty) {
           selected.add(fallback.first);
           pickedIds.add(fallback.first.id);
@@ -160,7 +261,9 @@ class PlanEngine {
 
       // 复合动作优先
       if (params.compoundFirst) {
-        candidates.sort((a, b) => (b.isCompound ? 1 : 0) - (a.isCompound ? 1 : 0));
+        candidates.sort(
+          (a, b) => (b.isCompound ? 1 : 0) - (a.isCompound ? 1 : 0),
+        );
       }
 
       final count = bodyParts.length <= 3 ? 2 : 1;
@@ -201,13 +304,15 @@ class PlanEngine {
       WorkoutDayType.lower: ['股四头肌拉伸 30 秒', '腘绳肌拉伸 30 秒'],
       WorkoutDayType.fullBody: ['全身拉伸序列各 20 秒'],
     };
-    return [...general, ...specific[dayType] ?? ['泡沫轴全身放松 5 分钟']];
+    return [
+      ...general,
+      ...specific[dayType] ?? ['泡沫轴全身放松 5 分钟'],
+    ];
   }
 }
 
 /// 训练参数
 class TrainingParams {
-
   const TrainingParams({
     required this.sets,
     required this.reps,

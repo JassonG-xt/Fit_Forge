@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -254,6 +256,70 @@ void main() {
       expect(state.hasCompletedOnboarding, false);
       expect(state.sessions.length, 1); // data preserved
       expect(state.profile, isNotNull); // profile preserved
+    });
+  });
+
+  group('importFromJson', () {
+    test('does not mutate state when import fails part way through', () {
+      state.saveProfile(UserProfile(goal: FitnessGoal.buildMuscle));
+
+      final error = state.importFromJson(
+        json.encode({
+          'version': 1,
+          'profile': UserProfile(goal: FitnessGoal.loseFat).toJson(),
+          'sessions': ['not a session object'],
+        }),
+      );
+
+      expect(error, isNotNull);
+      expect(state.profile!.goal, FitnessGoal.buildMuscle);
+    });
+
+    test('migrates old body-part achievements missing targetBodyPart', () {
+      final legacyAchievement = Achievement(
+        id: 'a10',
+        type: AchievementType.bodyPartMastery,
+        title: '胸肌专家',
+        description: '完成 20 次含胸部训练',
+        icon: 'target',
+        threshold: 20,
+      );
+
+      final error = state.importFromJson(
+        json.encode({
+          'version': 1,
+          'achievements': [legacyAchievement.toJson()],
+        }),
+      );
+
+      expect(error, isNull);
+      expect(
+        state.achievements.firstWhere((a) => a.id == 'a10').targetBodyPart,
+        BodyPart.chest,
+      );
+    });
+  });
+
+  group('profile and plan consistency', () {
+    test('clears active plan when plan-driving profile fields change', () {
+      final profile = UserProfile(
+        goal: FitnessGoal.buildMuscle,
+        weeklyFrequency: 3,
+      );
+      state.saveProfile(profile);
+      state.adoptPlan(
+        WorkoutPlan(
+          id: 'plan-1',
+          name: 'Initial',
+          goal: FitnessGoal.buildMuscle,
+          split: TrainingSplit.pushPullLegs,
+          weeklyFrequency: 3,
+        ),
+      );
+
+      state.updateProfile(profile.copyWith(goal: FitnessGoal.loseFat));
+
+      expect(state.activePlan, isNull);
     });
   });
 }

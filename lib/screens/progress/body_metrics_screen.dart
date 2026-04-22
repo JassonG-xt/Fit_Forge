@@ -26,108 +26,144 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('数据追踪'),
-        actions: [IconButton(icon: const Icon(Icons.add), onPressed: () => _showAddDialog(context))],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => _showAddDialog(context),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.screenH),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // 指标选择
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'weight', label: Text('体重')),
-              ButtonSegment(value: 'bodyFat', label: Text('体脂')),
-              ButtonSegment(value: 'waist', label: Text('腰围')),
-              ButtonSegment(value: 'arm', label: Text('臂围')),
-            ],
-            selected: {_metricType},
-            onSelectionChanged: (v) => setState(() => _metricType = v.first),
-          ),
-          const SizedBox(height: AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 指标选择
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'weight', label: Text('体重')),
+                ButtonSegment(value: 'bodyFat', label: Text('体脂')),
+                ButtonSegment(value: 'waist', label: Text('腰围')),
+                ButtonSegment(value: 'arm', label: Text('臂围')),
+              ],
+              selected: {_metricType},
+              onSelectionChanged: (v) => setState(() => _metricType = v.first),
+            ),
+            const SizedBox(height: AppSpacing.md),
 
-          // 图表
-          _chartSection(theme, metrics),
-          const SizedBox(height: AppSpacing.lg),
+            // 图表
+            _chartSection(theme, metrics),
+            const SizedBox(height: AppSpacing.lg),
 
-          // 历史列表
-          Text('记录历史', style: theme.textTheme.titleSmall),
-          const SizedBox(height: AppSpacing.sm),
-          ...metrics.take(20).map((m) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: SectionCard(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  child: Row(children: [
-                    Text('${m.date.month}/${m.date.day}', style: theme.textTheme.bodySmall),
-                    const Spacer(),
-                    if (m.weightKg != null) _badge(theme, '${m.weightKg}kg'),
-                    if (m.bodyFatPercentage != null) _badge(theme, '${m.bodyFatPercentage}%'),
-                  ]),
+            // 历史列表
+            Text('记录历史', style: theme.textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.sm),
+            ...metrics
+                .take(20)
+                .map(
+                  (m) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: SectionCard(
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${m.date.month}/${m.date.day}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          const Spacer(),
+                          if (m.weightKg != null)
+                            _badge(theme, '${m.weightKg}kg'),
+                          if (m.bodyFatPercentage != null)
+                            _badge(theme, '${m.bodyFatPercentage}%'),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              )),
-        ]),
+          ],
+        ),
       ),
     );
   }
 
   Widget _chartSection(ThemeData theme, List<BodyMetric> metrics) {
-    final points = metrics.reversed.map((m) {
-      double? val;
-      switch (_metricType) {
-        case 'weight': val = m.weightKg;
-        case 'bodyFat': val = m.bodyFatPercentage;
-        case 'waist': val = m.waistCm;
-        case 'arm': val = m.armCm;
-      }
-      return val != null ? FlSpot(m.date.millisecondsSinceEpoch.toDouble(), val) : null;
-    }).whereType<FlSpot>().toList();
+    final points = metrics.reversed
+        .map((m) {
+          double? val;
+          switch (_metricType) {
+            case 'weight':
+              val = m.weightKg;
+            case 'bodyFat':
+              val = m.bodyFatPercentage;
+            case 'waist':
+              val = m.waistCm;
+            case 'arm':
+              val = m.armCm;
+          }
+          return val != null
+              ? FlSpot(m.date.millisecondsSinceEpoch.toDouble(), val)
+              : null;
+        })
+        .whereType<FlSpot>()
+        .toList();
 
     if (points.isEmpty) {
       return SectionCard(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl, horizontal: AppSpacing.md),
-        child: Center(child: Text('暂无数据，请先记录', style: theme.textTheme.bodySmall)),
+        padding: const EdgeInsets.symmetric(
+          vertical: AppSpacing.xxl,
+          horizontal: AppSpacing.md,
+        ),
+        child: Center(
+          child: Text('暂无数据，请先记录', style: theme.textTheme.bodySmall),
+        ),
       );
     }
 
     return SectionCard(
       child: SizedBox(
         height: 200,
-        child: LineChart(LineChartData(
-          gridData: const FlGridData(show: false),
-          titlesData: const FlTitlesData(show: false),
-          borderData: FlBorderData(show: false),
-          lineTouchData: LineTouchData(
-            touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) => AppColors.bgSurface,
+        child: LineChart(
+          LineChartData(
+            gridData: const FlGridData(show: false),
+            titlesData: const FlTitlesData(show: false),
+            borderData: FlBorderData(show: false),
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipColor: (_) => AppColors.bgSurface,
+              ),
             ),
+            lineBarsData: [
+              LineChartBarData(
+                spots: points,
+                isCurved: true,
+                color: AppColors.primary,
+                barWidth: 3,
+                dotData: FlDotData(
+                  show: true,
+                  getDotPainter: (spot, percent, barData, index) =>
+                      FlDotCirclePainter(
+                        radius: 3,
+                        color: AppColors.primary,
+                        strokeColor: AppColors.bgElevated,
+                        strokeWidth: 2,
+                      ),
+                ),
+                belowBarData: BarAreaData(
+                  show: true,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.2),
+                      AppColors.primary.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          lineBarsData: [
-            LineChartBarData(
-              spots: points,
-              isCurved: true,
-              color: AppColors.primary,
-              barWidth: 3,
-              dotData: FlDotData(
-                show: true,
-                getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
-                  radius: 3,
-                  color: AppColors.primary,
-                  strokeColor: AppColors.bgElevated,
-                  strokeWidth: 2,
-                ),
-              ),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.2),
-                    AppColors.primary.withValues(alpha: 0.0),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        )),
+        ),
       ),
     );
   }
@@ -135,15 +171,21 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
   Widget _badge(ThemeData theme, String text) {
     return Container(
       margin: const EdgeInsets.only(left: AppSpacing.sm),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
       decoration: BoxDecoration(
         color: AppColors.primary.withValues(alpha: 0.12),
         borderRadius: AppRadius.brSm,
       ),
-      child: Text(text, style: theme.textTheme.labelSmall!.copyWith(
-        fontWeight: FontWeight.w700,
-        color: AppColors.primary,
-      )),
+      child: Text(
+        text,
+        style: theme.textTheme.labelSmall!.copyWith(
+          fontWeight: FontWeight.w700,
+          color: AppColors.primary,
+        ),
+      ),
     );
   }
 
@@ -202,9 +244,9 @@ class _AddMetricSheetState extends State<_AddMetricSheet> {
 
   void _save() {
     if (!_hasAnyValue) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请至少填写一项数据')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请至少填写一项数据')));
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -225,33 +267,40 @@ class _AddMetricSheetState extends State<_AddMetricSheet> {
     final theme = Theme.of(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        AppSpacing.lg, AppSpacing.lg, AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
         MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
       ),
       child: Form(
         key: _formKey,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('记录身体数据', style: theme.textTheme.headlineSmall),
-          const SizedBox(height: AppSpacing.md),
-          _input('体重 (kg)', _weightCtrl, 30, 300, 'kg'),
-          _input('体脂率 (%)', _fatCtrl, 3, 60, '%'),
-          _input('腰围 (cm)', _waistCtrl, 40, 200, 'cm'),
-          _input('臂围 (cm)', _armCtrl, 15, 60, 'cm'),
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _save,
-              child: const Text('保存'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('记录身体数据', style: theme.textTheme.headlineSmall),
+            const SizedBox(height: AppSpacing.md),
+            _input('体重 (kg)', _weightCtrl, 30, 300, 'kg'),
+            _input('体脂率 (%)', _fatCtrl, 3, 60, '%'),
+            _input('腰围 (cm)', _waistCtrl, 40, 200, 'cm'),
+            _input('臂围 (cm)', _armCtrl, 15, 60, 'cm'),
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(onPressed: _save, child: const Text('保存')),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _input(String label, TextEditingController ctrl,
-      double min, double max, String unit) {
+  Widget _input(
+    String label,
+    TextEditingController ctrl,
+    double min,
+    double max,
+    String unit,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: TextFormField(

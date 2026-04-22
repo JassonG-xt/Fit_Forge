@@ -62,67 +62,86 @@ class _RestTimerScreenState extends State<RestTimerScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('组间休息')),
       body: Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          // 大环形倒计时
-          ProgressRing(
-            progress: _progress,
-            size: 200,
-            strokeWidth: 10,
-            gradientColors: _remaining > 10
-                ? const [AppColors.primary, AppColors.primaryGlow]
-                : const [AppColors.danger, AppColors.warning],
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text(
-                _timeString,
-                style: GoogleFonts.manrope(
-                  fontSize: 52,
-                  fontWeight: FontWeight.w800,
-                  color: theme.colorScheme.onSurface,
-                ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // 大环形倒计时
+            ProgressRing(
+              progress: _progress,
+              size: 200,
+              strokeWidth: 10,
+              gradientColors: _remaining > 10
+                  ? const [AppColors.primary, AppColors.primaryGlow]
+                  : const [AppColors.danger, AppColors.warning],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _timeString,
+                    style: GoogleFonts.manrope(
+                      fontSize: 52,
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  Text('秒', style: theme.textTheme.bodySmall),
+                ],
               ),
-              Text('秒', style: theme.textTheme.bodySmall),
-            ]),
-          ),
-          const SizedBox(height: AppSpacing.xl),
+            ),
+            const SizedBox(height: AppSpacing.xl),
 
-          // 控制按钮
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            OutlinedButton(
-              onPressed: () => setState(() => _remaining = (_remaining - 15).clamp(0, 9999)),
-              child: const Text('-15s'),
+            // 控制按钮
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton(
+                  onPressed: () => setState(
+                    () => _remaining = (_remaining - 15).clamp(0, 9999),
+                  ),
+                  child: const Text('-15s'),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                FloatingActionButton(
+                  backgroundColor: AppColors.primary,
+                  onPressed: _isRunning ? _pause : _start,
+                  child: Icon(
+                    _isRunning ? Icons.pause : Icons.play_arrow,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                OutlinedButton(
+                  onPressed: () => setState(() => _remaining += 15),
+                  child: const Text('+15s'),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.md),
-            FloatingActionButton(
-              backgroundColor: AppColors.primary,
-              onPressed: _isRunning ? _pause : _start,
-              child: Icon(_isRunning ? Icons.pause : Icons.play_arrow, color: Colors.white),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            OutlinedButton(
-              onPressed: () => setState(() => _remaining += 15),
-              child: const Text('+15s'),
-            ),
-          ]),
-          const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.md),
 
-          // 预设时长
-          Wrap(spacing: AppSpacing.sm, children: [30, 60, 90, 120].map((s) =>
-            ActionChip(
-              label: Text('${s}s'),
-              onPressed: () {
-                _timer?.cancel();
-                setState(() => _remaining = s);
-                _start();
-              },
+            // 预设时长
+            Wrap(
+              spacing: AppSpacing.sm,
+              children: [30, 60, 90, 120]
+                  .map(
+                    (s) => ActionChip(
+                      label: Text('${s}s'),
+                      onPressed: () {
+                        _timer?.cancel();
+                        setState(() => _remaining = s);
+                        _start();
+                      },
+                    ),
+                  )
+                  .toList(),
             ),
-          ).toList()),
-          const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.xl),
 
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('跳过休息', style: theme.textTheme.bodySmall),
-          ),
-        ]),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('跳过休息', style: theme.textTheme.bodySmall),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -27,6 +27,7 @@ class WorkoutSessionScreen extends StatefulWidget {
 class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   static const _uuid = Uuid();
   late WorkoutSessionController _controller;
+  Future<void>? _autoSaveInFlight;
 
   List<PlannedExercise> get _exercises => _controller.exercises;
   PlannedExercise? get _current => _controller.current;
@@ -77,9 +78,23 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   int get _completedSetsCount => _controller.completedSetsCount;
 
   void _autoSave() {
-    context.read<AppState>().saveInProgressSession(
+    _autoSaveInFlight = context.read<AppState>().saveInProgressSession(
       _controller.toRecoveryJson(),
     );
+  }
+
+  Future<void> _waitForAutoSave() async {
+    final pending = _autoSaveInFlight;
+    if (pending == null) return;
+    try {
+      await pending;
+    } catch (_) {
+      return;
+    } finally {
+      if (identical(_autoSaveInFlight, pending)) {
+        _autoSaveInFlight = null;
+      }
+    }
   }
 
   Future<void> _saveAndExit() async {
@@ -112,6 +127,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     );
     final state = context.read<AppState>();
     state.saveSession(session);
+    await _waitForAutoSave();
     await state.clearInProgressSession();
     if (!mounted) return;
     Navigator.pop(context);

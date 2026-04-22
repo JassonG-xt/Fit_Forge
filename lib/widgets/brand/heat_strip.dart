@@ -7,11 +7,7 @@ import 'progress_ring.dart';
 ///
 /// 显示一周 7 天，每天一个小环形进度，当日用 primary 高亮描边。
 class HeatStrip extends StatelessWidget {
-  const HeatStrip({
-    super.key,
-    required this.weekActivity,
-    this.todayIndex,
-  });
+  const HeatStrip({super.key, required this.weekActivity, this.todayIndex});
 
   /// 7 个元素，每个 0.0~1.0 表示当日训练完成度。
   final List<double> weekActivity;

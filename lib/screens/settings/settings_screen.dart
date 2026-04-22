@@ -23,7 +23,11 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 _sectionHeader(theme, '个人信息'),
                 _infoTile(theme, '身高', '${profile.heightCm.round()} cm'),
-                _infoTile(theme, '体重', '${profile.weightKg.toStringAsFixed(1)} kg'),
+                _infoTile(
+                  theme,
+                  '体重',
+                  '${profile.weightKg.toStringAsFixed(1)} kg',
+                ),
                 _infoTile(theme, '年龄', '${profile.age} 岁'),
                 ListTile(
                   title: const Text('目标'),
@@ -31,8 +35,14 @@ class SettingsScreen extends StatelessWidget {
                     value: profile.goal,
                     underline: const SizedBox(),
                     dropdownColor: AppColors.bgSurface,
-                    items: FitnessGoal.values.map((g) =>
-                        DropdownMenuItem(value: g, child: Text(g.displayName))).toList(),
+                    items: FitnessGoal.values
+                        .map(
+                          (g) => DropdownMenuItem(
+                            value: g,
+                            child: Text(g.displayName),
+                          ),
+                        )
+                        .toList(),
                     onChanged: (v) {
                       if (v != null) {
                         state.updateProfile(profile.copyWith(goal: v));
@@ -46,11 +56,18 @@ class SettingsScreen extends StatelessWidget {
                     value: profile.weeklyFrequency,
                     underline: const SizedBox(),
                     dropdownColor: AppColors.bgSurface,
-                    items: List.generate(6, (i) =>
-                        DropdownMenuItem(value: i + 1, child: Text('${i + 1} 次/周'))).toList(),
+                    items: List.generate(
+                      6,
+                      (i) => DropdownMenuItem(
+                        value: i + 1,
+                        child: Text('${i + 1} 次/周'),
+                      ),
+                    ).toList(),
                     onChanged: (v) {
                       if (v != null) {
-                        state.updateProfile(profile.copyWith(weeklyFrequency: v));
+                        state.updateProfile(
+                          profile.copyWith(weeklyFrequency: v),
+                        );
                       }
                     },
                   ),
@@ -65,9 +82,18 @@ class SettingsScreen extends StatelessWidget {
                   title: const Text('主题模式'),
                   trailing: SegmentedButton<ThemeMode>(
                     segments: const [
-                      ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode, size: 16)),
-                      ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto, size: 16)),
-                      ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode, size: 16)),
+                      ButtonSegment(
+                        value: ThemeMode.dark,
+                        icon: Icon(Icons.dark_mode, size: 16),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.system,
+                        icon: Icon(Icons.brightness_auto, size: 16),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.light,
+                        icon: Icon(Icons.light_mode, size: 16),
+                      ),
                     ],
                     selected: {state.themeMode},
                     onSelectionChanged: (v) => state.setThemeMode(v.first),
@@ -86,9 +112,9 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () {
                     final jsonStr = state.exportToJson();
                     Clipboard.setData(ClipboardData(text: jsonStr));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('数据已复制到剪贴板')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('数据已复制到剪贴板')));
                   },
                 ),
                 ListTile(
@@ -112,8 +138,14 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.delete_forever, color: AppColors.danger),
-                  title: const Text('清除所有数据', style: TextStyle(color: AppColors.danger)),
+                  leading: const Icon(
+                    Icons.delete_forever,
+                    color: AppColors.danger,
+                  ),
+                  title: const Text(
+                    '清除所有数据',
+                    style: TextStyle(color: AppColors.danger),
+                  ),
                   subtitle: const Text('删除个人信息、训练记录、成就等所有数据'),
                   onTap: () => _confirmAction(
                     context,
@@ -122,7 +154,9 @@ class SettingsScreen extends StatelessWidget {
                     () async {
                       await state.resetAllData();
                       if (context.mounted) {
-                        Navigator.of(context).popUntil((route) => route.isFirst);
+                        Navigator.of(
+                          context,
+                        ).popUntil((route) => route.isFirst);
                       }
                     },
                     isDangerous: true,
@@ -138,8 +172,13 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _confirmAction(BuildContext context, String title, String message,
-      VoidCallback onConfirm, {bool isDangerous = false}) {
+  void _confirmAction(
+    BuildContext context,
+    String title,
+    String message,
+    VoidCallback onConfirm, {
+    bool isDangerous = false,
+  }) {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -165,15 +204,18 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _importFromClipboard(BuildContext context, AppState state) async {
+  Future<void> _importFromClipboard(
+    BuildContext context,
+    AppState state,
+  ) async {
     // 1) 读剪贴板
     final clipData = await Clipboard.getData(Clipboard.kTextPlain);
     final jsonStr = clipData?.text?.trim();
     if (!context.mounted) return;
     if (jsonStr == null || jsonStr.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('剪贴板为空')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('剪贴板为空')));
       return;
     }
 
@@ -182,9 +224,7 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('确认导入'),
-        content: const Text(
-          '导入将覆盖当前个人信息、训练计划、训练记录、身体数据和成就。\n\n此操作不可恢复。',
-        ),
+        content: const Text('导入将覆盖当前个人信息、训练计划、训练记录、身体数据和成就。\n\n此操作不可恢复。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -192,7 +232,10 @@ class SettingsScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确认导入', style: TextStyle(color: AppColors.danger)),
+            child: const Text(
+              '确认导入',
+              style: TextStyle(color: AppColors.danger),
+            ),
           ),
         ],
       ),
@@ -203,19 +246,29 @@ class SettingsScreen extends StatelessWidget {
     // 3) 执行导入，展示结果（null=成功；非 null=错误消息）
     final error = state.importFromJson(jsonStr);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error ?? '导入成功')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(error ?? '导入成功')));
   }
 
   Widget _sectionHeader(ThemeData theme, String text) => Padding(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xs),
-        child: Text(text, style: theme.textTheme.labelMedium!.copyWith(color: AppColors.textTertiary)),
-      );
+    padding: const EdgeInsets.fromLTRB(
+      AppSpacing.md,
+      AppSpacing.md,
+      AppSpacing.md,
+      AppSpacing.xs,
+    ),
+    child: Text(
+      text,
+      style: theme.textTheme.labelMedium!.copyWith(
+        color: AppColors.textTertiary,
+      ),
+    ),
+  );
 
   Widget _infoTile(ThemeData theme, String title, String value) => ListTile(
-        title: Text(title),
-        trailing: Text(value, style: theme.textTheme.bodySmall),
-        dense: true,
-      );
+    title: Text(title),
+    trailing: Text(value, style: theme.textTheme.bodySmall),
+    dense: true,
+  );
 }

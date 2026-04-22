@@ -65,9 +65,7 @@ class AppState extends ChangeNotifier {
     await _loadFoods();
     await _loadFromPrefs();
     _rebuildPrCache();
-    if (_achievements.isEmpty) {
-      _achievements = defaultAchievements();
-    }
+    _achievements = _migrateAchievements(_achievements);
     await checkForRecoverableSession();
   }
 
@@ -93,6 +91,9 @@ class AppState extends ChangeNotifier {
 
   // ──── 用户画像 ────
   void saveProfile(UserProfile profile) {
+    if (_shouldClearPlanForProfile(profile)) {
+      _activePlan = null;
+    }
     _profile = profile;
     _hasCompletedOnboarding = true;
     notifyListeners();
@@ -100,9 +101,32 @@ class AppState extends ChangeNotifier {
   }
 
   void updateProfile(UserProfile profile) {
+    if (_shouldClearPlanForProfile(profile)) {
+      _activePlan = null;
+    }
     _profile = profile;
     notifyListeners();
     _persist();
+  }
+
+  bool _shouldClearPlanForProfile(UserProfile nextProfile) {
+    final currentProfile = _profile;
+    return _activePlan != null &&
+        currentProfile != null &&
+        _planInputsChanged(currentProfile, nextProfile);
+  }
+
+  bool _planInputsChanged(UserProfile before, UserProfile after) {
+    return before.goal != after.goal ||
+        before.weeklyFrequency != after.weeklyFrequency ||
+        before.experienceLevel != after.experienceLevel ||
+        !_sameEquipment(before.availableEquipment, after.availableEquipment);
+  }
+
+  bool _sameEquipment(List<Equipment> a, List<Equipment> b) {
+    final aSet = a.toSet();
+    final bSet = b.toSet();
+    return aSet.length == bSet.length && aSet.containsAll(bSet);
   }
 
   // ──── 主题 ────
@@ -223,6 +247,36 @@ class AppState extends ChangeNotifier {
   }
 
   // ──── 成就 ────
+  List<Achievement> _migrateAchievements(List<Achievement> achievements) {
+    final defaults = defaultAchievements();
+    if (achievements.isEmpty) return defaults;
+
+    final existingById = {for (final a in achievements) a.id: a};
+    final defaultIds = defaults.map((a) => a.id).toSet();
+
+    return [
+      for (final fallback in defaults)
+        _mergeAchievement(existingById[fallback.id], fallback),
+      ...achievements.where((a) => !defaultIds.contains(a.id)),
+    ];
+  }
+
+  Achievement _mergeAchievement(Achievement? existing, Achievement fallback) {
+    if (existing == null) return fallback;
+    return Achievement(
+      id: fallback.id,
+      type: fallback.type,
+      title: fallback.title,
+      description: fallback.description,
+      icon: fallback.icon,
+      threshold: fallback.threshold,
+      targetBodyPart: existing.targetBodyPart ?? fallback.targetBodyPart,
+      currentProgress: existing.currentProgress,
+      isUnlocked: existing.isUnlocked,
+      unlockedAt: existing.unlockedAt,
+    );
+  }
+
   void _updateAchievements(int newPRCount) {
     final totalCompleted = completedSessions.length;
     final streak = streakDays;
@@ -414,39 +468,57 @@ class AppState extends ChangeNotifier {
       final data = json.decode(jsonStr) as Map<String, dynamic>;
       if (data['version'] == null) return '无效的导出文件格式';
 
-      if (data['profile'] != null) {
-        _profile = UserProfile.fromJson(
-          data['profile'] as Map<String, dynamic>,
-        );
-        _hasCompletedOnboarding = true;
+      var nextHasCompletedOnboarding = _hasCompletedOnboarding;
+      var nextThemeMode = _themeMode;
+      var nextProfile = _profile;
+      var nextActivePlan = _activePlan;
+      var nextSessions = _sessions;
+      var nextBodyMetrics = _bodyMetrics;
+      var nextAchievements = _achievements;
+
+      if (data.containsKey('profile')) {
+        final value = data['profile'];
+        nextProfile = value == null
+            ? null
+            : UserProfile.fromJson(value as Map<String, dynamic>);
+        nextHasCompletedOnboarding = nextProfile != null;
       }
-      if (data['activePlan'] != null) {
-        _activePlan = WorkoutPlan.fromJson(
-          data['activePlan'] as Map<String, dynamic>,
-        );
+      if (data.containsKey('activePlan')) {
+        final value = data['activePlan'];
+        nextActivePlan = value == null
+            ? null
+            : WorkoutPlan.fromJson(value as Map<String, dynamic>);
       }
-      if (data['sessions'] != null) {
-        _sessions = (data['sessions'] as List)
+      if (data.containsKey('sessions')) {
+        nextSessions = (data['sessions'] as List)
             .map((s) => WorkoutSession.fromJson(s as Map<String, dynamic>))
             .toList();
       }
-      if (data['bodyMetrics'] != null) {
-        _bodyMetrics = (data['bodyMetrics'] as List)
+      if (data.containsKey('bodyMetrics')) {
+        nextBodyMetrics = (data['bodyMetrics'] as List)
             .map((m) => BodyMetric.fromJson(m as Map<String, dynamic>))
             .toList();
       }
-      if (data['achievements'] != null) {
-        _achievements = (data['achievements'] as List)
+      if (data.containsKey('achievements')) {
+        nextAchievements = (data['achievements'] as List)
             .map((a) => Achievement.fromJson(a as Map<String, dynamic>))
             .toList();
       }
-      if (data['themeMode'] != null) {
-        _themeMode =
+      if (data.containsKey('themeMode')) {
+        nextThemeMode =
             ThemeMode.values
                 .where((m) => m.name == data['themeMode'])
                 .firstOrNull ??
             ThemeMode.dark;
       }
+
+      _hasCompletedOnboarding = nextHasCompletedOnboarding;
+      _themeMode = nextThemeMode;
+      _profile = nextProfile;
+      _activePlan = nextActivePlan;
+      _sessions = nextSessions;
+      _bodyMetrics = nextBodyMetrics;
+      _achievements = _migrateAchievements(nextAchievements);
 
       _invalidateCompletedCache();
       _rebuildPrCache();
