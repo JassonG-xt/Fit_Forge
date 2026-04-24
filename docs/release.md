@@ -65,6 +65,14 @@ Build notes:
 - the workflow uploads `build/web` with `actions/upload-pages-artifact`
 - the workflow publishes through `actions/deploy-pages`, so the repository Pages source should be set to **GitHub Actions**
 
+First-time setup still needs a maintainer to enable Pages in GitHub:
+
+1. Open `Settings -> Pages`.
+2. Under `Build and deployment`, set `Source` to **GitHub Actions**.
+3. Re-run `Deploy Web Demo` or push another commit to `main`.
+
+If `actions/configure-pages` fails before Flutter starts building, Pages is usually not enabled or is not configured for GitHub Actions. The default `GITHUB_TOKEN` can deploy to Pages, but it cannot enable Pages for the repository by itself.
+
 If the public demo returns 404 after a successful push, check the latest `Deploy Web Demo` run first. A 404 usually means the workflow has not completed successfully, the Pages source is not configured for GitHub Actions deployments, or the local workflow changes have not been pushed to `main` / `master` yet.
 
 ## CI Expectations
