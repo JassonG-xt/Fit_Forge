@@ -13,17 +13,25 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write   # push to gh-pages branch
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build-and-deploy:
     name: Build & deploy to GitHub Pages
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -43,12 +51,18 @@ jobs:
       - name: Configure SPA fallback
         run: cp build/web/index.html build/web/404.html
 
-      - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Verify Pages artifact
+        run: |
+          test -f build/web/index.html
+          test -f build/web/404.html
+          grep -Fq '<base href="/Fit_Forge/">' build/web/index.html
+          touch build/web/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build/web
-          publish_branch: gh-pages
-          keep_files: false
-          cname: ${{ vars.CUSTOM_DOMAIN }}
-          commit_message: 'deploy ${{ github.sha }}'
+          path: build/web
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
