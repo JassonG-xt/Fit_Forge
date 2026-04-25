@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fit_forge/models/models.dart';
@@ -164,5 +165,61 @@ void main() {
     await appState.flushPendingPersistence();
 
     expect(store.events, ['save-start', 'save-end', 'clear']);
+  });
+
+  testWidgets('完成页支持复制训练总结到剪贴板', (tester) async {
+    String? clipboardText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            switch (call.method) {
+              case 'Clipboard.setData':
+                final args = call.arguments as Map<Object?, Object?>;
+                clipboardText = args['text'] as String?;
+                return null;
+              case 'Clipboard.getData':
+                return <String, Object?>{'text': clipboardText};
+            }
+            return null;
+          },
+        );
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          );
+    });
+
+    final appState = await primedAppStateWithProfile();
+    await pumpIsolated(
+      tester,
+      appState: appState,
+      child: WorkoutSessionScreen(workoutDay: _singleExerciseDay()),
+    );
+
+    await tester.tap(find.text('跳过热身'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.text('完成这组'));
+      await tester.pump();
+    }
+
+    await tester.tap(find.text('完成训练'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('训练完成!'), findsOneWidget);
+    expect(find.text('复制训练总结'), findsOneWidget);
+
+    await tester.tap(find.text('复制训练总结'));
+    await tester.pump();
+
+    final clip = await Clipboard.getData(Clipboard.kTextPlain);
+    expect(clip?.text, isNotNull);
+    expect(clip!.text, contains('我刚完成了 FitForge 的推 (胸/肩/三头)训练'));
+    expect(clip.text, contains('✅ 3 组'));
+    expect(clip.text, contains('动作：Bench Press 3组'));
   });
 }

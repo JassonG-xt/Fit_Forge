@@ -14,6 +14,9 @@ class SettingsScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final state = context.watch<AppState>();
     final profile = state.profile;
+    final dropdownColor = theme.brightness == Brightness.dark
+        ? AppColors.bgSurface
+        : AppColors.bgElevatedLight;
 
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
@@ -34,7 +37,7 @@ class SettingsScreen extends StatelessWidget {
                   trailing: DropdownButton<FitnessGoal>(
                     value: profile.goal,
                     underline: const SizedBox(),
-                    dropdownColor: AppColors.bgSurface,
+                    dropdownColor: dropdownColor,
                     items: FitnessGoal.values
                         .map(
                           (g) => DropdownMenuItem(
@@ -55,7 +58,7 @@ class SettingsScreen extends StatelessWidget {
                   trailing: DropdownButton<int>(
                     value: profile.weeklyFrequency,
                     underline: const SizedBox(),
-                    dropdownColor: AppColors.bgSurface,
+                    dropdownColor: dropdownColor,
                     items: List.generate(
                       6,
                       (i) => DropdownMenuItem(
@@ -164,7 +167,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const Divider(),
                 _sectionHeader(theme, '关于'),
-                _infoTile(theme, '版本', '1.0.0'),
+                _infoTile(theme, '版本', '1.0.0-alpha'),
                 _infoTile(theme, '应用', 'FitForge 智能健身助手'),
                 const SizedBox(height: AppSpacing.xl),
               ],

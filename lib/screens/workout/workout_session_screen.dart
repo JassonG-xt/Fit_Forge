@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/models.dart';
@@ -95,6 +96,47 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         _autoSaveInFlight = null;
       }
     }
+  }
+
+  Future<void> _copyShareSummary() async {
+    final session = _controller.buildSession(
+      id: 'share-preview',
+      endedAt: DateTime.now(),
+    );
+    final completedExercises = session.exerciseRecords
+        .where((record) => record.sets.any((set) => set.isCompleted))
+        .toList();
+    final totalSets = session.exerciseRecords
+        .expand((record) => record.sets)
+        .where((set) => set.isCompleted)
+        .length;
+    final totalVolume = completedExercises.fold<double>(
+      0,
+      (sum, record) => sum + record.totalVolume,
+    );
+    final exerciseSummary = completedExercises
+        .map(
+          (record) {
+            final completedSets = record.sets
+                .where((set) => set.isCompleted)
+                .length;
+            return '${record.exerciseName} $completedSets组';
+          },
+        )
+        .join(' · ');
+    final summary = [
+      '我刚完成了 FitForge 的${widget.workoutDay.dayType.displayName}训练',
+      '⏱ ${session.durationMinutes} 分钟',
+      '✅ $totalSets 组',
+      '🏋️ ${totalVolume.toStringAsFixed(0)} kg 总容量',
+      if (exerciseSummary.isNotEmpty) '动作：$exerciseSummary',
+    ].join('\n');
+
+    await Clipboard.setData(ClipboardData(text: summary));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('训练总结已复制到剪贴板')));
   }
 
   Future<void> _saveAndExit() async {
@@ -716,6 +758,18 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           ),
 
           const SizedBox(height: AppSpacing.lg),
+
+          if (hasWork) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.share_outlined),
+                label: const Text('复制训练总结'),
+                onPressed: _copyShareSummary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
 
           GlowButton(
             label: hasWork ? '保存并返回' : '结束训练',

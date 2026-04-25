@@ -260,6 +260,95 @@ void main() {
   });
 
   group('importFromJson', () {
+    test('restores exported user data into a fresh state', () async {
+      final profile = UserProfile(
+        heightCm: 182,
+        weightKg: 78.5,
+        age: 29,
+        gender: Gender.male,
+        goal: FitnessGoal.loseFat,
+        weeklyFrequency: 4,
+        experienceLevel: ExperienceLevel.intermediate,
+        availableEquipment: [Equipment.barbell, Equipment.dumbbell],
+        createdAt: DateTime(2026, 4, 1),
+      );
+      final plan = WorkoutPlan(
+        id: 'plan-1',
+        name: 'Cutting Block',
+        goal: FitnessGoal.loseFat,
+        split: TrainingSplit.upperLower,
+        weeklyFrequency: 4,
+        createdAt: DateTime(2026, 4, 2),
+        days: [WorkoutDay(dayOfWeek: 1, dayType: WorkoutDayType.upper)],
+      );
+      final session = WorkoutSession(
+        id: 'session-1',
+        dayType: WorkoutDayType.upper,
+        isCompleted: true,
+        date: DateTime(2026, 4, 3),
+        durationMinutes: 52,
+        exerciseRecords: [
+          ExerciseRecord(
+            exerciseId: 'bench-press',
+            exerciseName: 'Bench Press',
+            sets: [
+              SetRecord(setNumber: 1, weightKg: 80, reps: 8, isCompleted: true),
+            ],
+          ),
+        ],
+      );
+      final metric = BodyMetric(
+        id: 'metric-1',
+        date: DateTime(2026, 4, 4),
+        weightKg: 77.8,
+        waistCm: 82,
+      );
+
+      state.saveProfile(profile);
+      state.adoptPlan(plan);
+      state.saveSession(session);
+      state.addBodyMetric(metric);
+      state.setThemeMode(ThemeMode.light);
+
+      final exported = state.exportToJson();
+      final importedState = await createTestState();
+      final error = importedState.importFromJson(exported);
+
+      expect(error, isNull);
+      expect(importedState.hasCompletedOnboarding, true);
+      expect(importedState.profile!.goal, FitnessGoal.loseFat);
+      expect(importedState.profile!.availableEquipment, [
+        Equipment.barbell,
+        Equipment.dumbbell,
+      ]);
+      expect(importedState.activePlan!.id, 'plan-1');
+      expect(importedState.activePlan!.split, TrainingSplit.upperLower);
+      expect(importedState.sessions.single.id, 'session-1');
+      expect(importedState.sessions.single.durationMinutes, 52);
+      expect(
+        importedState
+            .sessions
+            .single
+            .exerciseRecords
+            .single
+            .sets
+            .single
+            .weightKg,
+        80,
+      );
+      expect(importedState.bodyMetrics.single.weightKg, 77.8);
+      expect(importedState.bodyMetrics.single.waistCm, 82);
+      expect(importedState.themeMode, ThemeMode.light);
+      expect(importedState.lastWeightForExercise('bench-press'), 80);
+      expect(importedState.lastRepsForExercise('bench-press'), 8);
+      expect(
+        importedState.achievements
+            .firstWhere((a) => a.type == AchievementType.totalWorkouts)
+            .currentProgress,
+        1,
+      );
+    });
+
     test('does not mutate state when import fails part way through', () {
       state.saveProfile(UserProfile(goal: FitnessGoal.buildMuscle));
 

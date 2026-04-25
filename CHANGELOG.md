@@ -7,32 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned (Sprint 1)
-- GitHub Actions CI / Release automation
-- Android signing configuration & Play Store–ready APK
-- Custom app icon and native splash screen
-- Strict lint rules (strict-casts / strict-inference)
-- Widget tests for core screens
-
-### Planned (Sprint 2)
+### Planned
 - Freezed + json_serializable model refactor
 - Full screen widget test coverage (14 screens)
 - Golden tests for brand widgets
 - Integration test for core happy path
-- Test coverage ≥ 70%
-
-### Planned (Sprint 3)
 - i18n (Chinese + English)
 - Local notifications (rest timer / daily reminders)
 - Android Health Connect integration (weight sync)
 - Sentry crash reporting
-- Architecture documentation
 
 ---
 
-## [0.1.0] - 2026-04-15
+## [1.0.0-alpha] - 2026-04-18
 
-Initial prototype of the Flutter cross-platform rewrite.
+First public alpha of the Flutter cross-platform rewrite.
 
 ### Added
 - **Onboarding flow** — multi-step user profile setup (height, weight, goal, frequency, equipment)
@@ -68,5 +57,5 @@ Initial prototype of the Flutter cross-platform rewrite.
 - Persistence: SharedPreferences (JSON-encoded)
 - Unit tests: `plan_engine_test.dart`, `nutrition_engine_test.dart`, `app_state_test.dart`
 
-[Unreleased]: https://github.com/JassonG-xt/Fit_Forge/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/JassonG-xt/Fit_Forge/releases/tag/v0.1.0
+[Unreleased]: https://github.com/JassonG-xt/Fit_Forge/compare/v1.0.0-alpha...HEAD
+[1.0.0-alpha]: https://github.com/JassonG-xt/Fit_Forge/releases/tag/v1.0.0-alpha

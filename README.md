@@ -13,22 +13,11 @@ A Flutter cross-platform fitness app that auto-generates personalized workout an
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Flutter](https://img.shields.io/badge/Flutter-3.11+-02569B?logo=flutter)](https://flutter.dev)
 
-**[📱 Download APK](https://github.com/JassonG-xt/Fit_Forge/releases/latest)** · **[🌐 Try Web Demo](https://JassonG-xt.github.io/Fit_Forge/)** · **[📚 Docs](docs/)** · **[🐛 Report Bug](https://github.com/JassonG-xt/Fit_Forge/issues/new?template=bug_report.md)**
+**[📱 Download APK](https://github.com/JassonG-xt/Fit_Forge/releases/latest)** · **[🌐 Try Web Demo](https://JassonG-xt.github.io/Fit_Forge/)** · **[📚 Docs](docs/README.md)** · **[🐛 Report Bug](https://github.com/JassonG-xt/Fit_Forge/issues/new?template=bug_report.md)**
 
 </div>
 
 ---
-
-<!--
-┌─────────────────────────────────────────────────────────────────┐
-│  TODO (皇上亲自写)：pitch 段落 (5-8 行)                          │
-│  参考角度：                                                      │
-│  - 传统健身 app 的痛点（订阅制、计划模板化、离线不可用）          │
-│  - FitForge 的差异化（开源 / 自动生成 / 离线优先 / 跨平台）       │
-│  - 目标用户画像（健身爱好者、自律训练者、想摆脱付费 app 的人）    │
-│  写好后删除这段注释                                              │
-└─────────────────────────────────────────────────────────────────┘
--->
 
 > FitForge 是一个**完全免费、离线优先、开源**的健身训练助手。你输入一次身体数据和目标，它为你生成一套完整的 7 天训练计划和营养方案——不需要订阅、不需要联网、不需要把数据交给云端。
 
@@ -42,26 +31,11 @@ A Flutter cross-platform fitness app that auto-generates personalized workout an
 - 🎨 **自研设计系统** — 品牌色 + 排版 + 5 个自定义组件（HeroCard / StatNumber / HeatStrip / GlowButton / ProgressRing）
 - 🔄 **崩溃恢复** — 训练中途 app 被杀死也能恢复现场
 - 🌓 **深浅双主题**；🌏 **中英双语 i18n** 规划中
-- 📱 **跨平台** — Android（v1.0 release）+ Web（browser demo）+ iOS（v2 roadmap）
+- 📱 **跨平台基础** — Android（alpha APK）+ Web（browser demo）；iOS 工程骨架已生成，但尚未正式发布
 
 ## 📱 截图 / Screenshots
 
-<!-- TODO (Sprint 1.1 完成后补)：加 3-4 张实机截图到 docs/assets/ -->
-
-<table>
-  <tr>
-    <td align="center"><b>Onboarding</b></td>
-    <td align="center"><b>Home</b></td>
-    <td align="center"><b>Workout</b></td>
-    <td align="center"><b>Progress</b></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/screen-onboarding.png" width="200" alt="Onboarding screen"/></td>
-    <td><img src="docs/assets/screen-home.png" width="200" alt="Home screen"/></td>
-    <td><img src="docs/assets/screen-workout.png" width="200" alt="Workout session"/></td>
-    <td><img src="docs/assets/screen-progress.png" width="200" alt="Progress charts"/></td>
-  </tr>
-</table>
+当前仓库暂未内置静态截图资源，避免 README 长期挂着过期画面。要看真实界面，直接打开上方 Web Demo，或按下方命令本地运行。
 
 ## 🚀 Quick Start
 
@@ -149,7 +123,7 @@ graph LR
 - **Engines** are pure, testable functions — no Flutter dependency
 - **Screens** read state via `Consumer<AppState>` and dispatch actions via methods
 
-Detailed architecture docs are planned; this README reflects the current implementation.
+See [docs/architecture.md](docs/architecture.md) for a repo-grounded overview of state, persistence, screens, and data flow.
 
 ## 🗂 目录结构 / Project Structure
 
@@ -159,7 +133,7 @@ lib/
 ├── engines/
 │   ├── plan_engine.dart        # Auto-generate weekly workout plans
 │   └── nutrition_engine.dart   # BMR/TDEE + macros + meal plan
-├── models/                     # Immutable data (freezed-backed)
+├── models/                     # Hand-written Dart models
 │   ├── enums.dart
 │   ├── user_profile.dart
 │   ├── exercise.dart
@@ -187,8 +161,7 @@ lib/
 ├── widgets/
 │   ├── brand/                  # 5 custom brand components
 │   └── cards/
-├── theme/                      # Design system
-└── l10n/                       # Planned ARB localization files
+└── theme/                      # Design system
 
 test/
 ├── engines/                    # Unit: plan + nutrition engine
@@ -196,25 +169,29 @@ test/
 └── screens/                    # Widget tests
 ```
 
+Localization ARB files are planned and are not yet checked into the repository.
+
 ## 🧪 测试 / Testing
 
-Current test coverage:
+Current automated test coverage spans:
 
-| Layer | Purpose | Tools |
-|-------|---------|-------|
-| Unit (~70%) | Business logic — engines, state mutations | `flutter_test` |
-| Widget (~20%) | Screen rendering & interactions | `flutter_test` + `SharedPreferences` mock |
+| Layer | Scope | Tools |
+|-------|-------|-------|
+| Unit | Business logic, models, and state transitions | `flutter_test` |
+| Widget | Core navigation and selected primary screens | `flutter_test` + `SharedPreferences` mock |
 | Planned | Golden visual regression + E2E happy path | `golden_toolkit`, `integration_test` |
 
 ```bash
 flutter test                              # All non-integration tests
-flutter test --coverage                   # With coverage (target ≥ 70%)
+flutter test --coverage                   # With coverage
 ```
+
+Current checked coverage is **70%+** on this branch. Run `flutter test --coverage` on the current `HEAD` to see the exact number for your revision.
 
 ## 🗺 Roadmap
 
 ### ✅ Current implemented baseline
-- Android APK release on GitHub Releases
+- Android alpha APK release on GitHub Releases
 - Web Demo on GitHub Pages
 - Core engines + 14 screens + design system
 - Local JSON persistence, import/export, workout recovery
@@ -222,12 +199,10 @@ flutter test --coverage                   # With coverage (target ≥ 70%)
 - GitHub Actions workflows for CI, release, and web deploy
 
 ### 🚧 Near-term planned work
-- 70%+ test coverage
 - i18n (zh / en)
 - Local notifications
 - Android Health Connect (read weight)
 - Sentry crash reporting
-- Architecture/testing/release docs
 - Full UI i18n coverage (currently core screens only)
 - PDF report export (leverages existing `exportToJson`)
 - Expanded Health Connect scope (heart rate, steps)
@@ -241,13 +216,15 @@ flutter test --coverage                   # With coverage (target ≥ 70%)
 
 ## 📚 Documentation
 
-Current project documentation lives in this README plus:
+Current project documentation lives in:
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow, tests, lint, PR process
+- [docs/README.md](docs/README.md) — docs index
+- [docs/architecture.md](docs/architecture.md) — runtime architecture and module boundaries
+- [docs/testing.md](docs/testing.md) — test commands, scope, and current gaps
+- [docs/release.md](docs/release.md) — versioning, Android release tags, and web deploy flow
+- [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow, lint, tests, PR process
 - [CHANGELOG.md](CHANGELOG.md) — release history and planned work
 - `.github/workflows/` — CI, release, and web deploy automation
-
-Deeper architecture/testing/release guides are planned.
 
 ## 🤝 Contributing
 

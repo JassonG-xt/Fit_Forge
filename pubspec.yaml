@@ -1,7 +1,7 @@
 name: fit_forge
 description: "FitForge — 智能健身 App。根据用户画像自动生成训练和营养计划。AI-powered personal trainer with auto-generated workout and nutrition plans."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0-alpha+1
 
 homepage: https://github.com/JassonG-xt/Fit_Forge
 repository: https://github.com/JassonG-xt/Fit_Forge

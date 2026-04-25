@@ -12,6 +12,10 @@ build/
 .vscode/
 # Claude Code (local, per-user)
 .claude/
+# Codex / agent-local workspace state
+.codex
+.codex/
+.learnings/
 
 # macOS
 .DS_Store

@@ -39,8 +39,7 @@ lib/
 └── theme/                 # Colors, spacing, typography
 
 test/                      # Unit + widget tests
-integration_test/          # E2E tests
-docs/                      # Architecture documentation
+docs/                      # Architecture / testing / release docs
 ```
 
 ## Testing
@@ -49,9 +48,9 @@ docs/                      # Architecture documentation
 ```bash
 flutter test                              # All unit + widget tests
 flutter test --coverage                   # With coverage report
-flutter test integration_test/            # E2E tests (needs device)
-flutter test --tags golden                # Golden visual-regression tests
 ```
+
+Golden and integration suites are planned, but they are not checked into the repository yet.
 
 ### Coverage Report
 ```bash
@@ -64,8 +63,7 @@ genhtml coverage/lcov.info -o coverage/html
 ### Writing Tests
 - **Unit tests** go under `test/` mirroring `lib/` structure
 - **Widget tests** under `test/screens/`, model pattern: `test/widget_test.dart` (mocks `SharedPreferences`)
-- **Golden tests** under `test/widgets/` with `@Tags(['golden'])`
-- **Integration tests** under `integration_test/` — one happy path per file
+- When golden or integration tests are introduced, add them under `test/widgets/` or `integration_test/` and document the commands here at the same time
 
 ## Code Style
 
@@ -113,7 +111,10 @@ during active workouts. Closes #42.
    - [ ] New code has tests (unit + widget where applicable)
 3. **Write a descriptive PR** using the PR template
 4. **Link related issues** with `Closes #123` / `Fixes #456`
-5. **Wait for CI** to pass all three workflows (ci / release-dry-run / web-deploy)
+5. **Wait for CI** to pass. Today that means:
+   - `ci` on pushes and pull requests
+   - `web-deploy` on pushes to `main`
+   - `release` only when maintainers push a version tag
 
 ### What We Look For
 - Tests that exercise new behavior (not just happy path)
