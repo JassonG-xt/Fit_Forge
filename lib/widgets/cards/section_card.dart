@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_radius.dart';
+import '../../theme/app_shadows.dart';
 import '../../theme/app_spacing.dart';
 
-/// 标准深色卡片壳 —— bgElevated + 圆角 + 细描边。
-///
-/// 替代散落在各屏幕的 `Card(elevation: 0, color: Colors.grey[100])`。
+/// 标准内容卡片壳：浅色主门面使用白底轻阴影，深色模式使用细描边。
 class SectionCard extends StatelessWidget {
   const SectionCard({
     super.key,
@@ -37,6 +36,7 @@ class SectionCard extends StatelessWidget {
         color: bg,
         borderRadius: borderRadius ?? AppRadius.brLg,
         border: Border.all(color: border, width: 0.5),
+        boxShadow: isDark ? null : AppShadows.cardElevation,
       ),
       child: child,
     );

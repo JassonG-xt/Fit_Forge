@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_radius.dart';
 
-/// 渐变 Hero 容器 —— 首页顶部 / 完成页 / 各种"高能"卡片。
+/// Hero 容器 —— 首页顶部 / 完成页 / 各种重点卡片。
 ///
-/// 内置 `AppColors.heatGradient` 为默认渐变，可通过 [gradient] 覆写。
+/// 默认使用清爽绿色渐变，可通过 [gradient] 覆写。
 /// [child] 放在带内边距的 ClipRRect 内。
 class HeroCard extends StatelessWidget {
   const HeroCard({
@@ -26,7 +26,7 @@ class HeroCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: gradient ?? AppColors.heatGradient,
+        gradient: gradient ?? AppColors.freshGradient,
         borderRadius: br,
       ),
       child: ClipRRect(

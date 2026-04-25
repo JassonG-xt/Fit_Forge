@@ -3,9 +3,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_radius.dart';
 import '../../theme/app_shadows.dart';
 
-/// 发光主操作按钮 —— "开始训练" / "保存" / "完成这组"。
-///
-/// 比普通 ElevatedButton 多了品牌色辉光（[AppShadows.primaryGlow]）。
+/// 主操作按钮 —— "开始训练" / "保存" / "完成这组"。
 class GlowButton extends StatelessWidget {
   const GlowButton({
     super.key,
@@ -44,7 +42,7 @@ class GlowButton extends StatelessWidget {
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.textInverse,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
           textStyle: theme.textTheme.labelLarge!.copyWith(

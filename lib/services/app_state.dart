@@ -23,7 +23,7 @@ class AppState extends ChangeNotifier {
   List<BodyMetric> _bodyMetrics = [];
   List<Achievement> _achievements = [];
   bool _hasCompletedOnboarding = false;
-  ThemeMode _themeMode = ThemeMode.dark;
+  ThemeMode _themeMode = ThemeMode.light;
 
   // ──── 缓存 ────
   List<WorkoutSession>? _completedSessionsCache;
@@ -145,7 +145,7 @@ class AppState extends ChangeNotifier {
     _bodyMetrics = [];
     _achievements = defaultAchievements();
     _hasCompletedOnboarding = false;
-    _themeMode = ThemeMode.dark;
+    _themeMode = ThemeMode.light;
     _invalidateCompletedCache();
     _prCache.clear();
     notifyListeners();
@@ -509,7 +509,7 @@ class AppState extends ChangeNotifier {
             ThemeMode.values
                 .where((m) => m.name == data['themeMode'])
                 .firstOrNull ??
-            ThemeMode.dark;
+            ThemeMode.light;
       }
 
       _hasCompletedOnboarding = nextHasCompletedOnboarding;

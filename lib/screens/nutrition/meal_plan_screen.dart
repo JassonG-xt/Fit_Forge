@@ -4,7 +4,6 @@ import '../../services/app_state.dart';
 import '../../engines/nutrition_engine.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
-import '../../widgets/brand/hero_card.dart';
 import '../../widgets/cards/section_card.dart';
 
 class MealPlanScreen extends StatelessWidget {
@@ -44,24 +43,17 @@ class MealPlanScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 宏量总览
-            HeroCard(
-              gradient: AppColors.heatGradient,
+            SectionCard(
+              borderColor: AppColors.primary.withValues(alpha: 0.18),
               child: Column(
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '每日营养目标',
-                        style: theme.textTheme.titleSmall!.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
+                      Text('每日营养目标', style: theme.textTheme.titleSmall),
                       Text(
                         profile.goal.displayName,
-                        style: theme.textTheme.labelMedium!.copyWith(
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
+                        style: theme.textTheme.labelMedium,
                       ),
                     ],
                   ),
@@ -69,16 +61,11 @@ class MealPlanScreen extends StatelessWidget {
                   Text(
                     '${macros.calories}',
                     style: theme.textTheme.displayLarge!.copyWith(
-                      color: Colors.white,
+                      color: AppColors.primary,
                       fontSize: 40,
                     ),
                   ),
-                  Text(
-                    '千卡/天',
-                    style: theme.textTheme.bodySmall!.copyWith(
-                      color: Colors.white.withValues(alpha: 0.7),
-                    ),
-                  ),
+                  Text('千卡/天', style: theme.textTheme.bodySmall),
                   const SizedBox(height: AppSpacing.md),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -159,16 +146,10 @@ class MealPlanScreen extends StatelessWidget {
         Text(
           value,
           style: theme.textTheme.labelLarge!.copyWith(
-            color: Colors.white,
             fontWeight: FontWeight.w700,
           ),
         ),
-        Text(
-          label,
-          style: theme.textTheme.labelSmall!.copyWith(
-            color: Colors.white.withValues(alpha: 0.7),
-          ),
-        ),
+        Text(label, style: theme.textTheme.labelSmall),
       ],
     );
   }

@@ -236,7 +236,7 @@ void main() {
       expect(state.sessions.isEmpty, true);
       expect(state.profile, null);
       expect(state.activePlan, null);
-      expect(state.themeMode, ThemeMode.dark);
+      expect(state.themeMode, ThemeMode.light);
     });
   });
 

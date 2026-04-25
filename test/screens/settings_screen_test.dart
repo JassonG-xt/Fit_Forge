@@ -62,7 +62,7 @@ void main() {
     expect(find.text('清除所有数据'), findsOneWidget);
   });
 
-  testWidgets('默认 themeMode 是 dark（与 AppState 构造默认一致）', (tester) async {
+  testWidgets('默认 themeMode 是 light（与 AppState 构造默认一致）', (tester) async {
     final appState = await primedAppStateWithProfile();
     await pumpIsolated(
       tester,
@@ -70,7 +70,7 @@ void main() {
       child: const SettingsScreen(),
     );
 
-    expect(appState.themeMode, ThemeMode.dark);
+    expect(appState.themeMode, ThemeMode.light);
   });
 
   testWidgets('tap light 主题图标 → AppState.themeMode 翻为 light', (tester) async {

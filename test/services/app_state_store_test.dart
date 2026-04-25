@@ -60,6 +60,17 @@ void main() {
     expect(loaded.themeMode, ThemeMode.light);
   });
 
+  test('migrates old default dark theme to light once', () async {
+    SharedPreferences.setMockInitialValues({'themeMode': ThemeMode.dark.name});
+
+    const store = AppStateStore();
+    final firstLoad = await store.load();
+    final secondLoad = await store.load();
+
+    expect(firstLoad.themeMode, ThemeMode.light);
+    expect(secondLoad.themeMode, ThemeMode.light);
+  });
+
   test('stores and clears in-progress workout recovery payload', () async {
     const store = AppStateStore();
     final payload = {

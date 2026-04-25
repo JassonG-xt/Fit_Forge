@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'app_colors.dart';
 
 /// FitForge 设计系统：字体 + TextTheme。
 ///
@@ -14,11 +15,11 @@ class AppTypography {
   /// [brightness] 决定默认文字颜色。
   static TextTheme textTheme(Brightness brightness) {
     final base = brightness == Brightness.dark
-        ? const Color(0xFFF5F6F8)
-        : const Color(0xFF0F1115);
+        ? AppColors.textPrimary
+        : AppColors.textPrimaryLight;
     final secondary = brightness == Brightness.dark
-        ? const Color(0xFFA1A6B3)
-        : const Color(0xFF5B6273);
+        ? AppColors.textSecondary
+        : AppColors.textSecondaryLight;
 
     // Noto Sans SC 基底
     final noto = GoogleFonts.notoSansScTextTheme(const TextTheme());

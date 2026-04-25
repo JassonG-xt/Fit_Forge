@@ -11,14 +11,14 @@ import 'app_typography.dart';
 /// MaterialApp(
 ///   theme: AppTheme.light,
 ///   darkTheme: AppTheme.dark,
-///   themeMode: ThemeMode.dark, // 深色为主门面
+///   themeMode: ThemeMode.light, // 浅色为主门面
 /// )
 /// ```
 class AppTheme {
   AppTheme._();
 
   // ════════════════════════════════════════════
-  //  深色主题（主门面）
+  //  深色主题（辅助门面）
   // ════════════════════════════════════════════
   static ThemeData get dark {
     final textTheme = AppTypography.textTheme(Brightness.dark);
@@ -64,7 +64,7 @@ class AppTheme {
       // ── NavigationBar（底 Tab）──
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.bgSurface,
-        indicatorColor: AppColors.primary.withValues(alpha: 0.15),
+        indicatorColor: AppColors.primary.withValues(alpha: 0.18),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: AppColors.primary);
@@ -84,7 +84,7 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.textInverse,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
@@ -160,7 +160,9 @@ class AppTheme {
             return AppColors.bgSurface;
           }),
           foregroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return Colors.white;
+            if (states.contains(WidgetState.selected)) {
+              return AppColors.textInverse;
+            }
             return AppColors.textSecondary;
           }),
           side: WidgetStateProperty.all(
@@ -184,7 +186,7 @@ class AppTheme {
       // ── Chip ──
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.bgSurface,
-        selectedColor: AppColors.primary,
+        selectedColor: AppColors.primary.withValues(alpha: 0.16),
         labelStyle: textTheme.labelMedium!,
         side: const BorderSide(color: AppColors.border),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.brFull),
@@ -214,7 +216,7 @@ class AppTheme {
   }
 
   // ════════════════════════════════════════════
-  //  浅色主题（跟随态）
+  //  浅色主题（主门面）
   // ════════════════════════════════════════════
   static ThemeData get light {
     final textTheme = AppTypography.textTheme(Brightness.light);
@@ -240,7 +242,7 @@ class AppTheme {
         foregroundColor: AppColors.textPrimaryLight,
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        centerTitle: true,
+        centerTitle: false,
         titleTextStyle: textTheme.titleLarge,
         systemOverlayStyle: SystemUiOverlayStyle.dark,
       ),
@@ -258,13 +260,27 @@ class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.bgElevatedLight,
         indicatorColor: AppColors.primary.withValues(alpha: 0.12),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: AppColors.primary);
+          }
+          return const IconThemeData(color: AppColors.textTertiaryLight);
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return textTheme.labelSmall!.copyWith(color: AppColors.primary);
+          }
+          return textTheme.labelSmall!.copyWith(
+            color: AppColors.textTertiaryLight,
+          );
+        }),
         surfaceTintColor: Colors.transparent,
       ),
 
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.textInverse,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.brMd),
@@ -274,7 +290,7 @@ class AppTheme {
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.bgBaseLight,
+        fillColor: AppColors.bgElevatedLight,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 12,
@@ -306,10 +322,12 @@ class AppTheme {
         style: ButtonStyle(
           backgroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) return AppColors.primary;
-            return Colors.white;
+            return AppColors.bgElevatedLight;
           }),
           foregroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return Colors.white;
+            if (states.contains(WidgetState.selected)) {
+              return AppColors.textInverse;
+            }
             return AppColors.textSecondaryLight;
           }),
         ),
@@ -320,6 +338,14 @@ class AppTheme {
         inactiveTrackColor: AppColors.borderLight,
         thumbColor: AppColors.primary,
         overlayColor: AppColors.primary.withValues(alpha: 0.12),
+      ),
+
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.bgSurfaceLight,
+        selectedColor: AppColors.primary.withValues(alpha: 0.14),
+        labelStyle: textTheme.labelMedium!,
+        side: const BorderSide(color: AppColors.borderLight),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.brFull),
       ),
     );
   }

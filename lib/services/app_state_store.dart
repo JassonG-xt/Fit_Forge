@@ -14,7 +14,7 @@ class AppStateSnapshot {
     this.bodyMetrics = const [],
     this.achievements = const [],
     this.hasCompletedOnboarding = false,
-    this.themeMode = ThemeMode.dark,
+    this.themeMode = ThemeMode.light,
   });
 
   final UserProfile? profile;
@@ -37,6 +37,7 @@ class AppStateStore {
   static const _kAchievements = 'achievements';
   static const _kOnboarding = 'hasCompletedOnboarding';
   static const _kThemeMode = 'themeMode';
+  static const _kVisualRefreshV1 = 'visualRefreshV1';
   static const _kInProgressSession = 'inProgressSession';
 
   Future<void> clear() async {
@@ -66,9 +67,10 @@ class AppStateStore {
 
   Future<AppStateSnapshot> load() async {
     final prefs = await SharedPreferences.getInstance();
+    final themeMode = await _loadThemeModeWithMigration(prefs);
     return AppStateSnapshot(
       hasCompletedOnboarding: prefs.getBool(_kOnboarding) ?? false,
-      themeMode: _safeLoad(() => _loadThemeMode(prefs), ThemeMode.dark),
+      themeMode: themeMode,
       profile: _safeLoad<UserProfile?>(() => _loadProfile(prefs), null),
       activePlan: _safeLoad<WorkoutPlan?>(() => _loadPlan(prefs), null),
       sessions: _safeLoad(() => _loadSessions(prefs), const []),
@@ -119,11 +121,24 @@ class AppStateStore {
     }
   }
 
+  Future<ThemeMode> _loadThemeModeWithMigration(SharedPreferences prefs) async {
+    final themeMode = _safeLoad(() => _loadThemeMode(prefs), ThemeMode.light);
+    final hasVisualRefresh = prefs.getBool(_kVisualRefreshV1) ?? false;
+    if (!hasVisualRefresh) {
+      await prefs.setBool(_kVisualRefreshV1, true);
+      if (themeMode == ThemeMode.dark) {
+        await prefs.setString(_kThemeMode, ThemeMode.light.name);
+        return ThemeMode.light;
+      }
+    }
+    return themeMode;
+  }
+
   ThemeMode _loadThemeMode(SharedPreferences prefs) {
     final themeModeStr = prefs.getString(_kThemeMode);
-    if (themeModeStr == null) return ThemeMode.dark;
+    if (themeModeStr == null) return ThemeMode.light;
     return ThemeMode.values.where((m) => m.name == themeModeStr).firstOrNull ??
-        ThemeMode.dark;
+        ThemeMode.light;
   }
 
   UserProfile? _loadProfile(SharedPreferences prefs) {

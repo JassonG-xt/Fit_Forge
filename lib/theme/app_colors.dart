@@ -2,70 +2,74 @@ import 'package:flutter/material.dart';
 
 /// FitForge 设计系统：语义色 token。
 ///
-/// 原则：
-/// - 所有屏幕禁止直接使用 `Colors.xxx`（除 `Colors.transparent`）。
-/// - 深色模式是主门面，浅色模式作为跟随，两套 token 同名配对。
-/// - 颜色用途由名字决定，不由色值决定——"bgElevated" 永远是卡片背景。
+/// 视觉方向：浅色优先、清爽运动感、低饱和数据色。页面应通过语义色取色，
+/// 不直接依赖具体色值。
 class AppColors {
   AppColors._();
 
   // ──── Surface 层次（深色）────
-  static const bgBase = Color(0xFF0A0B0F); // 最底层 Scaffold 背景
-  static const bgElevated = Color(0xFF14161C); // 卡片/面板
-  static const bgSurface = Color(0xFF1C1F27); // 悬浮元素（modal / sticky bar）
-  static const border = Color(0xFF2A2E38); // 分隔线 / 描边 / 非激活边框
+  static const bgBase = Color(0xFF111817);
+  static const bgElevated = Color(0xFF18211F);
+  static const bgSurface = Color(0xFF202C29);
+  static const border = Color(0xFF30413D);
 
   // ──── Surface 层次（浅色，跟随态）────
-  static const bgBaseLight = Color(0xFFF7F8FA);
+  static const bgBaseLight = Color(0xFFF5F8F6);
   static const bgElevatedLight = Color(0xFFFFFFFF);
-  static const bgSurfaceLight = Color(0xFFFFFFFF);
-  static const borderLight = Color(0xFFE4E7EC);
+  static const bgSurfaceLight = Color(0xFFEEF5F1);
+  static const borderLight = Color(0xFFDDE8E2);
 
   // ──── 品牌色 ────
-  static const primary = Color(0xFFFF6B1A); // 燃脂橙
-  static const primaryGlow = Color(0xFFFF8A3D); // 橙色高光（渐变用）
-  static const primaryDim = Color(0xFFCC5515); // 按下/禁用态
-  static const accent = Color(0xFF00E5A8); // 电光绿（成功 / PR / 解锁）
-  static const accentDim = Color(0xFF00B386);
-  static const danger = Color(0xFFFF3D5A);
-  static const warning = Color(0xFFFFB020);
+  static const primary = Color(0xFF18C787);
+  static const primaryGlow = Color(0xFF75E8B6);
+  static const primaryDim = Color(0xFF0E9564);
+  static const accent = Color(0xFF3E7BFA);
+  static const accentDim = Color(0xFF2F63D4);
+  static const danger = Color(0xFFE85D75);
+  static const warning = Color(0xFFF4B84A);
 
   // ──── 文本色（深色模式）────
-  static const textPrimary = Color(0xFFF5F6F8);
-  static const textSecondary = Color(0xFFA1A6B3);
-  static const textTertiary = Color(0xFF6B7184);
-  static const textInverse = Color(0xFF0A0B0F); // 亮色按钮上的文字
+  static const textPrimary = Color(0xFFF3F7F5);
+  static const textSecondary = Color(0xFFB1BDB8);
+  static const textTertiary = Color(0xFF7F8C87);
+  static const textInverse = Color(0xFFFFFFFF);
 
   // ──── 文本色（浅色模式，跟随态）────
-  static const textPrimaryLight = Color(0xFF0F1115);
-  static const textSecondaryLight = Color(0xFF5B6273);
-  static const textTertiaryLight = Color(0xFF8B92A3);
+  static const textPrimaryLight = Color(0xFF17211E);
+  static const textSecondaryLight = Color(0xFF5D6B66);
+  static const textTertiaryLight = Color(0xFF91A09A);
 
   // ──── 渐变 ────
   static const heatGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFFF6B1A), Color(0xFFFF3D5A)],
+    colors: [Color(0xFF18C787), Color(0xFF54DCA6)],
   );
 
   static const ringGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFFFF8A3D), Color(0xFFFFD12B)],
+    colors: [Color(0xFF18C787), Color(0xFF7BE7B9)],
   );
 
   static const coolGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF00E5A8), Color(0xFF2B8CFF)],
+    colors: [Color(0xFF18C787), Color(0xFF3E7BFA)],
+  );
+
+  static const freshGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFE9FFF5), Color(0xFFFFFFFF)],
   );
 
   // ──── 部位色（动作库/训练分类用）────
-  static const chest = Color(0xFFFF6B1A);
-  static const back = Color(0xFF2B8CFF);
-  static const legs = Color(0xFF9B5CFF);
-  static const shoulders = Color(0xFFFFB020);
-  static const arms = Color(0xFF00E5A8);
-  static const core = Color(0xFFFF3D5A);
-  static const cardio = Color(0xFFFF6B1A);
+  static const chest = Color(0xFF18C787);
+  static const back = Color(0xFF3E7BFA);
+  static const legs = Color(0xFF7C6DF2);
+  static const shoulders = Color(0xFFF4B84A);
+  static const arms = Color(0xFF0DAE75);
+  static const core = Color(0xFFE85D75);
+  static const cardio = Color(0xFF1CB6B0);
 }

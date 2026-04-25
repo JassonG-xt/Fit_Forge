@@ -5,7 +5,6 @@ import '../../services/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_radius.dart';
-import '../../widgets/brand/hero_card.dart';
 import '../../widgets/brand/stat_number.dart';
 import '../../widgets/brand/progress_ring.dart';
 import '../../widgets/brand/glow_button.dart';
@@ -37,10 +36,9 @@ class HomeScreen extends StatelessWidget {
           appBar: AppBar(
             title: Text(
               'FitForge',
-              style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge!.copyWith(fontWeight: FontWeight.w800),
             ),
             actions: [
               IconButton(
@@ -56,37 +54,42 @@ class HomeScreen extends StatelessWidget {
           ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: AppSpacing.sm),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 920),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: AppSpacing.sm),
 
-                // ─── 崩溃恢复提示 ───
-                if (state.hasRecoverableSession)
-                  _recoveryBanner(context, state),
+                    // ─── 崩溃恢复提示 ───
+                    if (state.hasRecoverableSession)
+                      _recoveryBanner(context, state),
 
-                // ─── Hero 区：问候 + 连续天数 + 周进度环 ───
-                _heroSection(context, state),
-                const SizedBox(height: AppSpacing.lg),
+                    // ─── Hero 区：问候 + 连续天数 + 周进度环 ───
+                    _heroSection(context, state),
+                    const SizedBox(height: AppSpacing.lg),
 
-                // ─── 今日训练大卡片 ───
-                _todayWorkoutCard(context, state),
-                const SizedBox(height: AppSpacing.lg),
+                    // ─── 今日训练大卡片 ───
+                    _todayWorkoutCard(context, state),
+                    const SizedBox(height: AppSpacing.lg),
 
-                // ─── 本周热图 ───
-                _weekHeatSection(context, state),
-                const SizedBox(height: AppSpacing.lg),
+                    // ─── 本周热图 ───
+                    _weekHeatSection(context, state),
+                    const SizedBox(height: AppSpacing.lg),
 
-                // ─── 快速统计 ───
-                _statsRow(context, state),
-                const SizedBox(height: AppSpacing.lg),
+                    // ─── 快速统计 ───
+                    _statsRow(context, state),
+                    const SizedBox(height: AppSpacing.lg),
 
-                // ─── 快捷入口 ───
-                Text('快捷入口', style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: AppSpacing.sm),
-                _quickAccessGrid(context),
-                const SizedBox(height: AppSpacing.xl),
-              ],
+                    // ─── 快捷入口 ───
+                    Text('快捷入口', style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: AppSpacing.sm),
+                    _quickAccessGrid(context),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
+                ),
+              ),
             ),
           ),
         );
@@ -168,87 +171,71 @@ class HomeScreen extends StatelessWidget {
   // ════════════════════════════════════════════
   Widget _heroSection(BuildContext context, AppState state) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final weekProgress = state.activePlan != null
         ? state.totalWorkoutsThisWeek / (state.profile?.weeklyFrequency ?? 4)
         : 0.0;
 
-    return HeroCard(
+    return SectionCard(
+      borderColor: AppColors.primary.withValues(alpha: 0.16),
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Row(
         children: [
-          // 左侧：问候 + 目标
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(_greeting, style: theme.textTheme.headlineMedium),
+                const SizedBox(height: AppSpacing.xs),
                 Text(
-                  _greeting,
-                  style: theme.textTheme.headlineMedium!.copyWith(
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
+                  state.profile == null
+                      ? '今天从一个清晰计划开始'
+                      : '目标: ${state.profile!.goal.displayName}',
+                  style: theme.textTheme.bodySmall,
                 ),
-                if (state.profile != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: Text(
-                      '目标: ${state.profile!.goal.displayName}',
-                      style: theme.textTheme.bodySmall!.copyWith(
-                        color: Colors.white.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ),
                 const SizedBox(height: AppSpacing.md),
-                // Streak 大数字
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
                       '${state.streakDays}',
                       style: theme.textTheme.displayLarge!.copyWith(
-                        color: Colors.white,
-                        fontSize: 48,
+                        color: AppColors.primary,
+                        fontSize: 46,
                         height: 1.0,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 6),
-                      child: Text(
-                        '天连续训练',
-                        style: theme.textTheme.bodySmall!.copyWith(
-                          color: Colors.white.withValues(alpha: 0.7),
-                        ),
-                      ),
+                      child: Text('天连续训练', style: theme.textTheme.bodySmall),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-
-          // 右侧：周进度环
           ProgressRing(
             progress: weekProgress.clamp(0.0, 1.0),
-            size: 80,
-            strokeWidth: 6,
-            gradientColors: const [Colors.white, Color(0xFFFFD12B)],
-            trackColor: Colors.white.withValues(alpha: 0.2),
+            size: 82,
+            strokeWidth: 7,
+            trackColor: isDark ? AppColors.bgSurface : AppColors.bgSurfaceLight,
+            gradientColors: const [AppColors.primary, AppColors.primaryGlow],
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   '${state.totalWorkoutsThisWeek}/${state.profile?.weeklyFrequency ?? '-'}',
                   style: theme.textTheme.labelLarge!.copyWith(
-                    color: Colors.white,
+                    color: isDark
+                        ? AppColors.textPrimary
+                        : AppColors.textPrimaryLight,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 Text(
                   '本周',
-                  style: theme.textTheme.labelSmall!.copyWith(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 10,
-                  ),
+                  style: theme.textTheme.labelSmall!.copyWith(fontSize: 10),
                 ),
               ],
             ),
@@ -290,12 +277,12 @@ class HomeScreen extends StatelessWidget {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      gradient: AppColors.heatGradient,
+                      color: AppColors.primary.withValues(alpha: 0.12),
                       borderRadius: AppRadius.brSm,
                     ),
                     child: const Icon(
-                      Icons.local_fire_department,
-                      color: Colors.white,
+                      Icons.play_arrow_rounded,
+                      color: AppColors.primary,
                       size: 20,
                     ),
                   ),
@@ -422,13 +409,13 @@ class HomeScreen extends StatelessWidget {
             Container(
               width: 56,
               height: 56,
-              decoration: const BoxDecoration(
-                gradient: AppColors.heatGradient,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.add_rounded,
-                color: Colors.white,
+                color: AppColors.primary,
                 size: 28,
               ),
             ),
@@ -467,42 +454,55 @@ class HomeScreen extends StatelessWidget {
   //  快速统计
   // ════════════════════════════════════════════
   Widget _statsRow(BuildContext context, AppState state) {
-    return Row(
-      children: [
-        Expanded(
-          child: SectionCard(
-            child: StatNumber(
-              value: '${state.totalWorkoutsThisWeek}',
-              label: '本周训练',
-              fontSize: 24,
-            ),
-          ),
+    final cards = [
+      SectionCard(
+        child: StatNumber(
+          value: '${state.totalWorkoutsThisWeek}',
+          label: '本周训练',
+          fontSize: 24,
         ),
-        const SizedBox(width: AppSpacing.cardGap),
-        Expanded(
-          child: SectionCard(
-            child: StatNumber(
-              value: state.profile != null
-                  ? '${state.profile!.weightKg}'
-                  : '--',
-              label: '当前体重(kg)',
-              fontSize: 24,
-              valueColor: AppColors.accent,
-            ),
-          ),
+      ),
+      SectionCard(
+        child: StatNumber(
+          value: state.profile != null ? '${state.profile!.weightKg}' : '--',
+          label: '当前体重(kg)',
+          fontSize: 24,
+          valueColor: AppColors.accent,
         ),
-        const SizedBox(width: AppSpacing.cardGap),
-        Expanded(
-          child: SectionCard(
-            child: StatNumber(
-              value: '${state.completedSessions.length}',
-              label: '累计训练',
-              fontSize: 24,
-              valueColor: AppColors.warning,
-            ),
-          ),
+      ),
+      SectionCard(
+        child: StatNumber(
+          value: '${state.completedSessions.length}',
+          label: '累计训练',
+          fontSize: 24,
+          valueColor: AppColors.warning,
         ),
-      ],
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 420) {
+          return Column(
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                cards[i],
+                if (i != cards.length - 1)
+                  const SizedBox(height: AppSpacing.cardGap),
+              ],
+            ],
+          );
+        }
+        return Row(
+          children: [
+            for (var i = 0; i < cards.length; i++) ...[
+              Expanded(child: cards[i]),
+              if (i != cards.length - 1)
+                const SizedBox(width: AppSpacing.cardGap),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -538,41 +538,46 @@ class HomeScreen extends StatelessWidget {
       ),
     ];
 
-    return Row(
-      children: items.map((item) {
-        final (title, icon, color, screen) = item;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(
-              right: item != items.last ? AppSpacing.sm : 0,
-            ),
-            child: InkWell(
-              borderRadius: AppRadius.brMd,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(builder: (_) => screen),
-              ),
-              child: SectionCard(
-                padding: const EdgeInsets.symmetric(
-                  vertical: AppSpacing.md,
-                  horizontal: AppSpacing.sm,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth = constraints.maxWidth < 520
+            ? (constraints.maxWidth - AppSpacing.sm) / 2
+            : (constraints.maxWidth - AppSpacing.sm * 3) / 4;
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: items.map((item) {
+            final (title, icon, color, screen) = item;
+            return SizedBox(
+              width: itemWidth,
+              child: InkWell(
+                borderRadius: AppRadius.brMd,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(builder: (_) => screen),
                 ),
-                child: Column(
-                  children: [
-                    Icon(icon, color: color, size: 22),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      title,
-                      style: theme.textTheme.labelSmall,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                child: SectionCard(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppSpacing.md,
+                    horizontal: AppSpacing.sm,
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(icon, color: color, size: 22),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        title,
+                        style: theme.textTheme.labelSmall,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 

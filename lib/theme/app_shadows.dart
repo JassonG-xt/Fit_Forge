@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// FitForge 设计系统：阴影 + 发光 token。
-///
-/// 深色模式下传统 boxShadow 几乎不可见，
-/// 改用**内发光描边**（inset glow）和**品牌色发光**（elevation glow）区分层级。
+/// FitForge 设计系统：浅色卡片阴影 + 低饱和品牌阴影。
 class AppShadows {
   AppShadows._();
 
@@ -22,9 +19,9 @@ class AppShadows {
   /// 品牌高亮：CTA 按钮 / 当前组卡片
   static List<BoxShadow> primaryGlow = [
     BoxShadow(
-      color: AppColors.primary.withValues(alpha: 0.3),
-      blurRadius: 20,
-      offset: const Offset(0, 4),
+      color: AppColors.primary.withValues(alpha: 0.18),
+      blurRadius: 18,
+      offset: const Offset(0, 8),
     ),
   ];
 
@@ -42,9 +39,9 @@ class AppShadows {
   /// 卡片标准阴影
   static List<BoxShadow> cardElevation = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.06),
-      blurRadius: 16,
-      offset: const Offset(0, 4),
+      color: const Color(0xFF12352A).withValues(alpha: 0.08),
+      blurRadius: 18,
+      offset: const Offset(0, 8),
     ),
   ];
 }
