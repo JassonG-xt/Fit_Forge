@@ -12,6 +12,8 @@ import 'session_queries.dart';
 class AppState extends ChangeNotifier {
   AppState({AppStateStore store = const AppStateStore()}) : _store = store;
 
+  static const int currentExportVersion = AppStateSnapshot.currentVersion;
+
   final AppStateStore _store;
 
   // ──── 状态 ────
@@ -43,6 +45,10 @@ class AppState extends ChangeNotifier {
   List<Achievement> get achievements => UnmodifiableListView(_achievements);
   bool get hasCompletedOnboarding => _hasCompletedOnboarding;
   ThemeMode get themeMode => _themeMode;
+  ProfileState get profileState => ProfileState._(this);
+  WorkoutState get workoutState => WorkoutState._(this);
+  ProgressState get progressState => ProgressState._(this);
+  SettingsState get settingsState => SettingsState._(this);
 
   /// 已完成的训练记录（按日期降序），带缓存。
   List<WorkoutSession> get completedSessions {
@@ -328,6 +334,7 @@ class AppState extends ChangeNotifier {
   // ──── 持久化 ────
   static const _persistDebounceDuration = Duration(milliseconds: 100);
   Timer? _persistTimer;
+  Future<void> _persistQueue = Future<void>.value();
   Future<void>? _persistInFlight;
 
   void _persist() {
@@ -349,19 +356,23 @@ class AppState extends ChangeNotifier {
     if (timer != null) {
       timer.cancel();
       _persistTimer = null;
-      _startPersistWrite();
     }
-    await _persistInFlight;
+    final write = _startPersistWrite();
+    await write;
   }
 
-  void _startPersistWrite() {
-    final write = _writePrefs();
+  Future<void> _startPersistWrite() {
+    final write = _persistQueue.then((_) => _writePrefs());
+    _persistQueue = write.catchError((Object error, StackTrace stackTrace) {
+      debugPrint('FitForge: persist queue failed: $error');
+    });
     _persistInFlight = write;
     write.whenComplete(() {
       if (identical(_persistInFlight, write)) {
         _persistInFlight = null;
       }
     });
+    return write;
   }
 
   Future<void> _writePrefs() async {
@@ -450,7 +461,7 @@ class AppState extends ChangeNotifier {
   /// Exports all user data as a JSON string.
   String exportToJson() {
     final data = <String, dynamic>{
-      'version': 1,
+      'version': currentExportVersion,
       'exportedAt': DateTime.now().toIso8601String(),
       'profile': _profile?.toJson(),
       'activePlan': _activePlan?.toJson(),
@@ -462,71 +473,186 @@ class AppState extends ChangeNotifier {
     return const JsonEncoder.withIndent('  ').convert(data);
   }
 
-  /// Imports user data from a JSON string. Returns error message or null on success.
-  String? importFromJson(String jsonStr) {
+  /// Parses and validates an import without mutating current state.
+  AppStateImportPreview previewImportJson(String jsonStr) {
     try {
       final data = json.decode(jsonStr) as Map<String, dynamic>;
-      if (data['version'] == null) return '无效的导出文件格式';
-
-      var nextHasCompletedOnboarding = _hasCompletedOnboarding;
-      var nextThemeMode = _themeMode;
-      var nextProfile = _profile;
-      var nextActivePlan = _activePlan;
-      var nextSessions = _sessions;
-      var nextBodyMetrics = _bodyMetrics;
-      var nextAchievements = _achievements;
-
-      if (data.containsKey('profile')) {
-        final value = data['profile'];
-        nextProfile = value == null
-            ? null
-            : UserProfile.fromJson(value as Map<String, dynamic>);
-        nextHasCompletedOnboarding = nextProfile != null;
+      final version = data['version'];
+      if (version is! int) {
+        return const AppStateImportPreview.invalid('无效的导出文件格式');
       }
-      if (data.containsKey('activePlan')) {
-        final value = data['activePlan'];
-        nextActivePlan = value == null
-            ? null
-            : WorkoutPlan.fromJson(value as Map<String, dynamic>);
-      }
-      if (data.containsKey('sessions')) {
-        nextSessions = (data['sessions'] as List)
-            .map((s) => WorkoutSession.fromJson(s as Map<String, dynamic>))
-            .toList();
-      }
-      if (data.containsKey('bodyMetrics')) {
-        nextBodyMetrics = (data['bodyMetrics'] as List)
-            .map((m) => BodyMetric.fromJson(m as Map<String, dynamic>))
-            .toList();
-      }
-      if (data.containsKey('achievements')) {
-        nextAchievements = (data['achievements'] as List)
-            .map((a) => Achievement.fromJson(a as Map<String, dynamic>))
-            .toList();
-      }
-      if (data.containsKey('themeMode')) {
-        nextThemeMode =
-            ThemeMode.values
-                .where((m) => m.name == data['themeMode'])
-                .firstOrNull ??
-            ThemeMode.light;
+      if (version > currentExportVersion) {
+        return AppStateImportPreview.invalid('不支持的导出版本: $version');
       }
 
-      _hasCompletedOnboarding = nextHasCompletedOnboarding;
-      _themeMode = nextThemeMode;
-      _profile = nextProfile;
-      _activePlan = nextActivePlan;
-      _sessions = nextSessions;
-      _bodyMetrics = nextBodyMetrics;
-      _achievements = _migrateAchievements(nextAchievements);
-
-      _invalidateCompletedCache();
-      _rebuildPrCache();
-      notifyListeners();
-      _persist();
-      return null;
+      final snapshot = _snapshotFromImportData(data, version);
+      return AppStateImportPreview.valid(snapshot);
     } catch (e) {
-      return '导入失败: $e';
+      return AppStateImportPreview.invalid('导入失败: $e');
     }
   }
+
+  /// Imports user data from a JSON string. Returns error message or null on success.
+  String? importFromJson(String jsonStr) {
+    final preview = previewImportJson(jsonStr);
+    if (!preview.isValid) return preview.error;
+
+    _applySnapshot(preview.snapshot!);
+    notifyListeners();
+    _persist();
+    return null;
+  }
+
+  AppStateSnapshot _snapshotFromImportData(
+    Map<String, dynamic> data,
+    int version,
+  ) {
+    var nextHasCompletedOnboarding = _hasCompletedOnboarding;
+    var nextThemeMode = _themeMode;
+    var nextProfile = _profile;
+    var nextActivePlan = _activePlan;
+    var nextSessions = List<WorkoutSession>.of(_sessions);
+    var nextBodyMetrics = List<BodyMetric>.of(_bodyMetrics);
+    var nextAchievements = List<Achievement>.of(_achievements);
+
+    if (data.containsKey('profile')) {
+      final value = data['profile'];
+      nextProfile = value == null
+          ? null
+          : UserProfile.fromJson(value as Map<String, dynamic>);
+      nextHasCompletedOnboarding = nextProfile != null;
+    }
+    if (data.containsKey('activePlan')) {
+      final value = data['activePlan'];
+      nextActivePlan = value == null
+          ? null
+          : WorkoutPlan.fromJson(value as Map<String, dynamic>);
+    }
+    if (data.containsKey('sessions')) {
+      nextSessions = (data['sessions'] as List)
+          .map((s) => WorkoutSession.fromJson(s as Map<String, dynamic>))
+          .toList();
+    }
+    if (data.containsKey('bodyMetrics')) {
+      nextBodyMetrics = (data['bodyMetrics'] as List)
+          .map((m) => BodyMetric.fromJson(m as Map<String, dynamic>))
+          .toList();
+    }
+    if (data.containsKey('achievements')) {
+      nextAchievements = (data['achievements'] as List)
+          .map((a) => Achievement.fromJson(a as Map<String, dynamic>))
+          .toList();
+    }
+    if (data.containsKey('themeMode')) {
+      nextThemeMode =
+          ThemeMode.values
+              .where((m) => m.name == data['themeMode'])
+              .firstOrNull ??
+          ThemeMode.light;
+    }
+
+    return AppStateSnapshot(
+      version: version,
+      profile: nextProfile,
+      activePlan: nextActivePlan,
+      sessions: nextSessions,
+      bodyMetrics: nextBodyMetrics,
+      achievements: _migrateAchievements(nextAchievements),
+      hasCompletedOnboarding: nextHasCompletedOnboarding,
+      themeMode: nextThemeMode,
+    );
+  }
+
+  void _applySnapshot(AppStateSnapshot snapshot) {
+    _hasCompletedOnboarding = snapshot.hasCompletedOnboarding;
+    _themeMode = snapshot.themeMode;
+    _profile = snapshot.profile;
+    _activePlan = snapshot.activePlan;
+    _sessions = snapshot.sessions;
+    _bodyMetrics = snapshot.bodyMetrics;
+    _achievements = snapshot.achievements;
+    _invalidateCompletedCache();
+    _rebuildPrCache();
+  }
+}
+
+class AppStateImportPreview {
+  const AppStateImportPreview.valid(this.snapshot) : error = null;
+  const AppStateImportPreview.invalid(this.error) : snapshot = null;
+
+  final AppStateSnapshot? snapshot;
+  final String? error;
+
+  bool get isValid => snapshot != null;
+}
+
+class ProfileState {
+  const ProfileState._(this._state);
+
+  final AppState _state;
+
+  UserProfile? get profile => _state.profile;
+  bool get hasCompletedOnboarding => _state.hasCompletedOnboarding;
+
+  void saveProfile(UserProfile profile) => _state.saveProfile(profile);
+
+  void updateProfile(UserProfile profile) => _state.updateProfile(profile);
+}
+
+class WorkoutState {
+  const WorkoutState._(this._state);
+
+  final AppState _state;
+
+  WorkoutPlan? get activePlan => _state.activePlan;
+  List<WorkoutSession> get sessions => _state.sessions;
+  WorkoutDay? get todayWorkout => _state.todayWorkout;
+
+  WorkoutPlan previewPlan() => _state.previewPlan();
+
+  void adoptPlan(WorkoutPlan plan) => _state.adoptPlan(plan);
+
+  void saveSession(WorkoutSession session) => _state.saveSession(session);
+
+  double lastWeightForExercise(String exerciseId) {
+    return _state.lastWeightForExercise(exerciseId);
+  }
+
+  int lastRepsForExercise(String exerciseId) {
+    return _state.lastRepsForExercise(exerciseId);
+  }
+}
+
+class ProgressState {
+  const ProgressState._(this._state);
+
+  final AppState _state;
+
+  List<WorkoutSession> get completedSessions => _state.completedSessions;
+  List<BodyMetric> get bodyMetrics => _state.bodyMetrics;
+  List<Achievement> get achievements => _state.achievements;
+  int get streakDays => _state.streakDays;
+  int get totalWorkoutsThisWeek => _state.totalWorkoutsThisWeek;
+
+  void addBodyMetric(BodyMetric metric) => _state.addBodyMetric(metric);
+}
+
+class SettingsState {
+  const SettingsState._(this._state);
+
+  final AppState _state;
+
+  ThemeMode get themeMode => _state.themeMode;
+
+  void setThemeMode(ThemeMode mode) => _state.setThemeMode(mode);
+
+  String exportToJson() => _state.exportToJson();
+
+  AppStateImportPreview previewImportJson(String jsonStr) {
+    return _state.previewImportJson(jsonStr);
+  }
+
+  String? importFromJson(String jsonStr) => _state.importFromJson(jsonStr);
+
+  Future<void> resetAllData() => _state.resetAllData();
 }

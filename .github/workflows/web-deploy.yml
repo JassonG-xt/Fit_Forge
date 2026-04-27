@@ -58,6 +58,15 @@ jobs:
           grep -Fq '<base href="/Fit_Forge/">' build/web/index.html
           touch build/web/.nojekyll
 
+      - name: Smoke test built web app
+        run: |
+          python3 -m http.server 8080 --directory build/web &
+          server_pid=$!
+          trap "kill $server_pid" EXIT
+          sleep 2
+          curl -fsS http://127.0.0.1:8080/
+          curl -fsS http://127.0.0.1:8080/404.html
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fit_forge/services/app_state.dart';
+import 'package:fit_forge/services/app_state_store.dart';
 import 'package:fit_forge/models/models.dart';
 
 /// Creates an AppState ready for testing (no init() — that needs rootBundle).
@@ -14,6 +16,50 @@ Future<AppState> createTestState() async {
   // resetAllData seeds default achievements without needing rootBundle
   await state.resetAllData();
   return state;
+}
+
+class _WriteCall {
+  const _WriteCall({required this.sessionCount});
+
+  final int sessionCount;
+}
+
+class _BlockingWriteStore extends AppStateStore {
+  final writes = <_WriteCall>[];
+  final _writeCompleters = <Completer<void>>[];
+  final _writeCountWaiters = <int, Completer<void>>{};
+
+  int get writeCount => writes.length;
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<void> write(AppStateSnapshot snapshot) async {
+    final allowWrite = Completer<void>();
+    _writeCompleters.add(allowWrite);
+    writes.add(_WriteCall(sessionCount: snapshot.sessions.length));
+    _notifyWriteCountWaiters();
+
+    await allowWrite.future;
+  }
+
+  Future<void> waitForWriteCount(int count) {
+    if (writeCount >= count) return Future.value();
+    return (_writeCountWaiters[count] ??= Completer<void>()).future;
+  }
+
+  void completeWrite(int index) {
+    _writeCompleters[index].complete();
+  }
+
+  void _notifyWriteCountWaiters() {
+    for (final entry in _writeCountWaiters.entries.toList()) {
+      if (writeCount >= entry.key && !entry.value.isCompleted) {
+        entry.value.complete();
+      }
+    }
+  }
 }
 
 void main() {
@@ -201,6 +247,39 @@ void main() {
 
         expect(prefs.getBool('hasCompletedOnboarding'), isTrue);
         expect(prefs.getString('profile'), isNotNull);
+      },
+    );
+
+    test(
+      'flushPendingPersistence waits for in-flight writes before writing latest state',
+      () async {
+        final store = _BlockingWriteStore();
+        final state = AppState(store: store);
+        await state.resetAllData();
+
+        state.saveProfile(UserProfile(goal: FitnessGoal.buildMuscle));
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        await store.waitForWriteCount(1);
+        expect(store.writes.single.sessionCount, 0);
+
+        state.saveSession(
+          WorkoutSession(
+            id: 'latest-session',
+            dayType: WorkoutDayType.push,
+            isCompleted: true,
+          ),
+        );
+
+        final flush = state.flushPendingPersistence();
+        await Future<void>.delayed(Duration.zero);
+        expect(store.writeCount, 1);
+
+        store.completeWrite(0);
+        await store.waitForWriteCount(2);
+        expect(store.writes.last.sessionCount, 1);
+
+        store.completeWrite(1);
+        await flush;
       },
     );
   });
@@ -409,6 +488,23 @@ void main() {
       state.updateProfile(profile.copyWith(goal: FitnessGoal.loseFat));
 
       expect(state.activePlan, isNull);
+    });
+  });
+
+  group('feature-level facades', () {
+    test('delegate profile, workout, progress, and settings behavior', () {
+      state.profileState.saveProfile(UserProfile(goal: FitnessGoal.loseFat));
+      state.workoutState.saveSession(
+        WorkoutSession(
+          id: 'facade-session',
+          dayType: WorkoutDayType.push,
+          isCompleted: true,
+        ),
+      );
+
+      expect(state.profileState.profile!.goal, FitnessGoal.loseFat);
+      expect(state.progressState.completedSessions.single.id, 'facade-session');
+      expect(state.settingsState.exportToJson(), contains('"version": 1'));
     });
   });
 }

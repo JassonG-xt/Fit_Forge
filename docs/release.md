@@ -46,7 +46,7 @@ The workflow expects these GitHub secrets when producing a signed release:
 - `ANDROID_KEY_PASSWORD`
 - `ANDROID_KEY_ALIAS`
 
-Locally, `android/key.properties.template` documents the expected key file shape. If no release keystore is configured, the Gradle release build falls back to debug signing so maintainers can still verify packaging.
+Locally, `android/key.properties.template` documents the expected key file shape. Release builds must be signed with the configured release key; debug signing is not used for release artifacts.
 
 ## Web Deployment
 
@@ -62,6 +62,7 @@ Build notes:
 - the workflow builds with `--base-href "/Fit_Forge/"`
 - `build/web/index.html` is copied to `404.html` for SPA fallback on GitHub Pages
 - the artifact is checked before upload so `index.html`, `404.html`, and the `/Fit_Forge/` base href are present
+- the built artifact is served locally and smoke-tested with `curl` before upload
 - the workflow uploads `build/web` with `actions/upload-pages-artifact`
 - the workflow publishes through `actions/deploy-pages`, so the repository Pages source should be set to **GitHub Actions**
 
@@ -80,9 +81,10 @@ If the public demo returns 404 after a successful push, check the latest `Deploy
 `.github/workflows/ci.yml` runs on pushes to `main` / `master` and on pull requests. It currently verifies:
 
 - dependency resolution
-- formatting on pull requests
+- formatting on pushes and pull requests
 - strict static analysis
 - test execution with coverage upload
+- minimum 75% total line coverage and 90% coverage for `lib/engines/` plus `lib/services/`
 
 ## Local Release Commands
 

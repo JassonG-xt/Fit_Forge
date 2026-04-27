@@ -2,6 +2,9 @@ import '../models/models.dart';
 
 /// 饮食计划生成引擎
 class NutritionEngine {
+  static const MacroCalculator macroCalculator = DefaultMacroCalculator();
+  static const MealPlanner mealPlanner = DefaultMealPlanner();
+
   // ══════════ 宏量营养素计算 ══════════
 
   static MacroTarget calculateMacros(UserProfile profile) {
@@ -173,6 +176,40 @@ class NutritionEngine {
     final base = weightKg * 35;
     final bonus = workoutDays >= 4 ? 500.0 : 300.0;
     return (base + bonus).round();
+  }
+}
+
+abstract interface class MacroCalculator {
+  MacroTarget calculate(UserProfile profile);
+}
+
+class DefaultMacroCalculator implements MacroCalculator {
+  const DefaultMacroCalculator();
+
+  @override
+  MacroTarget calculate(UserProfile profile) {
+    return NutritionEngine.calculateMacros(profile);
+  }
+}
+
+abstract interface class MealPlanner {
+  List<MealSuggestion> generate(
+    MacroTarget macros,
+    FitnessGoal goal,
+    List<Food> foods,
+  );
+}
+
+class DefaultMealPlanner implements MealPlanner {
+  const DefaultMealPlanner();
+
+  @override
+  List<MealSuggestion> generate(
+    MacroTarget macros,
+    FitnessGoal goal,
+    List<Food> foods,
+  ) {
+    return NutritionEngine.generateMealPlan(macros, goal, foods);
   }
 }
 

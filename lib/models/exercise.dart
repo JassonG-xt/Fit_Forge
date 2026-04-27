@@ -55,7 +55,7 @@ class Exercise {
   final Equipment equipment;
 
   /// 完成此动作所需的全部器械（含主器械）。
-  /// 计划引擎会检查用户是否拥有所有��需器械。
+  /// 计划引擎会检查用户是否拥有所有所需器械。
   final List<Equipment> requiredEquipment;
   final ExperienceLevel difficulty;
   final bool isCompound;

@@ -13,8 +13,8 @@ plugins {
 // ══════════════════════════════════════════════════════════════════
 // Loads `android/key.properties` if present. In CI this file is
 // materialized from GitHub Secrets (see .github/workflows/release.yml).
-// For forks and local dev without the file, release builds fall back
-// to debug signing — see buildTypes.release below.
+// Release builds require this file. Debug signing is never used for release
+// artifacts, so GitHub Releases cannot accidentally ship debug-signed APKs.
 // ══════════════════════════════════════════════════════════════════
 val keystoreProperties = Properties().apply {
     val file = rootProject.file("key.properties")
@@ -59,13 +59,7 @@ android {
 
     buildTypes {
         release {
-            // Graceful fallback: forks and local dev without key.properties
-            // still get a working (but debug-signed) release build.
-            signingConfig = if (hasReleaseKeystore) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

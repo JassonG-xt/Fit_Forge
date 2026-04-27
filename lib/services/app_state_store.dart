@@ -8,6 +8,7 @@ import '../models/models.dart';
 /// Serializable snapshot of user-owned application state.
 class AppStateSnapshot {
   const AppStateSnapshot({
+    this.version = currentVersion,
     this.profile,
     this.activePlan,
     this.sessions = const [],
@@ -17,6 +18,9 @@ class AppStateSnapshot {
     this.themeMode = ThemeMode.light,
   });
 
+  static const int currentVersion = 1;
+
+  final int version;
   final UserProfile? profile;
   final WorkoutPlan? activePlan;
   final List<WorkoutSession> sessions;
@@ -30,6 +34,7 @@ class AppStateSnapshot {
 class AppStateStore {
   const AppStateStore();
 
+  static const _kVersion = 'snapshotVersion';
   static const _kProfile = 'profile';
   static const _kActivePlan = 'activePlan';
   static const _kSessions = 'sessions';
@@ -47,6 +52,7 @@ class AppStateStore {
 
   Future<void> write(AppStateSnapshot snapshot) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kVersion, snapshot.version);
     await _setJsonOrRemove(prefs, _kProfile, snapshot.profile?.toJson());
     await _setJsonOrRemove(prefs, _kActivePlan, snapshot.activePlan?.toJson());
     await prefs.setString(
@@ -69,6 +75,7 @@ class AppStateStore {
     final prefs = await SharedPreferences.getInstance();
     final themeMode = await _loadThemeModeWithMigration(prefs);
     return AppStateSnapshot(
+      version: prefs.getInt(_kVersion) ?? 1,
       hasCompletedOnboarding: prefs.getBool(_kOnboarding) ?? false,
       themeMode: themeMode,
       profile: _safeLoad<UserProfile?>(() => _loadProfile(prefs), null),

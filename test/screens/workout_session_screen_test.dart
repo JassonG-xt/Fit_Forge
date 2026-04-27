@@ -68,6 +68,83 @@ class _SlowRecoveryStore extends AppStateStore {
   }
 }
 
+class _SessionFlushStore extends AppStateStore {
+  final events = <String>[];
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<void> write(AppStateSnapshot snapshot) async {
+    events.add('write:${snapshot.sessions.length}');
+  }
+
+  @override
+  Future<void> saveInProgressSession(Map<String, dynamic> sessionData) async {
+    events.add('save');
+  }
+
+  @override
+  Future<void> clearInProgressSession() async {
+    events.add('clear');
+  }
+}
+
+class _QueuedRecoveryStore extends AppStateStore {
+  final events = <String>[];
+  final _saveCompleters = <Completer<void>>[];
+  final _saveCountWaiters = <int, Completer<void>>{};
+
+  int get saveCount => _saveCompleters.length;
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<void> write(AppStateSnapshot snapshot) async {}
+
+  @override
+  Future<void> saveInProgressSession(Map<String, dynamic> sessionData) async {
+    final index = _saveCompleters.length;
+    final allowSave = Completer<void>();
+    _saveCompleters.add(allowSave);
+    events.add('save-$index-start');
+    _notifySaveCountWaiters();
+
+    await allowSave.future;
+    events.add('save-$index-end');
+  }
+
+  @override
+  Future<void> clearInProgressSession() async {
+    events.add('clear');
+  }
+
+  Future<void> waitForSaveCount(int count) {
+    if (saveCount >= count) return Future.value();
+    return (_saveCountWaiters[count] ??= Completer<void>()).future;
+  }
+
+  void completeLatestStartedSave() {
+    for (var i = _saveCompleters.length - 1; i >= 0; i--) {
+      final completer = _saveCompleters[i];
+      if (!completer.isCompleted) {
+        completer.complete();
+        return;
+      }
+    }
+    throw StateError('No pending save to complete');
+  }
+
+  void _notifySaveCountWaiters() {
+    for (final entry in _saveCountWaiters.entries.toList()) {
+      if (saveCount >= entry.key && !entry.value.isCompleted) {
+        entry.value.complete();
+      }
+    }
+  }
+}
+
 void main() {
   testWidgets('打开训练会话默认进入热身页（AppBar 显示 dayType displayName）', (tester) async {
     final appState = await primedAppStateWithProfile();
@@ -167,29 +244,83 @@ void main() {
     expect(store.events, ['save-start', 'save-end', 'clear']);
   });
 
+  testWidgets('保存训练时先落盘正式记录，再清除恢复草稿', (tester) async {
+    final store = _SessionFlushStore();
+    final appState = AppState(store: store);
+    await appState.resetAllData();
+    appState.saveProfile(UserProfile());
+    await appState.flushPendingPersistence();
+    store.events.clear();
+
+    await pumpIsolated(
+      tester,
+      appState: appState,
+      child: WorkoutSessionScreen(workoutDay: _singleExerciseDay()),
+    );
+
+    await tester.tap(find.text('跳过热身'));
+    await tester.pump();
+    await tester.tap(find.text('完成这组'));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pump();
+
+    final clearIndex = store.events.indexOf('clear');
+    expect(clearIndex, isNonNegative);
+    expect(store.events.take(clearIndex), contains('write:1'));
+  });
+
+  testWidgets('退出训练前等待所有排队的 autosave，避免旧草稿复活', (tester) async {
+    final store = _QueuedRecoveryStore();
+    final appState = AppState(store: store);
+    await appState.resetAllData();
+    appState.saveProfile(UserProfile());
+    await appState.flushPendingPersistence();
+
+    await pumpIsolated(
+      tester,
+      appState: appState,
+      child: WorkoutSessionScreen(workoutDay: _singleExerciseDay()),
+    );
+
+    await tester.tap(find.text('跳过热身'));
+    await tester.pump();
+    await store.waitForSaveCount(1);
+
+    await tester.tap(find.text('完成这组'));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pump();
+
+    store.completeLatestStartedSave();
+    await tester.pump();
+    expect(store.events, isNot(contains('clear')));
+
+    await store.waitForSaveCount(2);
+    store.completeLatestStartedSave();
+    await tester.pumpAndSettle();
+    await appState.flushPendingPersistence();
+
+    expect(store.events.last, 'clear');
+  });
+
   testWidgets('完成页支持复制训练总结到剪贴板', (tester) async {
     String? clipboardText;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          SystemChannels.platform,
-          (call) async {
-            switch (call.method) {
-              case 'Clipboard.setData':
-                final args = call.arguments as Map<Object?, Object?>;
-                clipboardText = args['text'] as String?;
-                return null;
-              case 'Clipboard.getData':
-                return <String, Object?>{'text': clipboardText};
-            }
-            return null;
-          },
-        );
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          switch (call.method) {
+            case 'Clipboard.setData':
+              final args = call.arguments as Map<Object?, Object?>;
+              clipboardText = args['text'] as String?;
+              return null;
+            case 'Clipboard.getData':
+              return <String, Object?>{'text': clipboardText};
+          }
+          return null;
+        });
     addTearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            SystemChannels.platform,
-            null,
-          );
+          .setMockMethodCallHandler(SystemChannels.platform, null);
     });
 
     final appState = await primedAppStateWithProfile();

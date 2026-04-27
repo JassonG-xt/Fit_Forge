@@ -19,35 +19,25 @@ class WorkoutSessionController {
     required WorkoutDay workoutDay,
     required Map<String, dynamic> data,
   }) {
-    final records = <String, ExerciseRecord>{};
-    final savedRecords = data['records'];
-    if (savedRecords is Map<String, dynamic>) {
-      for (final entry in savedRecords.entries) {
-        final value = entry.value;
-        if (value is! Map<String, dynamic>) continue;
-        try {
-          records[entry.key] = ExerciseRecord.fromJson(value);
-        } catch (_) {
-          continue;
-        }
-      }
-    }
-
-    final savedStart = data['startTime'];
-    final startTime = savedStart is String
-        ? DateTime.tryParse(savedStart)
-        : null;
-    final rawIndex = data['currentIndex'];
+    final draft = WorkoutSessionDraft.fromJson(data);
     final maxIndex = workoutDay.exercises.isEmpty
         ? 0
         : workoutDay.exercises.length - 1;
-    final currentIndex = rawIndex is int
-        ? rawIndex.clamp(0, maxIndex).toInt()
-        : 0;
+    final currentIndex = draft.currentIndex.clamp(0, maxIndex).toInt();
+    final allowedExerciseIds = workoutDay.exercises
+        .map((exercise) => exercise.exerciseId)
+        .toSet();
+    final records = Map<String, ExerciseRecord>.fromEntries(
+      draft.records.entries.where(
+        (entry) =>
+            allowedExerciseIds.contains(entry.key) &&
+            allowedExerciseIds.contains(entry.value.exerciseId),
+      ),
+    );
 
     return WorkoutSessionController(
       workoutDay: workoutDay,
-      startTime: startTime,
+      startTime: draft.startedAt,
       currentIndex: currentIndex,
       showWarmup: false,
       records: records,
@@ -105,12 +95,12 @@ class WorkoutSessionController {
   }
 
   Map<String, dynamic> toRecoveryJson() {
-    return {
-      'dayType': workoutDay.dayType.name,
-      'currentIndex': currentIndex,
-      'startTime': startTime.toIso8601String(),
-      'records': records.map((k, v) => MapEntry(k, v.toJson())),
-    };
+    return WorkoutSessionDraft(
+      dayType: workoutDay.dayType,
+      startedAt: startTime,
+      currentIndex: currentIndex,
+      records: records,
+    ).toJson();
   }
 
   WorkoutSession buildSession({required String id, required DateTime endedAt}) {

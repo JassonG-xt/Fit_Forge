@@ -40,6 +40,20 @@ void main() {
     expect(loaded.sessions.single.id, 's1');
     expect(loaded.hasCompletedOnboarding, isTrue);
     expect(loaded.themeMode, ThemeMode.light);
+    expect(loaded.version, AppStateSnapshot.currentVersion);
+  });
+
+  test('loads legacy snapshots as version 1', () async {
+    SharedPreferences.setMockInitialValues({
+      'hasCompletedOnboarding': true,
+      'themeMode': ThemeMode.light.name,
+    });
+
+    const store = AppStateStore();
+    final loaded = await store.load();
+
+    expect(loaded.version, 1);
+    expect(loaded.hasCompletedOnboarding, isTrue);
   });
 
   test('keeps valid persisted fields when one field is corrupt', () async {

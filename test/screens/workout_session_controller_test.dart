@@ -44,6 +44,7 @@ void main() {
       final data = controller.toRecoveryJson();
       final records = data['records'] as Map<String, dynamic>;
 
+      expect(data['version'], 1);
       expect(controller.completedSetsCount, 1);
       expect(data['dayType'], WorkoutDayType.push.name);
       expect(data['currentIndex'], 0);
@@ -117,6 +118,52 @@ void main() {
       expect(session.durationMinutes, 45);
       expect(session.isCompleted, isTrue);
       expect(session.exerciseRecords.single.exerciseId, 'ex001');
+    });
+
+    test('filters recovered records that do not belong to the current day', () {
+      final restored = WorkoutSessionController.fromRecovery(
+        workoutDay: WorkoutDay(
+          dayOfWeek: 1,
+          dayType: WorkoutDayType.push,
+          exercises: [
+            PlannedExercise(
+              exerciseId: 'new-exercise',
+              exerciseName: 'New Exercise',
+              targetSets: 1,
+              targetReps: 10,
+              restSeconds: 60,
+            ),
+          ],
+        ),
+        data: WorkoutSessionDraft(
+          dayType: WorkoutDayType.push,
+          startedAt: DateTime(2026, 4, 21, 8),
+          records: {
+            'old-exercise': ExerciseRecord(
+              exerciseId: 'old-exercise',
+              exerciseName: 'Old Exercise',
+              sets: [
+                SetRecord(
+                  setNumber: 1,
+                  weightKg: 50,
+                  reps: 8,
+                  isCompleted: true,
+                ),
+              ],
+            ),
+          },
+        ).toJson(),
+      );
+
+      final session = restored.buildSession(
+        id: 'session-1',
+        endedAt: DateTime(2026, 4, 21, 8, 30),
+      );
+
+      expect(
+        session.exerciseRecords.map((record) => record.exerciseId),
+        isNot(contains('old-exercise')),
+      );
     });
   });
 }

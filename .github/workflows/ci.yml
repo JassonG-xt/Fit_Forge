@@ -45,8 +45,7 @@ jobs:
       # - name: Generate code (freezed / json_serializable)
       #   run: dart run build_runner build --delete-conflicting-outputs
 
-      - name: Verify formatting (PR only)
-        if: github.event_name == 'pull_request'
+      - name: Verify formatting
         run: dart format --set-exit-if-changed .
 
       - name: Analyze
@@ -54,6 +53,37 @@ jobs:
 
       - name: Run tests with coverage
         run: flutter test --coverage --reporter expanded
+
+      - name: Enforce coverage thresholds
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          total_lf = total_lh = core_lf = core_lh = 0
+          current_sf = ""
+          for line in Path("coverage/lcov.info").read_text().splitlines():
+              if line.startswith("SF:"):
+                  current_sf = line[3:].replace("\\", "/")
+              elif line.startswith("LF:"):
+                  value = int(line[3:])
+                  total_lf += value
+                  if current_sf.startswith(("lib/engines/", "lib/services/")):
+                      core_lf += value
+              elif line.startswith("LH:"):
+                  value = int(line[3:])
+                  total_lh += value
+                  if current_sf.startswith(("lib/engines/", "lib/services/")):
+                      core_lh += value
+
+          total = total_lh / total_lf if total_lf else 0
+          core = core_lh / core_lf if core_lf else 0
+          print(f"Total coverage: {total:.2%}")
+          print(f"Core engine/service coverage: {core:.2%}")
+          if total < 0.75:
+              raise SystemExit("Total coverage must be at least 75%")
+          if core < 0.90:
+              raise SystemExit("Core engine/service coverage must be at least 90%")
+          PY
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

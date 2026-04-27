@@ -48,7 +48,7 @@ Widget and service tests use mocked `SharedPreferences` state. This keeps tests 
 
 ## Coverage Expectations
 
-The project target is `70%+` line coverage, and the current branch meets that threshold. Use `flutter test --coverage` on the current `HEAD` to measure the exact number for your revision.
+CI requires at least 75% total line coverage and at least 90% line coverage for `lib/engines/` plus `lib/services/`. Use `flutter test --coverage` on the current `HEAD` to measure the exact number for your revision.
 
 ## What Is Not Present Yet
 

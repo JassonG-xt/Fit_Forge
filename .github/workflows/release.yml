@@ -35,12 +35,22 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Validate Android signing secrets
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          test -n "$KEYSTORE_B64"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_PASSWORD"
+          test -n "$KEY_ALIAS"
+
       # Materialize signing secrets into the files `build.gradle.kts` expects.
-      # If ANDROID_KEYSTORE_BASE64 is unset, builds fall back to debug signing.
       - name: Decode keystore
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        if: ${{ env.KEYSTORE_B64 != '' }}
         run: |
           echo "$KEYSTORE_B64" | base64 --decode > android/fitforge.jks
 
@@ -50,7 +60,6 @@ jobs:
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        if: ${{ env.KEYSTORE_B64 != '' }}
         run: |
           {
             echo "storePassword=${STORE_PASSWORD}"

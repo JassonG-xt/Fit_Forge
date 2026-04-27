@@ -5,16 +5,18 @@ import '../models/models.dart';
 /// 根据用户画像动态生成个性化训练计划
 class PlanEngine {
   static const _uuid = Uuid();
+  static const PlanRules defaultRules = DefaultPlanRules();
 
   // ══════════ 主入口 ══════════
 
   static WorkoutPlan generatePlan(
     UserProfile profile,
-    List<Exercise> exercises,
-  ) {
-    final split = determineSplit(profile.weeklyFrequency);
-    final schedule = buildWeeklySchedule(split, profile.weeklyFrequency);
-    final params = trainingParameters(profile.goal, profile.experienceLevel);
+    List<Exercise> exercises, {
+    PlanRules rules = defaultRules,
+  }) {
+    final split = rules.determineSplit(profile);
+    final schedule = rules.buildWeeklySchedule(split, profile.weeklyFrequency);
+    final params = rules.trainingParameters(profile);
 
     final days = <WorkoutDay>[];
     for (var i = 0; i < schedule.length; i++) {
@@ -30,6 +32,8 @@ class PlanEngine {
         profile.availableEquipment,
         profile.experienceLevel,
         params,
+        ranker: rules.exerciseRanker,
+        profile: profile,
       );
 
       final planned = selected
@@ -223,8 +227,10 @@ class PlanEngine {
     List<Exercise> allExercises,
     List<Equipment> availableEquipment,
     ExperienceLevel level,
-    TrainingParams params,
-  ) {
+    TrainingParams params, {
+    ExerciseRanker ranker = const DefaultExerciseRanker(),
+    UserProfile? profile,
+  }) {
     final selected = <Exercise>[];
     final pickedIds = <String>{}; // 去重：防止跨部位选到同一动作
     final levelIndex = ExperienceLevel.values.indexOf(level);
@@ -261,9 +267,15 @@ class PlanEngine {
 
       // 复合动作优先
       if (params.compoundFirst) {
-        candidates.sort(
-          (a, b) => (b.isCompound ? 1 : 0) - (a.isCompound ? 1 : 0),
-        );
+        candidates.sort((a, b) {
+          final activeProfile = profile;
+          if (activeProfile == null) {
+            return (b.isCompound ? 1 : 0) - (a.isCompound ? 1 : 0);
+          }
+          return ranker
+              .score(b, activeProfile)
+              .compareTo(ranker.score(a, activeProfile));
+        });
       }
 
       final count = bodyParts.length <= 3 ? 2 : 1;
@@ -308,6 +320,62 @@ class PlanEngine {
       ...general,
       ...specific[dayType] ?? ['泡沫轴全身放松 5 分钟'],
     ];
+  }
+}
+
+abstract interface class ExerciseRanker {
+  int score(Exercise exercise, UserProfile profile);
+}
+
+class DefaultExerciseRanker implements ExerciseRanker {
+  const DefaultExerciseRanker();
+
+  @override
+  int score(Exercise exercise, UserProfile profile) {
+    var score = 0;
+    if (exercise.isCompound) score += 20;
+    if (exercise.allRequiredEquipment.every(
+      profile.availableEquipment.contains,
+    )) {
+      score += 10;
+    }
+    final levelGap =
+        ExperienceLevel.values.indexOf(profile.experienceLevel) -
+        ExperienceLevel.values.indexOf(exercise.difficulty);
+    score += levelGap.clamp(-10, 10);
+    return score;
+  }
+}
+
+abstract interface class PlanRules {
+  ExerciseRanker get exerciseRanker;
+
+  TrainingSplit determineSplit(UserProfile profile);
+
+  List<WorkoutDayType> buildWeeklySchedule(TrainingSplit split, int frequency);
+
+  TrainingParams trainingParameters(UserProfile profile);
+}
+
+class DefaultPlanRules implements PlanRules {
+  const DefaultPlanRules({this.exerciseRanker = const DefaultExerciseRanker()});
+
+  @override
+  final ExerciseRanker exerciseRanker;
+
+  @override
+  TrainingSplit determineSplit(UserProfile profile) {
+    return PlanEngine.determineSplit(profile.weeklyFrequency);
+  }
+
+  @override
+  List<WorkoutDayType> buildWeeklySchedule(TrainingSplit split, int frequency) {
+    return PlanEngine.buildWeeklySchedule(split, frequency);
+  }
+
+  @override
+  TrainingParams trainingParameters(UserProfile profile) {
+    return PlanEngine.trainingParameters(profile.goal, profile.experienceLevel);
   }
 }
 

@@ -4,5 +4,6 @@ export 'exercise.dart';
 export 'food.dart';
 export 'workout_plan.dart';
 export 'workout_session.dart';
+export 'workout_session_draft.dart';
 export 'body_metric.dart';
 export 'achievement.dart';

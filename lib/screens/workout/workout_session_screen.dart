@@ -28,6 +28,7 @@ class WorkoutSessionScreen extends StatefulWidget {
 class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   static const _uuid = Uuid();
   late WorkoutSessionController _controller;
+  Future<void> _autoSaveChain = Future<void>.value();
   Future<void>? _autoSaveInFlight;
 
   List<PlannedExercise> get _exercises => _controller.exercises;
@@ -79,9 +80,23 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   int get _completedSetsCount => _controller.completedSetsCount;
 
   void _autoSave() {
-    _autoSaveInFlight = context.read<AppState>().saveInProgressSession(
-      _controller.toRecoveryJson(),
-    );
+    final state = context.read<AppState>();
+    final sessionData = _controller.toRecoveryJson();
+    final pending = _queueAutoSave(state, sessionData);
+    _autoSaveChain = pending;
+    _autoSaveInFlight = pending;
+  }
+
+  Future<void> _queueAutoSave(
+    AppState state,
+    Map<String, dynamic> sessionData,
+  ) async {
+    try {
+      await _autoSaveChain;
+    } catch (e) {
+      debugPrint('FitForge: recovery autosave failed before latest save: $e');
+    }
+    await state.saveInProgressSession(sessionData);
   }
 
   Future<void> _waitForAutoSave() async {
@@ -115,14 +130,12 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       (sum, record) => sum + record.totalVolume,
     );
     final exerciseSummary = completedExercises
-        .map(
-          (record) {
-            final completedSets = record.sets
-                .where((set) => set.isCompleted)
-                .length;
-            return '${record.exerciseName} $completedSets组';
-          },
-        )
+        .map((record) {
+          final completedSets = record.sets
+              .where((set) => set.isCompleted)
+              .length;
+          return '${record.exerciseName} $completedSets组';
+        })
         .join(' · ');
     final summary = [
       '我刚完成了 FitForge 的${widget.workoutDay.dayType.displayName}训练',
@@ -170,6 +183,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     final state = context.read<AppState>();
     state.saveSession(session);
     await _waitForAutoSave();
+    await state.flushPendingPersistence();
     await state.clearInProgressSession();
     if (!mounted) return;
     Navigator.pop(context);
