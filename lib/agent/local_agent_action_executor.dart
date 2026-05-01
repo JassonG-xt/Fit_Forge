@@ -35,6 +35,22 @@ class LocalAgentActionExecutor {
     }
   }
 
+  // 共享 payload 校验：plan 必须存在 / dayOfWeek 必须是 1-7 之间的整数。
+  // 抽出来只是为了消重，避免每个 action 重写同样的两行。
+  static AgentActionResult? _requireActivePlan(WorkoutPlan? plan) {
+    if (plan == null) {
+      return AgentActionResult.failure('当前没有可调整的训练计划。');
+    }
+    return null;
+  }
+
+  static AgentActionResult? _requireDayOfWeek(dynamic raw) {
+    if (raw is! num || raw.toInt() < 1 || raw.toInt() > 7) {
+      return AgentActionResult.failure('dayOfWeek 缺失或不在 1-7 之间。');
+    }
+    return null;
+  }
+
   // ─── generatePlan ───
   Future<AgentActionResult> _generatePlan(AgentAction action) async {
     if (appState.profile == null) {
@@ -55,9 +71,8 @@ class LocalAgentActionExecutor {
   // ─── rescheduleWeek ───
   Future<AgentActionResult> _rescheduleWeek(AgentAction action) async {
     final plan = appState.activePlan;
-    if (plan == null) {
-      return AgentActionResult.failure('当前没有可调整的训练计划。');
-    }
+    final planErr = _requireActivePlan(plan);
+    if (planErr != null) return planErr;
     final raw = action.payload['availableWeekdays'];
     if (raw is! List) {
       return AgentActionResult.failure('availableWeekdays 字段缺失或格式不正确。');
@@ -74,7 +89,7 @@ class LocalAgentActionExecutor {
     }
 
     final result = reschedulePlanToWeekdays(
-      plan: plan,
+      plan: plan!,
       availableWeekdays: weekdays,
     );
     appState.adoptPlan(result.plan);
@@ -91,15 +106,13 @@ class LocalAgentActionExecutor {
   // ─── replaceExercise ───
   Future<AgentActionResult> _replaceExercise(AgentAction action) async {
     final plan = appState.activePlan;
-    if (plan == null) {
-      return AgentActionResult.failure('当前没有可调整的训练计划。');
-    }
+    final planErr = _requireActivePlan(plan);
+    if (planErr != null) return planErr;
     final dayOfWeek = action.payload['dayOfWeek'];
+    final dayErr = _requireDayOfWeek(dayOfWeek);
+    if (dayErr != null) return dayErr;
     final fromId = action.payload['fromExerciseId'];
     final toId = action.payload['toExerciseId'];
-    if (dayOfWeek is! num || dayOfWeek < 1 || dayOfWeek > 7) {
-      return AgentActionResult.failure('dayOfWeek 缺失或不在 1-7 之间。');
-    }
     if (fromId is! String || fromId.isEmpty) {
       return AgentActionResult.failure('fromExerciseId 缺失。');
     }
@@ -116,8 +129,8 @@ class LocalAgentActionExecutor {
     }
 
     final newPlan = replaceExerciseInPlan(
-      plan: plan,
-      dayOfWeek: dayOfWeek.toInt(),
+      plan: plan!,
+      dayOfWeek: (dayOfWeek as num).toInt(),
       fromExerciseId: fromId,
       toExerciseId: toId,
       toExerciseName: target.name,
@@ -135,24 +148,19 @@ class LocalAgentActionExecutor {
   // ─── compressWorkout ───
   Future<AgentActionResult> _compressWorkout(AgentAction action) async {
     final plan = appState.activePlan;
-    if (plan == null) {
-      return AgentActionResult.failure('当前没有可调整的训练计划。');
-    }
+    final planErr = _requireActivePlan(plan);
+    if (planErr != null) return planErr;
     final dayOfWeekRaw = action.payload['dayOfWeek'] ?? DateTime.now().weekday;
+    final dayErr = _requireDayOfWeek(dayOfWeekRaw);
+    if (dayErr != null) return dayErr;
     final targetMinutesRaw = action.payload['targetMinutes'];
-
-    if (dayOfWeekRaw is! num ||
-        dayOfWeekRaw.toInt() < 1 ||
-        dayOfWeekRaw.toInt() > 7) {
-      return AgentActionResult.failure('dayOfWeek 不在 1-7 之间。');
-    }
     if (targetMinutesRaw is! num || targetMinutesRaw.toInt() <= 0) {
       return AgentActionResult.failure('targetMinutes 必须为正数。');
     }
 
     final newPlan = compressDayInPlan(
-      plan: plan,
-      dayOfWeek: dayOfWeekRaw.toInt(),
+      plan: plan!,
+      dayOfWeek: (dayOfWeekRaw as num).toInt(),
       targetMinutes: targetMinutesRaw.toInt(),
     );
     if (newPlan == null) {
