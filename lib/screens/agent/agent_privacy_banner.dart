@@ -39,9 +39,7 @@ class AgentPrivacyBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: AppRadius.brMd,
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,10 +70,7 @@ class AgentPrivacyBanner extends StatelessWidget {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: onDismiss,
-              child: const Text('我知道了'),
-            ),
+            child: TextButton(onPressed: onDismiss, child: const Text('我知道了')),
           ),
         ],
       ),

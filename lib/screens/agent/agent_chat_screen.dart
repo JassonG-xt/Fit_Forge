@@ -88,9 +88,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
           final messages = service.messages;
           final showSafetyBanner = messages.any(
             (m) =>
-                m.actions.any(
-                  (a) => a.type == AgentActionType.safetyResponse,
-                ),
+                m.actions.any((a) => a.type == AgentActionType.safetyResponse),
           );
 
           if (messages.isNotEmpty) _scrollToBottom();
@@ -153,10 +151,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
     );
   }
 
-  Future<void> _confirmAction(
-    AgentService service,
-    AgentAction action,
-  ) async {
+  Future<void> _confirmAction(AgentService service, AgentAction action) async {
     final result = await service.confirmAction(action);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

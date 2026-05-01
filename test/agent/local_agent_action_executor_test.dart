@@ -13,15 +13,14 @@ void main() {
     AgentActionType type,
     Map<String, dynamic> payload, {
     String id = 'test',
-  }) =>
-      AgentAction(
-        id: id,
-        type: type,
-        title: 't',
-        summary: 's',
-        requiresConfirmation: true,
-        payload: payload,
-      );
+  }) => AgentAction(
+    id: id,
+    type: type,
+    title: 't',
+    summary: 's',
+    requiresConfirmation: true,
+    payload: payload,
+  );
 
   group('LocalAgentActionExecutor', () {
     test('generatePlan adopts a previewed plan', () async {

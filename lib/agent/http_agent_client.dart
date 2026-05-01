@@ -86,11 +86,7 @@ class HttpAgentClient implements AgentClient {
 }
 
 class HttpAgentException implements Exception {
-  const HttpAgentException(
-    this.message, {
-    this.statusCode,
-    this.responseBody,
-  });
+  const HttpAgentException(this.message, {this.statusCode, this.responseBody});
 
   final String message;
   final int? statusCode;

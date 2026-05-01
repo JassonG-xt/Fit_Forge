@@ -200,8 +200,9 @@ class MockAgentClient implements AgentClient {
             break;
           }
         }
-        fromId ??= (dayExercises.first as Map<String, dynamic>)['exerciseId']
-            as String?;
+        fromId ??=
+            (dayExercises.first as Map<String, dynamic>)['exerciseId']
+                as String?;
         fromName ??=
             (dayExercises.first as Map<String, dynamic>)['exerciseName']
                 as String?;
@@ -362,7 +363,9 @@ class MockAgentClient implements AgentClient {
 
   AgentResponse _nutritionResponse() {
     return AgentResponse(
-      message: '如果某餐摄入偏多，下一餐可以选高蛋白、低油脂、适量碳水的组合。' '不建议完全跳餐或极端节食。',
+      message:
+          '如果某餐摄入偏多，下一餐可以选高蛋白、低油脂、适量碳水的组合。'
+          '不建议完全跳餐或极端节食。',
       intent: AgentIntent.nutritionAdvice,
       confidence: 0.8,
       actions: [
@@ -383,7 +386,9 @@ class MockAgentClient implements AgentClient {
 
   AgentResponse _fallbackResponse() {
     return const AgentResponse(
-      message: '我可以帮你生成训练计划、调整训练日、替换动作、压缩今日训练，或给出营养建议。' '告诉我你的目标、训练频率和今天的限制吧。',
+      message:
+          '我可以帮你生成训练计划、调整训练日、替换动作、压缩今日训练，或给出营养建议。'
+          '告诉我你的目标、训练频率和今天的限制吧。',
       intent: AgentIntent.answerOnly,
       confidence: 0.5,
       actions: [],
@@ -391,7 +396,15 @@ class MockAgentClient implements AgentClient {
   }
 
   String _weekdayName(int weekday) {
-    const names = {1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日'};
+    const names = {
+      1: '周一',
+      2: '周二',
+      3: '周三',
+      4: '周四',
+      5: '周五',
+      6: '周六',
+      7: '周日',
+    };
     return names[weekday] ?? '周$weekday';
   }
 }

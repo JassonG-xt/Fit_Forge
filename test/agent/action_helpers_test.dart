@@ -46,10 +46,7 @@ WorkoutPlan _twoDayPlan() => WorkoutPlan(
         ),
       ],
     ),
-    WorkoutDay(
-      dayOfWeek: 2,
-      dayType: WorkoutDayType.rest,
-    ),
+    WorkoutDay(dayOfWeek: 2, dayType: WorkoutDayType.rest),
     WorkoutDay(
       dayOfWeek: 3,
       dayType: WorkoutDayType.lower,

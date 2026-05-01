@@ -26,14 +26,8 @@ void main() {
       expect(response.intent, AgentIntent.safetyResponse);
       expect(response.safety.shouldStopWorkout, true);
       expect(response.actions, hasLength(1));
-      expect(
-        response.actions.single.type,
-        AgentActionType.safetyResponse,
-      );
-      expect(
-        response.actions.single.riskLevel,
-        AgentActionRiskLevel.high,
-      );
+      expect(response.actions.single.type, AgentActionType.safetyResponse);
+      expect(response.actions.single.riskLevel, AgentActionRiskLevel.high);
     });
 
     test('compress detects target minutes', () async {
@@ -46,10 +40,7 @@ void main() {
       );
       expect(response.intent, AgentIntent.compressWorkout);
       expect(response.actions.single.type, AgentActionType.compressWorkout);
-      expect(
-        response.actions.single.payload['targetMinutes'],
-        25,
-      );
+      expect(response.actions.single.payload['targetMinutes'], 25);
     });
 
     test('reschedule extracts weekdays', () async {

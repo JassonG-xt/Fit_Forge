@@ -32,9 +32,7 @@ class AgentMessageBubble extends StatelessWidget {
         ? AppColors.textInverse
         : (isDark ? AppColors.textPrimary : AppColors.textPrimaryLight);
 
-    final align = isUser
-        ? CrossAxisAlignment.end
-        : CrossAxisAlignment.start;
+    final align = isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
 
     final bubble = Container(
       constraints: const BoxConstraints(maxWidth: 320),

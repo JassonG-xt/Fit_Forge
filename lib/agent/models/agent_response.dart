@@ -14,8 +14,7 @@ class AgentSafetyInfo {
         hasMedicalConcern: json['hasMedicalConcern'] as bool? ?? false,
         shouldStopWorkout: json['shouldStopWorkout'] as bool? ?? false,
         disclaimer:
-            json['disclaimer'] as String? ??
-            'FitForge 只提供通用健身建议，不构成医疗建议。',
+            json['disclaimer'] as String? ?? 'FitForge 只提供通用健身建议，不构成医疗建议。',
       );
 
   final bool hasMedicalConcern;

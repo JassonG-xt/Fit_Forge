@@ -118,10 +118,7 @@ void main() {
 
   testWidgets('mock mode shows local-only privacy line', (tester) async {
     await pumpChat(tester);
-    expect(
-      find.textContaining('本地 Mock 模式：不会向任何后端发送数据'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('本地 Mock 模式：不会向任何后端发送数据'), findsOneWidget);
   });
 
   testWidgets('http mode shows remote host in privacy banner', (tester) async {

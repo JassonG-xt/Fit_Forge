@@ -30,10 +30,7 @@ void main() async {
   final mode = _resolveAgentMode();
   final AgentClient agentClient = _createAgentClient(mode);
 
-  final agentService = AgentService(
-    appState: appState,
-    client: agentClient,
-  );
+  final agentService = AgentService(appState: appState, client: agentClient);
 
   runApp(
     MultiProvider(

@@ -60,7 +60,9 @@ class AgentContextBuilder {
           'weeklyFrequency': profile.weeklyFrequency,
         },
       },
-      availableExerciseSummary: state.exercises.map(_summarizeExercise).toList(),
+      availableExerciseSummary: state.exercises
+          .map(_summarizeExercise)
+          .toList(),
     );
   }
 

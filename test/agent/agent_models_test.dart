@@ -83,7 +83,9 @@ void main() {
             'summary': '请停止训练',
             'requiresConfirmation': false,
             'riskLevel': 'high',
-            'payload': {'matchedRisks': ['chest_pain']},
+            'payload': {
+              'matchedRisks': ['chest_pain'],
+            },
           },
         ],
         'safety': {

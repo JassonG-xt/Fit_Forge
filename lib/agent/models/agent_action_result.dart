@@ -16,11 +16,7 @@ class AgentActionResult {
   }
 
   factory AgentActionResult.failure(String message) {
-    return AgentActionResult(
-      success: false,
-      title: '操作失败',
-      message: message,
-    );
+    return AgentActionResult(success: false, title: '操作失败', message: message);
   }
 
   factory AgentActionResult.noop(String message) {
