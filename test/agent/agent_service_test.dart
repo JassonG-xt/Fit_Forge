@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:fit_forge/agent/agent_client.dart';
+import 'package:fit_forge/agent/agent_event_log.dart';
 import 'package:fit_forge/agent/agent_service.dart';
 import 'package:fit_forge/agent/local_agent_action_executor.dart';
 import 'package:fit_forge/agent/mocks/mock_agent_client.dart';
@@ -134,6 +136,61 @@ void main() {
       expect(service.messages.last.isError, true);
       expect(service.messages.last.content, contains('暂时无法连接'));
       expect(service.lastError, contains('connection refused'));
+    });
+
+    test(
+      'event log records turn and propagates confirm/cancel outcomes',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final state = await primedAppStateWithProfile();
+        final eventLog = AgentEventLog();
+        await eventLog.hydrate();
+        final service = AgentService(
+          appState: state,
+          client: MockAgentClient(delay: Duration.zero),
+          executor: LocalAgentActionExecutor(state),
+          eventLog: eventLog,
+        );
+
+        // Turn 1: read-only weeklyReview action — confirm marks accepted+executed.
+        await service.sendUserMessage('帮我总结这周训练');
+        expect(eventLog.events, hasLength(1));
+        final review = service.messages.last.actions.single;
+        await service.confirmAction(review);
+        expect(eventLog.events.last.accepted, true);
+        expect(eventLog.events.last.executed, true);
+
+        // Turn 2: generatePlan action — cancel marks accepted=false.
+        await service.sendUserMessage('帮我生成一份新训练计划');
+        expect(eventLog.events, hasLength(2));
+        final plan = service.messages.last.actions.single;
+        service.cancelAction(plan);
+        expect(eventLog.events.last.accepted, false);
+        expect(eventLog.events.last.executed, false);
+      },
+    );
+
+    test('event log captures failure reason when execution fails', () async {
+      SharedPreferences.setMockInitialValues({});
+      final state = await primedAppStateWithProfile();
+      // No active plan → rescheduleWeek will fail in the executor.
+      final eventLog = AgentEventLog();
+      await eventLog.hydrate();
+      final service = AgentService(
+        appState: state,
+        client: MockAgentClient(delay: Duration.zero),
+        executor: LocalAgentActionExecutor(state),
+        eventLog: eventLog,
+      );
+
+      await service.sendUserMessage('我这周只能周二、周四、周日练');
+      final action = service.messages.last.actions.single;
+      final result = await service.confirmAction(action);
+
+      expect(result.success, false);
+      expect(eventLog.events.last.accepted, true);
+      expect(eventLog.events.last.executed, false);
+      expect(eventLog.events.last.failureReason, isNotNull);
     });
   });
 }

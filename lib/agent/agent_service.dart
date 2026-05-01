@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../services/app_state.dart';
 import 'agent_client.dart';
 import 'agent_context_builder.dart';
+import 'agent_event_log.dart';
 import 'local_agent_action_executor.dart';
 import 'models/agent_action.dart';
 import 'models/agent_action_result.dart';
@@ -21,15 +22,18 @@ class AgentService extends ChangeNotifier {
     required this.client,
     LocalAgentActionExecutor? executor,
     AgentContextBuilder? contextBuilder,
+    AgentEventLog? eventLog,
     Uuid? idGenerator,
   }) : _executor = executor ?? LocalAgentActionExecutor(appState),
        _contextBuilder = contextBuilder ?? const AgentContextBuilder(),
+       _eventLog = eventLog,
        _ids = idGenerator ?? const Uuid();
 
   final AppState appState;
   final AgentClient client;
   final LocalAgentActionExecutor _executor;
   final AgentContextBuilder _contextBuilder;
+  final AgentEventLog? _eventLog;
   final Uuid _ids;
 
   final List<AgentMessage> _messages = <AgentMessage>[];
@@ -67,7 +71,14 @@ class AgentService extends ChangeNotifier {
         context: context,
         history: List.unmodifiable(_messages),
       );
-      _messages.add(_assistantMessageFor(response));
+      final assistantMessage = _assistantMessageFor(response);
+      _messages.add(assistantMessage);
+      _eventLog?.record(
+        id: _ids.v4(),
+        userMessage: trimmed,
+        agentMessage: response.message,
+        actions: response.actions,
+      );
     } catch (e) {
       _lastError = e.toString();
       _messages.add(
@@ -91,12 +102,23 @@ class AgentService extends ChangeNotifier {
     }
     final result = await _executor.execute(action);
     _processedActionIds.add(action.id);
+    _eventLog?.updateOutcome(
+      actionId: action.id,
+      accepted: true,
+      executed: result.success,
+      failureReason: result.success ? null : result.message,
+    );
     notifyListeners();
     return result;
   }
 
   void cancelAction(AgentAction action) {
     _processedActionIds.add(action.id);
+    _eventLog?.updateOutcome(
+      actionId: action.id,
+      accepted: false,
+      executed: false,
+    );
     notifyListeners();
   }
 

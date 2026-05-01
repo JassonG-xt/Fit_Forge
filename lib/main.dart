@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'agent/agent_client.dart';
+import 'agent/agent_event_log.dart';
 import 'agent/agent_runtime.dart';
 import 'agent/agent_service.dart';
 import 'agent/http_agent_client.dart';
@@ -30,13 +31,21 @@ void main() async {
   final mode = _resolveAgentMode();
   final AgentClient agentClient = _createAgentClient(mode);
 
-  final agentService = AgentService(appState: appState, client: agentClient);
+  final eventLog = AgentEventLog();
+  await eventLog.hydrate();
+
+  final agentService = AgentService(
+    appState: appState,
+    client: agentClient,
+    eventLog: eventLog,
+  );
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<AppState>.value(value: appState),
         ChangeNotifierProvider<AgentService>.value(value: agentService),
+        ChangeNotifierProvider<AgentEventLog>.value(value: eventLog),
         Provider<AgentRuntime>.value(
           value: AgentRuntime(mode: mode, baseUrl: _agentBaseUrl),
         ),
