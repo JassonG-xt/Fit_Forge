@@ -25,9 +25,18 @@ void main() {
     AgentMode mode = AgentMode.mock,
     String baseUrl = '',
   }) async {
+    // Default 800x600 viewport clips action cards once they include the
+    // before/after diff section; give widget tests a taller viewport so
+    // confirm/cancel buttons stay hit-testable.
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final state = await primedAppStateWithProfile();
     if (withPlan) {
       state.adoptPlan(_seedPlan());
+      await state.flushPendingPersistence();
     }
     final service = AgentService(
       appState: state,
@@ -84,6 +93,7 @@ void main() {
     await pumpChat(tester);
     await tester.tap(find.text('今天只有 30 分钟，帮我压缩训练'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('取消'));
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     final applyButton = find.text('已处理');
@@ -102,6 +112,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('应用修改'), findsOneWidget);
+    await tester.ensureVisible(find.text('应用修改'));
     await tester.tap(find.text('应用修改'));
     await tester.pumpAndSettle();
 
@@ -137,6 +148,46 @@ void main() {
     await tester.tap(find.text('我知道了'));
     await tester.pumpAndSettle();
     expect(find.text('我知道了'), findsNothing);
+  });
+
+  testWidgets('rescheduleWeek action card includes 7-day diff section', (
+    tester,
+  ) async {
+    await pumpChat(tester, withPlan: true);
+    final input = find.byType(TextField);
+    await tester.enterText(input, '我这周只能周二、周四、周日练');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.arrow_forward), findsNWidgets(7));
+    for (final label in ['周一', '周二', '周三', '周四', '周五', '周六', '周日']) {
+      expect(find.text(label), findsOneWidget);
+    }
+  });
+
+  testWidgets('weeklyReview action card has no diff section', (tester) async {
+    await pumpChat(tester);
+    await tester.tap(find.text('帮我总结这周训练'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.arrow_forward), findsNothing);
+    expect(find.text('周一'), findsNothing);
+  });
+
+  testWidgets('diff hides after the action is resolved', (tester) async {
+    await pumpChat(tester, withPlan: true);
+    final input = find.byType(TextField);
+    await tester.enterText(input, '我这周只能周二、周四、周日练');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.arrow_forward), findsNWidgets(7));
+
+    await tester.ensureVisible(find.text('取消'));
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.arrow_forward), findsNothing);
   });
 }
 

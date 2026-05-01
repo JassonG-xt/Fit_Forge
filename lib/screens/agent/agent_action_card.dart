@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../agent/models/agent_action.dart';
+import '../../services/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_radius.dart';
 import '../../theme/app_spacing.dart';
 import '../../widgets/brand/glow_button.dart';
 import '../../widgets/cards/section_card.dart';
+import 'agent_diff_view.dart';
 
 /// Coach Agent 建议的结构化动作卡片。
 ///
@@ -55,6 +58,11 @@ class AgentActionCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(action.summary, style: theme.textTheme.bodyMedium),
+              if (action.requiresConfirmation && !isResolved)
+                AgentDiffView(
+                  action: action,
+                  appState: Provider.of<AppState>(context, listen: false),
+                ),
               if (action.requiresConfirmation) ...[
                 const SizedBox(height: AppSpacing.md),
                 Row(
