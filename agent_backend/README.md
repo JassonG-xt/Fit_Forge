@@ -119,10 +119,18 @@ curl -sX POST http://localhost:8000/v1/coach/message \
 
 ## Connecting from Flutter
 
+HTTP 模式（连后端）：
+
 ```bash
 flutter run \
   --dart-define=FITFORGE_AGENT_MODE=http \
   --dart-define=AGENT_BASE_URL=http://localhost:8000
+```
+
+Mock 模式（不需要启动后端）：
+
+```bash
+flutter run --dart-define=FITFORGE_AGENT_MODE=mock
 ```
 
 后端不可达时，Flutter 会显示「暂时无法连接 FitForge Coach」错误气泡，UI 不会崩溃。
