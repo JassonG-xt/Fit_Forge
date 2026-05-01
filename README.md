@@ -39,6 +39,94 @@ A Flutter cross-platform fitness app that auto-generates personalized workout an
 
 当前仓库暂未内置静态截图资源，避免 README 长期挂着过期画面。要看真实界面，直接打开上方 Web Demo，或按下方命令本地运行。
 
+## 🤖 FitForge Coach Agent
+
+FitForge 在传统训练 / 营养引擎之上叠了一层 **agentic coaching** —— 用户用自然语言提问，Coach 把请求解析为结构化 `AgentAction`，由前端在用户确认后写入本地状态。LLM 不直接修改计划。
+
+### What it does
+
+- 理解自然语言健身请求（中文）
+- 读取用户画像 / 当前计划 / 今日训练 / 最近训练记录摘要 / 动作库
+- 生成结构化 action（rescheduleWeek / replaceExercise / compressWorkout / generatePlan / weeklyReview / nutritionAdvice / safetyResponse）
+- 修改本地状态前必须用户点 **"应用修改"** 确认
+- 通过 `LocalAgentActionExecutor` 走确定性引擎执行，不绕过现有 PlanEngine
+- 触发关键字（胸痛 / 晕倒 / 呼吸困难 / 怀孕 / 急性损伤 / 饮食障碍等）时只返回 `safetyResponse`，不生成训练修改 action
+
+### Example prompts
+
+- "我这周只能周二、周四、周日训练，帮我重新安排。"
+- "今天只有 25 分钟，帮我压缩训练。"
+- "没有杠铃，帮我替换深蹲。"
+- "总结一下我这周训练表现。"
+- "我胸口疼但想继续练。"
+
+### Architecture
+
+```mermaid
+graph LR
+    User[User] --> Chat[AgentChatScreen]
+    Chat --> Service[AgentService]
+    Service --> Builder[AgentContextBuilder]
+    Builder --> AppState[AppState]
+    Service --> Client{AgentClient}
+    Client -->|mock| Mock[MockAgentClient]
+    Client -->|http| Backend[FastAPI Coach Backend]
+    Backend --> Guard[Safety Guardrails]
+    Backend --> Resp[Structured AgentResponse]
+    Mock --> Resp
+    Resp --> Card[AgentActionCard]
+    Card -->|user confirms| Exec[LocalAgentActionExecutor]
+    Exec --> AppState
+    AppState --> Engines[PlanEngine / NutritionEngine]
+    AppState --> Store[(SharedPreferences)]
+```
+
+LLM / 后端只产出建议；写状态全部走 `LocalAgentActionExecutor`，并在写入前做 payload 校验。
+
+### Current implementation status
+
+| Layer | Status |
+|-------|--------|
+| Flutter Coach UI（Chat / Action Card / Privacy Banner / Safety Banner）| ✅ implemented |
+| 结构化 `AgentAction` + 本地确认 + 执行 | ✅ implemented |
+| `AgentContextBuilder` 上下文最小化 | ✅ implemented |
+| FastAPI mock 后端（关键字路由）| ✅ implemented |
+| Mock vs HTTP 模式切换 | ✅ implemented |
+| 真实 LLM Coach Agent | 📋 planned |
+| 多 Agent 编排（Planner / Recovery / Nutrition）| 📋 planned |
+
+当前 backend 是 **关键字 mock**，用来打通端到端工程闭环。真实 LLM 接入和多 Agent 架构留作后续 milestone。
+
+### Running Coach Agent
+
+默认即 mock 模式，无需后端：
+
+```bash
+flutter run --dart-define=FITFORGE_AGENT_MODE=mock
+# or simply: flutter run
+```
+
+接 FastAPI 后端：
+
+```bash
+# 1) 启动后端
+cd agent_backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+
+# 2) Flutter 端连接
+flutter run \
+  --dart-define=FITFORGE_AGENT_MODE=http \
+  --dart-define=AGENT_BASE_URL=http://localhost:8000
+```
+
+详细后端说明见 [`agent_backend/README.md`](agent_backend/README.md)。
+
+> **Medical disclaimer**
+> FitForge Coach 只提供通用健身和营养建议，不构成医疗诊断或治疗。
+> 出现胸痛、晕厥、严重头晕、呼吸困难或急性损伤时，请停止训练并咨询专业医疗人员。
+
 ## 🚀 Quick Start
 
 ### 📥 下载使用 / Install

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../agent/agent_runtime.dart';
 import '../../agent/agent_service.dart';
 import '../../agent/models/agent_action.dart';
 import '../../agent/models/agent_message.dart';
@@ -9,6 +10,7 @@ import '../../theme/app_radius.dart';
 import '../../theme/app_spacing.dart';
 import 'agent_action_card.dart';
 import 'agent_message_bubble.dart';
+import 'agent_privacy_banner.dart';
 import 'agent_safety_banner.dart';
 import 'suggested_prompt_bar.dart';
 
@@ -36,23 +38,7 @@ class AgentChatScreen extends StatefulWidget {
 class _AgentChatScreenState extends State<AgentChatScreen> {
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
-  bool _showedDisclaimer = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_showedDisclaimer && mounted) {
-        _showedDisclaimer = true;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('FitForge Coach 提供通用健身建议，不构成医疗建议。'),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    });
-  }
+  bool _privacyBannerDismissed = false;
 
   @override
   void dispose() {
@@ -85,6 +71,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final runtime = context.watch<AgentRuntime>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('FitForge Coach'),
@@ -92,14 +79,14 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
           IconButton(
             tooltip: '隐私和安全提示',
             icon: const Icon(Icons.privacy_tip_outlined),
-            onPressed: () => _showPrivacyDialog(context),
+            onPressed: () => _showPrivacyDialog(context, runtime),
           ),
         ],
       ),
       body: Consumer<AgentService>(
         builder: (context, service, _) {
           final messages = service.messages;
-          final showBanner = messages.any(
+          final showSafetyBanner = messages.any(
             (m) =>
                 m.actions.any(
                   (a) => a.type == AgentActionType.safetyResponse,
@@ -110,9 +97,15 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
 
           return Column(
             children: [
-              if (showBanner)
+              if (showSafetyBanner)
                 const AgentSafetyBanner(
                   disclaimer: '检测到潜在健康风险。请优先停止训练并咨询专业医疗人员。',
+                ),
+              if (!_privacyBannerDismissed)
+                AgentPrivacyBanner(
+                  runtime: runtime,
+                  onDismiss: () =>
+                      setState(() => _privacyBannerDismissed = true),
                 ),
               Expanded(
                 child: messages.isEmpty
@@ -174,15 +167,27 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
     );
   }
 
-  void _showPrivacyDialog(BuildContext context) {
+  void _showPrivacyDialog(BuildContext context, AgentRuntime runtime) {
+    final modeLine = runtime.isHttp
+        ? '当前是「在线」模式（HTTP 后端：${runtime.baseUrl}）。\n\n'
+              '为了让 Coach 给出有依据的建议，App 会把以下必要上下文发送到后端：\n'
+              '· 训练目标、经验级、周频率\n'
+              '· 当前训练计划与今日训练\n'
+              '· 最近 10 条已完成训练记录摘要\n'
+              '· 最近 10 条身体指标摘要\n'
+              '· 动作库的精简元数据（不含详细教学）'
+        : '当前是「本地 Mock」模式：所有响应在客户端生成，不会发送任何数据到后端。';
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('隐私和安全'),
-        content: const Text(
-          'FitForge Coach 在云端基于你当前的训练计划、训练历史和动作库生成建议。\n\n'
-          '所有修改都需要你点击「应用修改」后才会写入本地数据。\n\n'
-          'FitForge 不提供医疗诊断或治疗建议。',
+        content: SingleChildScrollView(
+          child: Text(
+            '$modeLine\n\n'
+            '所有训练计划修改都需要你点「应用修改」后才会写入本地数据。\n\n'
+            'FitForge Coach 提供通用健身和营养建议，不构成医疗诊断或治疗。'
+            '出现胸痛、晕厥、严重头晕、呼吸困难或急性损伤时，请停止训练并咨询专业医疗人员。',
+          ),
         ),
         actions: [
           TextButton(

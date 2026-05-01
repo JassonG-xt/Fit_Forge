@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:fit_forge/agent/agent_runtime.dart';
 import 'package:fit_forge/agent/agent_service.dart';
 import 'package:fit_forge/agent/local_agent_action_executor.dart';
 import 'package:fit_forge/agent/mocks/mock_agent_client.dart';
@@ -21,6 +22,8 @@ void main() {
   Future<_ChatHarness> pumpChat(
     WidgetTester tester, {
     bool withPlan = false,
+    AgentMode mode = AgentMode.mock,
+    String baseUrl = '',
   }) async {
     final state = await primedAppStateWithProfile();
     if (withPlan) {
@@ -36,6 +39,9 @@ void main() {
         providers: [
           ChangeNotifierProvider.value(value: state),
           ChangeNotifierProvider.value(value: service),
+          Provider<AgentRuntime>.value(
+            value: AgentRuntime(mode: mode, baseUrl: baseUrl),
+          ),
         ],
         child: const MaterialApp(home: AgentChatScreen()),
       ),
@@ -108,6 +114,32 @@ void main() {
       plan.days.firstWhere((d) => d.dayOfWeek == 1).dayType,
       WorkoutDayType.rest,
     );
+  });
+
+  testWidgets('mock mode shows local-only privacy line', (tester) async {
+    await pumpChat(tester);
+    expect(
+      find.textContaining('本地 Mock 模式：不会向任何后端发送数据'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('http mode shows remote host in privacy banner', (tester) async {
+    await pumpChat(
+      tester,
+      mode: AgentMode.http,
+      baseUrl: 'http://example.com:8000',
+    );
+    expect(find.textContaining('在线模式'), findsOneWidget);
+    expect(find.textContaining('example.com'), findsOneWidget);
+  });
+
+  testWidgets('privacy banner is dismissable', (tester) async {
+    await pumpChat(tester);
+    expect(find.text('我知道了'), findsOneWidget);
+    await tester.tap(find.text('我知道了'));
+    await tester.pumpAndSettle();
+    expect(find.text('我知道了'), findsNothing);
   });
 }
 

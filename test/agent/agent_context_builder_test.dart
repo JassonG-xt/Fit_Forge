@@ -140,6 +140,34 @@ void main() {
       expect(snapshot.recentSessions, hasLength(5));
     });
 
+    test('recentSessions are the latest by date even when saved out of order', () async {
+      final state = await primedAppStateWithProfile();
+      // Insert sessions in deliberately scrambled date order.
+      final dates = [3, 10, 1, 7, 2, 14, 5];
+      for (var i = 0; i < dates.length; i++) {
+        state.saveSession(
+          WorkoutSession(
+            id: 'session_${dates[i]}',
+            dayType: WorkoutDayType.push,
+            date: DateTime.now().subtract(Duration(days: dates[i])),
+            durationMinutes: 30,
+            isCompleted: true,
+          ),
+        );
+      }
+      await state.flushPendingPersistence();
+
+      final snapshot = const AgentContextBuilder(
+        recentSessionLimit: 3,
+      ).build(state);
+      expect(snapshot.recentSessions, hasLength(3));
+      // 最近 3 条应为 days-ago = 1, 2, 3（按 date desc 取前 3 条）。
+      final ids = snapshot.recentSessions
+          .map((s) => s['id'] as String)
+          .toList();
+      expect(ids, ['session_1', 'session_2', 'session_3']);
+    });
+
     test('availableExerciseSummary strips heavy fields', () async {
       final state = AppState();
       await state.init();

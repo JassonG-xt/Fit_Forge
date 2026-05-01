@@ -146,5 +146,53 @@ void main() {
       await client.sendMessage(message: 'hi', context: context, history: const []);
       expect(capturedUrl.path, '/custom/coach');
     });
+
+    test('http.ClientException is wrapped in HttpAgentException', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final mockHttp = MockClient((request) async {
+        throw http.ClientException('connection refused');
+      });
+      final client = HttpAgentClient(
+        baseUrl: 'http://example.com',
+        httpClient: mockHttp,
+      );
+
+      await expectLater(
+        client.sendMessage(message: '你好', context: context, history: const []),
+        throwsA(
+          isA<HttpAgentException>().having(
+            (e) => e.message,
+            'message',
+            contains('connection refused'),
+          ),
+        ),
+      );
+    });
+
+    test('timeout is wrapped in HttpAgentException', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final mockHttp = MockClient((request) async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return http.Response('{}', 200);
+      });
+      final client = HttpAgentClient(
+        baseUrl: 'http://example.com',
+        httpClient: mockHttp,
+        timeout: const Duration(milliseconds: 30),
+      );
+
+      await expectLater(
+        client.sendMessage(message: '你好', context: context, history: const []),
+        throwsA(
+          isA<HttpAgentException>().having(
+            (e) => e.message,
+            'message',
+            contains('超时'),
+          ),
+        ),
+      );
+    });
   });
 }

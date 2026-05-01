@@ -24,6 +24,14 @@ class AgentContextBuilder {
     final activePlan = state.activePlan;
     final today = state.todayWorkout;
 
+    // 上游 AppState 已经维护了排序（completedSessions 在 SessionQueries 里
+    // 按 date desc，bodyMetrics 在 add 时排序），但这里仍显式 sort 一次，
+    // 避免未来上游改动后悄悄把"最近 N 条"变成乱序的 N 条。
+    final sortedSessions = [...state.completedSessions]
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final sortedMetrics = [...state.bodyMetrics]
+      ..sort((a, b) => b.date.compareTo(a.date));
+
     return AgentContextSnapshot(
       locale: locale,
       profile: profile?.toJson(),
@@ -35,11 +43,11 @@ class AgentContextBuilder {
               'exercises': today.exercises.map((e) => e.toJson()).toList(),
             }
           : null,
-      recentSessions: state.completedSessions
+      recentSessions: sortedSessions
           .take(recentSessionLimit)
           .map(_summarizeSession)
           .toList(),
-      bodyMetrics: state.bodyMetrics
+      bodyMetrics: sortedMetrics
           .take(bodyMetricLimit)
           .map((m) => m.toJson())
           .toList(),

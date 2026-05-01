@@ -69,6 +69,9 @@ class LocalAgentActionExecutor {
     if (weekdays.any((d) => d < 1 || d > 7)) {
       return AgentActionResult.failure('训练日期必须在 1-7 之间（周一到周日）。');
     }
+    if (weekdays.toSet().length != weekdays.length) {
+      return AgentActionResult.failure('训练日期不能重复。');
+    }
 
     final result = reschedulePlanToWeekdays(
       plan: plan,
@@ -102,6 +105,9 @@ class LocalAgentActionExecutor {
     }
     if (toId is! String || toId.isEmpty) {
       return AgentActionResult.failure('toExerciseId 缺失。');
+    }
+    if (fromId == toId) {
+      return AgentActionResult.failure('替代动作不能和原动作相同。');
     }
 
     final target = appState.exercises.where((e) => e.id == toId).firstOrNull;

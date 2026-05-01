@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -76,12 +75,12 @@ class HttpAgentClient implements AgentClient {
         throw const HttpAgentException('Coach 后端返回的不是合法 JSON 对象');
       }
       return AgentResponse.fromJson(decoded);
-    } on SocketException catch (e) {
-      throw HttpAgentException('网络无法连接 Coach 后端：${e.message}');
     } on TimeoutException {
       throw HttpAgentException('Coach 后端响应超时（${timeout.inSeconds} 秒）');
     } on FormatException catch (e) {
       throw HttpAgentException('Coach 后端返回了无法解析的响应：${e.message}');
+    } on http.ClientException catch (e) {
+      throw HttpAgentException('网络无法连接 Coach 后端：${e.message}');
     }
   }
 }

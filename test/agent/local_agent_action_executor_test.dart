@@ -84,6 +84,19 @@ void main() {
       expect(result.success, false);
     });
 
+    test('rescheduleWeek rejects duplicate weekdays', () async {
+      final state = await primedAppStateWithProfile();
+      state.adoptPlan(_seedPlan());
+      final executor = LocalAgentActionExecutor(state);
+      final result = await executor.execute(
+        makeAction(AgentActionType.rescheduleWeek, const {
+          'availableWeekdays': [2, 2, 4],
+        }),
+      );
+      expect(result.success, false);
+      expect(result.message, contains('不能重复'));
+    });
+
     test('rescheduleWeek mutates active plan when valid', () async {
       final state = await primedAppStateWithProfile();
       state.adoptPlan(_seedPlan());
@@ -119,6 +132,22 @@ void main() {
       );
       expect(result.success, false);
       expect(result.message, contains('不在动作库'));
+    });
+
+    test('replaceExercise rejects fromId == toId', () async {
+      final state = await primedAppStateWithProfile();
+      await state.init();
+      state.adoptPlan(_seedPlan());
+      final executor = LocalAgentActionExecutor(state);
+      final result = await executor.execute(
+        makeAction(AgentActionType.replaceExercise, const {
+          'dayOfWeek': 1,
+          'fromExerciseId': 'bench_press',
+          'toExerciseId': 'bench_press',
+        }),
+      );
+      expect(result.success, false);
+      expect(result.message, contains('不能和原动作相同'));
     });
 
     test('replaceExercise swaps when toExerciseId exists in library', () async {
