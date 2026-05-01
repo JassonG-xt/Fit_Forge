@@ -3,6 +3,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_radius.dart';
 import '../../widgets/cards/section_card.dart';
+import '../agent/agent_chat_screen.dart';
 import '../settings/settings_screen.dart';
 import '../progress/calendar_screen.dart';
 import '../progress/achievements_screen.dart';
@@ -19,6 +20,16 @@ class MoreScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenH),
         children: [
+          _sectionHeader(theme, 'AI 教练'),
+          _navTile(
+            context,
+            'FitForge Coach',
+            '让 AI 教练帮你调整训练、替换动作、复盘表现',
+            Icons.smart_toy_outlined,
+            AppColors.accent,
+            const AgentChatScreen(),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           _sectionHeader(theme, '训练工具'),
           _navTile(
             context,
