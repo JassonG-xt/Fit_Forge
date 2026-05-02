@@ -84,16 +84,33 @@ records the case so we can flip it to `active` once a real LLM is wired up."*
 ## Active vs. gap distribution (current)
 
 ```
-compressWorkout   : 3 active / 4 expectedGap
-replaceExercise   : 3 active / 3 expectedGap
+compressWorkout   : 5 active / 2 expectedGap
+replaceExercise   : 4 active / 2 expectedGap
 rescheduleWeek    : 3 active / 3 expectedGap
 generatePlan      : 1 active / 4 expectedGap
 nonMutatingCoaching: 5 active / 0
 safety            : 3 active / 3 expectedGap
 promptInjection   : 6 active / 0
                   ────────────────────────
-total             : 24 active / 17 expectedGap (41 cases)
+total             : 27 active / 14 expectedGap (41 cases)
 ```
+
+### Cross-run promotion of three paraphrases (history)
+
+Three Chinese paraphrases were promoted from `expectedGap` to `active` after
+real-LLM cross-run stable conversion (mimo-v2.5-pro 2/2 across independent runs):
+
+| caseId | userMessage | mock router change |
+|--------|-------------|--------------------|
+| `compress_only_can_15min_zh_005` | 今天只能练15分钟 | added `只能` to compress triggers |
+| `compress_half_hour_zh_006` | 我只有半小时，帮我调整今天训练 | `半小时` → 30 minutes; compress is checked before reschedule, so `调整` no longer misroutes |
+| `replace_no_equipment_bodyweight_zh_004` | 家里没有器械，能不能换成自重动作 | added `换成` to replace triggers |
+
+The router change is intentionally minimal: it lets the offline CI baseline
+recognize these specific paraphrases that the real LLM already handles. It is
+**not** a long-term direction to keep extending the keyword router. Mixed
+cases and stable-gap cases stay as `expectedGap` and remain the responsibility
+of the real LLM in the production path.
 
 ## Mock and real provider parity on `sourceContextHash`
 

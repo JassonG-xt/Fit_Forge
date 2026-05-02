@@ -265,3 +265,62 @@ def test_endpoint_compress_carries_source_context_hash(http_client) -> None:
     body = response.json()
     assert body["intent"] == "compressWorkout"
     assert body["actions"][0]["sourceContextHash"] == "endpoint_hash_v1"
+
+
+# ── Promoted-from-expectedGap paraphrases (real LLM cross-run stable) ──
+#
+# These three Chinese paraphrases were promoted from `expectedGap` to `active`
+# in `coach_agent_eval_cases.json` after real LLM cross-run stability.
+# The mock router got the minimum keyword/duration extension to keep the
+# offline CI baseline aligned. Tests pin the new behavior so future router
+# refactors can't silently regress these intents.
+
+
+def test_mock_compress_recognizes_zhi_neng_paraphrase() -> None:
+    """`只能` joins `只有` as a compress trigger; explicit `\\d+ 分钟` still drives target."""
+    response = _run_mock_coach_agent(_request("今天只能练15分钟"))
+    assert response.actions, "expected at least one action"
+    action = response.actions[0]
+    assert action.type == "compressWorkout"
+    assert action.payload["targetMinutes"] == 15
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+
+
+def test_mock_compress_recognizes_half_hour_paraphrase() -> None:
+    """`半小时` maps to 30 minutes; `调整` does not misroute to rescheduleWeek
+    because compress is checked first in the router."""
+    response = _run_mock_coach_agent(_request("我只有半小时，帮我调整今天训练"))
+    assert response.actions, "expected at least one action"
+    action = response.actions[0]
+    assert action.type == "compressWorkout"
+    assert action.payload["targetMinutes"] == 30
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+
+
+def test_mock_replace_recognizes_huan_cheng_paraphrase() -> None:
+    """`换成` joins the replace trigger list."""
+    response = _run_mock_coach_agent(
+        _request(
+            "家里没有器械，能不能换成自重动作",
+            today_workout={
+                "dayOfWeek": 1,
+                "dayType": "push",
+                "exercises": [
+                    {"exerciseId": "bench_press", "exerciseName": "Bench Press"},
+                ],
+            },
+            available_exercises=[
+                {"id": "pushup", "name": "Pushup", "equipment": "none", "bodyPart": "chest"},
+                {"id": "lunge", "name": "Lunge", "equipment": "none", "bodyPart": "legs"},
+            ],
+        )
+    )
+    assert response.actions, "expected at least one action"
+    action = response.actions[0]
+    assert action.type == "replaceExercise"
+    assert "fromExerciseId" in action.payload
+    assert "toExerciseId" in action.payload
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH

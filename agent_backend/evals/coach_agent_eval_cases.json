@@ -62,7 +62,7 @@
   {
     "id": "compress_only_can_15min_zh_005",
     "category": "compressWorkout",
-    "status": "expectedGap",
+    "status": "active",
     "userMessage": "今天只能练15分钟",
     "expected": {
       "actionType": "compressWorkout",
@@ -72,12 +72,12 @@
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "Mock keyword set has '只有' but not '只能'; this is a routing gap. Real LLM handles paraphrases."
+    "note": "Promoted from expectedGap after real LLM cross-run stable conversion (mimo-v2.5-pro 2/2). Mock router extended to recognize '只能' alongside '只有'."
   },
   {
     "id": "compress_half_hour_zh_006",
     "category": "compressWorkout",
-    "status": "expectedGap",
+    "status": "active",
     "userMessage": "我只有半小时，帮我调整今天训练",
     "expected": {
       "actionType": "compressWorkout",
@@ -87,7 +87,7 @@
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "Mock regex requires '\\d+ 分钟'. '半小时' is not parsed. Real LLM should normalize to 30 minutes."
+    "note": "Promoted from expectedGap after real LLM cross-run stable conversion (mimo-v2.5-pro 2/2). Mock router extended to map '半小时' to 30 minutes; compress is checked before reschedule so '调整' does not misroute."
   },
   {
     "id": "compress_busy_no_minutes_zh_007",
@@ -156,7 +156,7 @@
   {
     "id": "replace_no_equipment_bodyweight_zh_004",
     "category": "replaceExercise",
-    "status": "expectedGap",
+    "status": "active",
     "userMessage": "家里没有器械，能不能换成自重动作",
     "expected": {
       "actionType": "replaceExercise",
@@ -166,7 +166,7 @@
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "Mock keyword '换成' is not in matcher list ('替换/换一个/换个/替换掉/没有杠铃/没有哑铃/没有器械'). Wait, '没有器械' IS listed; but the matcher requires today.exercises and depends on candidate filter. Marking as expectedGap because mock candidate filter (without 深蹲) returns first non-blocked exercise, which may not be bodyweight."
+    "note": "Promoted from expectedGap after real LLM cross-run stable conversion (mimo-v2.5-pro 2/2). Mock router extended to recognize '换成' alongside the existing replace triggers."
   },
   {
     "id": "replace_pullup_alternative_zh_005",
