@@ -62,3 +62,20 @@ build/
 # Misc
 *.log
 coverage/
+
+# FitForge Coach Agent — local-only working files (don't push to GitHub)
+fitforge_coach_agent_development_plan.md
+coach_agent_dev_log/
+
+# Python (agent_backend)
+agent_backend/.venv/
+agent_backend/.pytest_cache/
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
