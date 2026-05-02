@@ -19,6 +19,10 @@ from typing import Any, Dict, List, Optional
 import urllib.request
 import urllib.error
 
+from agents.action_safety import (
+    MUTATION_ACTION_TYPES as _MUTATION_ACTION_TYPES,
+    inject_action_safety as _inject_action_safety,
+)
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -27,14 +31,6 @@ from safety.fitness_guardrails import assess_message_safety
 logger = logging.getLogger(__name__)
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
-
-# Action types that modify local state (require confirmation + sourceContextHash).
-_MUTATION_ACTION_TYPES = frozenset({
-    "generatePlan",
-    "rescheduleWeek",
-    "replaceExercise",
-    "compressWorkout",
-})
 
 
 def _load_system_prompt() -> str:
@@ -134,27 +130,6 @@ def _parse_agent_response(raw: str) -> Optional[AgentResponse]:
     except Exception as exc:
         logger.warning("LLM output failed schema validation: %s", exc)
         return None
-
-
-def _inject_action_safety(
-    actions: List[AgentAction],
-    plan_context_hash: Optional[str],
-) -> List[AgentAction]:
-    """Inject sourceContextHash and enforce requiresConfirmation on mutations."""
-    result: List[AgentAction] = []
-    for action in actions:
-        is_mutation = action.type in _MUTATION_ACTION_TYPES
-
-        # Enforce requiresConfirmation on mutation actions
-        if is_mutation and not action.requiresConfirmation:
-            action.requiresConfirmation = True
-
-        # Inject sourceContextHash from context (never from LLM)
-        if is_mutation and plan_context_hash:
-            action.sourceContextHash = plan_context_hash
-
-        result.append(action)
-    return result
 
 
 def _safety_fallback_response(message: str) -> AgentResponse:
