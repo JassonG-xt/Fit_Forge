@@ -85,13 +85,24 @@ def _safety_response(message: str) -> AgentResponse:
 
 
 def _is_compress(message: str) -> int | None:
-    """Return target minutes if the message asks to compress today, else None."""
+    """Return target minutes if the message asks to compress today, else None.
+
+    Triggers (any one is enough alongside a duration):
+      压缩 / 短一点 / 快一点 / 只有 / 只能
+
+    Duration extraction:
+      - explicit `<digits> 分钟` → that number
+      - `半小时` → 30
+    """
+    triggers = ("压缩", "短一点", "快一点", "只有", "只能")
+    if not any(token in message for token in triggers):
+        return None
     match = re.search(r"(\d+)\s*分钟", message)
-    if not match:
-        return None
-    if not any(token in message for token in ("压缩", "短一点", "快一点", "只有")):
-        return None
-    return int(match.group(1))
+    if match:
+        return int(match.group(1))
+    if "半小时" in message:
+        return 30
+    return None
 
 
 def _compress_response(message: str, request: AgentRequest) -> AgentResponse:
@@ -166,7 +177,7 @@ def _reschedule_response(message: str) -> AgentResponse | None:
 
 
 def _replace_response(message: str, request: AgentRequest) -> AgentResponse | None:
-    if not any(k in message for k in ("替换", "换一个", "换个", "替换掉", "没有杠铃", "没有哑铃")):
+    if not any(k in message for k in ("替换", "换一个", "换个", "换成", "替换掉", "没有杠铃", "没有哑铃")):
         return None
 
     today = request.context.todayWorkout
