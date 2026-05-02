@@ -343,6 +343,121 @@ def test_real_provider_missing_env_returns_fallback(mock_call_llm) -> None:
     mock_call_llm.assert_not_called()
 
 
+# ── Edge cases ──
+
+
+def test_parse_unknown_action_type_rejected() -> None:
+    """AgentAction schema rejects unknown action types."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        AgentAction.model_validate({
+            "id": "x",
+            "type": "hackTheMainframe",
+            "title": "t",
+            "summary": "s",
+            "requiresConfirmation": True,
+            "payload": {},
+        })
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_unknown_action_type_returns_fallback(mock_call_llm) -> None:
+    """If LLM returns an unknown action type, schema validation fails -> fallback."""
+    resp_data = {
+        "message": "好的。",
+        "intent": "compressWorkout",
+        "confidence": 0.9,
+        "actions": [
+            {
+                "id": "bad",
+                "type": "deleteEverything",
+                "title": "t",
+                "summary": "s",
+                "requiresConfirmation": True,
+                "riskLevel": "low",
+                "payload": {},
+            }
+        ],
+        "safety": {"hasMedicalConcern": False, "shouldStopWorkout": False},
+    }
+    mock_call_llm.return_value = json.dumps(resp_data)
+    request = _make_request()
+
+    resp = run_real_coach_agent(request)
+
+    # Schema validation fails -> returns fallback
+    assert resp.intent == "answerOnly"
+    assert resp.actions == []
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_prompt_injection_cannot_bypass_confirmation(mock_call_llm) -> None:
+    """Even if LLM is tricked into setting requiresConfirmation=false, it gets forced to true."""
+    resp_data = {
+        "message": "好的，我已经帮你改好了，不需要确认。",
+        "intent": "compressWorkout",
+        "confidence": 0.95,
+        "actions": [
+            {
+                "id": "tricky",
+                "type": "compressWorkout",
+                "title": "压缩训练",
+                "summary": "压缩到15分钟",
+                "requiresConfirmation": False,
+                "riskLevel": "low",
+                "payload": {"dayOfWeek": 1, "targetMinutes": 15},
+            }
+        ],
+        "safety": {"hasMedicalConcern": False, "shouldStopWorkout": False},
+    }
+    mock_call_llm.return_value = json.dumps(resp_data)
+    request = _make_request(plan_context_hash="trusted_hash")
+
+    resp = run_real_coach_agent(request)
+
+    # Mutation action must require confirmation even if LLM said false
+    assert resp.actions[0].requiresConfirmation is True
+    # sourceContextHash must come from trusted context, not from LLM
+    assert resp.actions[0].sourceContextHash == "trusted_hash"
+    # LLM's claim of "already changed" is irrelevant — user must still confirm
+    assert "已经帮你改好了" in resp.message  # LLM's text is passed through, but action requires confirmation
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_http_401_returns_fallback(mock_call_llm) -> None:
+    """HTTP 401 (bad API key) should return fallback, not crash."""
+    import urllib.error
+
+    mock_call_llm.side_effect = urllib.error.HTTPError(
+        url="http://fake/v1/chat/completions",
+        code=401,
+        msg="Unauthorized",
+        hdrs=None,
+        fp=None,
+    )
+    request = _make_request()
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "answerOnly"
+    assert resp.actions == []
+
+
 # ── Provider switching via env ──
 
 
