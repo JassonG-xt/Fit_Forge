@@ -8,11 +8,11 @@ Why mock and not real? See docs/coach_agent_evals.md — eval is intentionally
 deterministic and offline; real-LLM normalization is covered separately by
 `test_coach_agent_real_provider_evals.py` with mocked transport.
 
-Known systemic gap (documented in docs/coach_agent_evals.md):
-- Backend mock provider does NOT inject `sourceContextHash` on mutation
-  actions, while the real provider does (via `_inject_action_safety`).
-  This eval skips the `mustHaveSourceContextHash` assertion under mock to
-  avoid false failures; real-provider eval covers that boundary.
+Mock and real providers now share a single mutation-safety helper
+(`agents.action_safety.inject_action_safety`), so this runner asserts
+`mustHaveSourceContextHash` uniformly against both. Legacy fallback
+(when `context.planContextHash` is absent) is covered separately in
+`test_coach_agent.py`.
 """
 
 from __future__ import annotations
@@ -190,11 +190,21 @@ def test_active_case_against_mock_provider(case: Dict[str, Any]) -> None:
             )
 
     # ── sourceContextHash ──
-    # KNOWN GAP: backend mock does not inject sourceContextHash on mutation
-    # actions (real provider does). We do NOT assert this against mock to avoid
-    # false negatives; sourceContextHash injection is covered by the real-
-    # provider eval suite. See docs/coach_agent_evals.md.
-    # Intentionally no assertion here.
+    # Mock and real providers now share `inject_action_safety`, so this
+    # assertion runs uniformly. Cases that do not assert the hash should
+    # omit `mustHaveSourceContextHash` from `expected`.
+    if expected.get("mustHaveSourceContextHash") and response.actions:
+        for action in response.actions:
+            if action.type in _MUTATION_ACTION_TYPES:
+                assert action.sourceContextHash, (
+                    f"[{case['id']}] mutation action {action.type} must carry "
+                    f"sourceContextHash injected from request.context.planContextHash"
+                )
+                assert action.sourceContextHash == _DEFAULT_CONTEXT["planContextHash"], (
+                    f"[{case['id']}] sourceContextHash must equal the trusted "
+                    f"context hash {_DEFAULT_CONTEXT['planContextHash']!r}, "
+                    f"got {action.sourceContextHash!r}"
+                )
 
 
 # ── Non-active cases: documented but skipped ──────────────────────────

@@ -15,6 +15,7 @@ import re
 import uuid
 from typing import Iterable
 
+from agents.action_safety import inject_action_safety
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -315,7 +316,23 @@ def _has_any(text: str, keys: Iterable[str]) -> bool:
 
 
 def _run_mock_coach_agent(request: AgentRequest) -> AgentResponse:
-    """Mock implementation: routes the user message to a fixed response."""
+    """Mock implementation: routes the user message to a fixed response.
+
+    After routing, applies the shared mutation-action safety helper so that
+    every mutation action carries `sourceContextHash` derived from the trusted
+    `request.context.planContextHash` (when present) and `requiresConfirmation`
+    is forced true. Mock and real providers share this safety layer.
+    """
+    response = _route_mock_message(request)
+    response.actions = inject_action_safety(
+        response.actions,
+        request.context.planContextHash,
+    )
+    return response
+
+
+def _route_mock_message(request: AgentRequest) -> AgentResponse:
+    """Pure routing: pick a response builder based on keyword heuristics."""
     message = request.message
 
     if assess_message_safety(message).has_medical_concern:
