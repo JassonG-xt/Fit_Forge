@@ -173,6 +173,7 @@ class MockAgentClient implements AgentClient {
           title: '压缩今日训练',
           summary: '保留核心动作，减少辅助动作和休息时间，目标 $targetMinutes 分钟左右。',
           requiresConfirmation: true,
+          sourceContextHash: context.planContextHash,
           payload: {
             'dayOfWeek': ?dayOfWeek,
             'targetMinutes': targetMinutes,
@@ -252,6 +253,7 @@ class MockAgentClient implements AgentClient {
           title: '替换 $fromName',
           summary: '将 $fromName 替换为 $toName。',
           requiresConfirmation: true,
+          sourceContextHash: context.planContextHash,
           payload: {
             'dayOfWeek': ?dayOfWeek,
             'fromExerciseId': fromId,
@@ -305,6 +307,7 @@ class MockAgentClient implements AgentClient {
           title: '重新安排本周训练日',
           summary: '将训练安排到$names，其余日期休息。',
           requiresConfirmation: true,
+          sourceContextHash: context.planContextHash,
           payload: {
             'availableWeekdays': weekdays,
             'preserveWorkoutOrder': true,

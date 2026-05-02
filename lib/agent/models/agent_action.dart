@@ -48,6 +48,7 @@ class AgentAction {
     required this.requiresConfirmation,
     this.payload = const {},
     this.riskLevel = AgentActionRiskLevel.low,
+    this.sourceContextHash,
   });
 
   factory AgentAction.fromJson(Map<String, dynamic> json) {
@@ -62,6 +63,7 @@ class AgentAction {
       payload: rawPayload is Map<String, dynamic>
           ? Map<String, dynamic>.from(rawPayload)
           : const {},
+      sourceContextHash: json['sourceContextHash'] as String?,
     );
   }
 
@@ -73,6 +75,9 @@ class AgentAction {
   final Map<String, dynamic> payload;
   final AgentActionRiskLevel riskLevel;
 
+  /// action 创建时的 activePlan contextHash，用于 stale action 检测。
+  final String? sourceContextHash;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'type': type.name,
@@ -81,5 +86,6 @@ class AgentAction {
     'requiresConfirmation': requiresConfirmation,
     'payload': payload,
     'riskLevel': riskLevel.name,
+    if (sourceContextHash != null) 'sourceContextHash': sourceContextHash,
   };
 }

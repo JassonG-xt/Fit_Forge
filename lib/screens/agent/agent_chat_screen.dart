@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../agent/agent_event_log.dart';
 import '../../agent/agent_runtime.dart';
 import '../../agent/agent_service.dart';
 import '../../agent/models/agent_action.dart';
@@ -104,6 +105,15 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
                   runtime: runtime,
                   onDismiss: () =>
                       setState(() => _privacyBannerDismissed = true),
+                  onClearLogs: () async {
+                    final log = context.read<AgentEventLog>();
+                    final messenger = ScaffoldMessenger.of(context);
+                    await log.clear();
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('本地 AI 教练日志已清除')),
+                    );
+                  },
                 ),
               Expanded(
                 child: messages.isEmpty

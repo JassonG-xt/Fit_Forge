@@ -4,8 +4,10 @@ import '../services/app_state.dart';
 import 'action_helpers/exercise_replacer.dart';
 import 'action_helpers/workout_compressor.dart';
 import 'action_helpers/workout_rescheduler.dart';
+import 'action_payload_parser.dart';
 import 'models/agent_action.dart';
 import 'models/agent_action_result.dart';
+import 'plan_context_hash.dart';
 
 /// 在用户确认后真正修改 AppState 的执行器。
 ///
@@ -35,8 +37,7 @@ class LocalAgentActionExecutor {
     }
   }
 
-  // 共享 payload 校验：plan 必须存在 / dayOfWeek 必须是 1-7 之间的整数。
-  // 抽出来只是为了消重，避免每个 action 重写同样的两行。
+  // 共享 payload 校验：plan 必须存在。
   static AgentActionResult? _requireActivePlan(WorkoutPlan? plan) {
     if (plan == null) {
       return AgentActionResult.failure('当前没有可调整的训练计划。');
@@ -44,14 +45,22 @@ class LocalAgentActionExecutor {
     return null;
   }
 
-  static AgentActionResult? _requireDayOfWeek(dynamic raw) {
-    if (raw is! num || raw.toInt() < 1 || raw.toInt() > 7) {
-      return AgentActionResult.failure('dayOfWeek 缺失或不在 1-7 之间。');
+  // stale action 检测：如果 action 创建后 plan 已变化，拒绝执行。
+  AgentActionResult? _checkStale(AgentAction action) {
+    final expected = action.sourceContextHash;
+    if (expected == null) return null; // legacy action without hash — allow
+    final plan = appState.activePlan;
+    if (plan == null) return null; // plan 消失 → _requireActivePlan 会拦
+    final current = computePlanContextHash(plan);
+    if (current != expected) {
+      return AgentActionResult.failure('训练计划已经发生变化，请重新让教练生成建议。');
     }
     return null;
   }
 
   // ─── generatePlan ───
+  // 不做 stale guard：generatePlan 基于 profile 生成全新计划，
+  // 不依赖当前 activePlan 内容（situation A）。
   Future<AgentActionResult> _generatePlan(AgentAction action) async {
     if (appState.profile == null) {
       return AgentActionResult.failure('需要先完成个人信息设置才能生成训练计划。');
@@ -73,20 +82,14 @@ class LocalAgentActionExecutor {
     final plan = appState.activePlan;
     final planErr = _requireActivePlan(plan);
     if (planErr != null) return planErr;
-    final raw = action.payload['availableWeekdays'];
-    if (raw is! List) {
-      return AgentActionResult.failure('availableWeekdays 字段缺失或格式不正确。');
+    final staleErr = _checkStale(action);
+    if (staleErr != null) return staleErr;
+
+    final parsed = parseAvailableWeekdays(action.payload['availableWeekdays']);
+    if (parsed is PayloadParseFailure) {
+      return AgentActionResult.failure(parsed.message!);
     }
-    final weekdays = raw.whereType<num>().map((n) => n.toInt()).toList();
-    if (weekdays.isEmpty) {
-      return AgentActionResult.failure('训练日期不能为空。');
-    }
-    if (weekdays.any((d) => d < 1 || d > 7)) {
-      return AgentActionResult.failure('训练日期必须在 1-7 之间（周一到周日）。');
-    }
-    if (weekdays.toSet().length != weekdays.length) {
-      return AgentActionResult.failure('训练日期不能重复。');
-    }
+    final weekdays = (parsed as PayloadParseSuccess<List<int>>).value;
 
     final result = reschedulePlanToWeekdays(
       plan: plan!,
@@ -108,31 +111,28 @@ class LocalAgentActionExecutor {
     final plan = appState.activePlan;
     final planErr = _requireActivePlan(plan);
     if (planErr != null) return planErr;
-    final dayOfWeek = action.payload['dayOfWeek'];
-    final dayErr = _requireDayOfWeek(dayOfWeek);
-    if (dayErr != null) return dayErr;
-    final fromId = action.payload['fromExerciseId'];
-    final toId = action.payload['toExerciseId'];
-    if (fromId is! String || fromId.isEmpty) {
-      return AgentActionResult.failure('fromExerciseId 缺失。');
-    }
-    if (toId is! String || toId.isEmpty) {
-      return AgentActionResult.failure('toExerciseId 缺失。');
-    }
-    if (fromId == toId) {
-      return AgentActionResult.failure('替代动作不能和原动作相同。');
-    }
+    final staleErr = _checkStale(action);
+    if (staleErr != null) return staleErr;
 
-    final target = appState.exercises.where((e) => e.id == toId).firstOrNull;
+    final parsed = parseReplaceExercisePayload(action.payload);
+    if (parsed is PayloadParseFailure) {
+      return AgentActionResult.failure(parsed.message!);
+    }
+    final payload =
+        (parsed as PayloadParseSuccess<ReplaceExercisePayload>).value;
+
+    final target = appState.exercises
+        .where((e) => e.id == payload.toExerciseId)
+        .firstOrNull;
     if (target == null) {
-      return AgentActionResult.failure('替代动作 $toId 不在动作库中。');
+      return AgentActionResult.failure('替代动作 ${payload.toExerciseId} 不在动作库中。');
     }
 
     final newPlan = replaceExerciseInPlan(
       plan: plan!,
-      dayOfWeek: (dayOfWeek as num).toInt(),
-      fromExerciseId: fromId,
-      toExerciseId: toId,
+      dayOfWeek: payload.dayOfWeek,
+      fromExerciseId: payload.fromExerciseId,
+      toExerciseId: payload.toExerciseId,
       toExerciseName: target.name,
     );
     if (newPlan == null) {
@@ -150,18 +150,20 @@ class LocalAgentActionExecutor {
     final plan = appState.activePlan;
     final planErr = _requireActivePlan(plan);
     if (planErr != null) return planErr;
-    final dayOfWeekRaw = action.payload['dayOfWeek'] ?? DateTime.now().weekday;
-    final dayErr = _requireDayOfWeek(dayOfWeekRaw);
-    if (dayErr != null) return dayErr;
-    final targetMinutesRaw = action.payload['targetMinutes'];
-    if (targetMinutesRaw is! num || targetMinutesRaw.toInt() <= 0) {
-      return AgentActionResult.failure('targetMinutes 必须为正数。');
+    final staleErr = _checkStale(action);
+    if (staleErr != null) return staleErr;
+
+    final parsed = parseCompressWorkoutPayload(action.payload);
+    if (parsed is PayloadParseFailure) {
+      return AgentActionResult.failure(parsed.message!);
     }
+    final payload =
+        (parsed as PayloadParseSuccess<CompressWorkoutPayload>).value;
 
     final newPlan = compressDayInPlan(
       plan: plan!,
-      dayOfWeek: (dayOfWeekRaw as num).toInt(),
-      targetMinutes: targetMinutesRaw.toInt(),
+      dayOfWeek: payload.dayOfWeek,
+      targetMinutes: payload.targetMinutes,
     );
     if (newPlan == null) {
       return AgentActionResult.failure('当天没有可以压缩的训练。');
@@ -169,7 +171,7 @@ class LocalAgentActionExecutor {
     appState.adoptPlan(newPlan);
     return AgentActionResult.success(
       title: '已压缩训练',
-      message: '今日训练已压缩到约 ${targetMinutesRaw.toInt()} 分钟。',
+      message: '今日训练已压缩到约 ${payload.targetMinutes} 分钟。',
     );
   }
 

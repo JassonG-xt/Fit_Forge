@@ -2,6 +2,7 @@ import '../models/exercise.dart';
 import '../models/workout_session.dart';
 import '../services/app_state.dart';
 import 'models/agent_context_snapshot.dart';
+import 'plan_context_hash.dart';
 
 /// 把 AppState 压缩成发给 Coach Agent 的最小快照。
 ///
@@ -63,6 +64,9 @@ class AgentContextBuilder {
       availableExerciseSummary: state.exercises
           .map(_summarizeExercise)
           .toList(),
+      planContextHash: activePlan != null
+          ? computePlanContextHash(activePlan)
+          : null,
     );
   }
 

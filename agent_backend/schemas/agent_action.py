@@ -1,6 +1,6 @@
 """Schema for the structured action returned by the Coach Agent."""
 
-from typing import Any, Dict, Literal
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -34,3 +34,4 @@ class AgentAction(BaseModel):
     requiresConfirmation: bool
     riskLevel: AgentRiskLevelLiteral = "low"
     payload: Dict[str, Any] = Field(default_factory=dict)
+    sourceContextHash: Optional[str] = None

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../agent/action_helpers/workout_compressor.dart';
-import '../../agent/action_helpers/workout_rescheduler.dart';
+import '../../agent/action_preview.dart';
 import '../../agent/models/agent_action.dart';
 import '../../models/enums.dart';
 import '../../models/workout_plan.dart';
@@ -15,6 +14,9 @@ import '../../theme/app_spacing.dart';
 ///
 /// Read-only action types (answerOnly, nutritionAdvice, weeklyReview,
 /// safetyResponse) render nothing — they don't mutate the plan.
+///
+/// All computation is delegated to [AgentActionPreviewer]; this widget
+/// only handles rendering.
 class AgentDiffView extends StatelessWidget {
   const AgentDiffView({
     super.key,
@@ -25,9 +27,12 @@ class AgentDiffView extends StatelessWidget {
   final AgentAction action;
   final AppState appState;
 
+  static const _previewer = AgentActionPreviewer();
+
   @override
   Widget build(BuildContext context) {
-    final inner = _buildInner();
+    final preview = _previewer.preview(action: action, appState: appState);
+    final inner = _buildFromPreview(preview);
     if (inner == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -35,22 +40,25 @@ class AgentDiffView extends StatelessWidget {
     );
   }
 
-  Widget? _buildInner() {
-    switch (action.type) {
-      case AgentActionType.compressWorkout:
-        return _CompressDiff(action: action, plan: appState.activePlan);
-      case AgentActionType.replaceExercise:
-        return _ReplaceDiff(action: action, appState: appState);
-      case AgentActionType.rescheduleWeek:
-        return _RescheduleDiff(action: action, plan: appState.activePlan);
-      case AgentActionType.generatePlan:
-        return _GeneratePlanDiff(appState: appState);
-      case AgentActionType.answerOnly:
-      case AgentActionType.nutritionAdvice:
-      case AgentActionType.weeklyReview:
-      case AgentActionType.safetyResponse:
-        return null;
+  Widget? _buildFromPreview(ActionPreview preview) {
+    if (preview is PreviewFailure) {
+      // 此类型不需要预览 → 静默不渲染
+      if (preview.message == '此类型不需要预览。') return null;
+      return _Hint(preview.message);
     }
+    if (preview is CompressPreview) {
+      return _CompressDiff(preview: preview);
+    }
+    if (preview is ReplacePreview) {
+      return _ReplaceDiff(preview: preview);
+    }
+    if (preview is ReschedulePreview) {
+      return _RescheduleDiff(preview: preview);
+    }
+    if (preview is GeneratePlanPreview) {
+      return _GeneratePlanDiff(preview: preview);
+    }
+    return null;
   }
 }
 
@@ -151,64 +159,40 @@ class _Hint extends StatelessWidget {
 // ─── compressWorkout ─────────────────────────────────────────────────
 
 class _CompressDiff extends StatelessWidget {
-  const _CompressDiff({required this.action, required this.plan});
+  const _CompressDiff({required this.preview});
 
-  final AgentAction action;
-  final WorkoutPlan? plan;
+  final CompressPreview preview;
 
   @override
   Widget build(BuildContext context) {
-    if (plan == null) return const _Hint('无法预览：当前没有训练计划。');
-    final dayOfWeek =
-        (action.payload['dayOfWeek'] as num?)?.toInt() ??
-        DateTime.now().weekday;
-    final targetMinutes = (action.payload['targetMinutes'] as num?)?.toInt();
-    if (targetMinutes == null) return const SizedBox.shrink();
-
-    final original = plan!.days.firstWhere(
-      (d) => d.dayOfWeek == dayOfWeek,
-      orElse: () =>
-          WorkoutDay(dayOfWeek: dayOfWeek, dayType: WorkoutDayType.rest),
-    );
-    if (original.dayType == WorkoutDayType.rest || original.exercises.isEmpty) {
-      return const _Hint('当天没有训练内容可以压缩。');
-    }
-
-    final newPlan = compressDayInPlan(
-      plan: plan!,
-      dayOfWeek: dayOfWeek,
-      targetMinutes: targetMinutes,
-    );
-    final compressed = newPlan?.days.firstWhere(
-      (d) => d.dayOfWeek == dayOfWeek,
-      orElse: () => original,
-    );
-    if (compressed == null) return const SizedBox.shrink();
-
-    final beforeSets = original.exercises.fold<int>(
+    final beforeSets = preview.original.exercises.fold<int>(
       0,
       (s, e) => s + e.targetSets,
     );
-    final afterSets = compressed.exercises.fold<int>(
+    final afterSets = preview.compressed.exercises.fold<int>(
       0,
       (s, e) => s + e.targetSets,
     );
-    final keptIds = compressed.exercises.map((e) => e.exerciseId).toSet();
-    final removedNames = original.exercises
+    final keptIds = preview.compressed.exercises
+        .map((e) => e.exerciseId)
+        .toSet();
+    final removedNames = preview.original.exercises
         .where((e) => !keptIds.contains(e.exerciseId))
         .map((e) => e.exerciseName)
         .toList();
 
     return _BeforeAfterRow(
       before: _CompressSummary(
-        exerciseCount: original.exercises.length,
+        exerciseCount: preview.original.exercises.length,
         totalSets: beforeSets,
       ),
       after: _CompressSummary(
-        exerciseCount: compressed.exercises.length,
+        exerciseCount: preview.compressed.exercises.length,
         totalSets: afterSets,
-        targetMinutes: targetMinutes,
-        keptNames: compressed.exercises.map((e) => e.exerciseName).toList(),
+        targetMinutes: preview.targetMinutes,
+        keptNames: preview.compressed.exercises
+            .map((e) => e.exerciseName)
+            .toList(),
         removedNames: removedNames,
       ),
     );
@@ -262,51 +246,24 @@ class _CompressSummary extends StatelessWidget {
 // ─── replaceExercise ─────────────────────────────────────────────────
 
 class _ReplaceDiff extends StatelessWidget {
-  const _ReplaceDiff({required this.action, required this.appState});
+  const _ReplaceDiff({required this.preview});
 
-  final AgentAction action;
-  final AppState appState;
+  final ReplacePreview preview;
 
   @override
   Widget build(BuildContext context) {
-    final plan = appState.activePlan;
-    if (plan == null) return const _Hint('无法预览：当前没有训练计划。');
-
-    final dayOfWeek = (action.payload['dayOfWeek'] as num?)?.toInt();
-    final fromId = action.payload['fromExerciseId'] as String?;
-    final toId = action.payload['toExerciseId'] as String?;
-    if (dayOfWeek == null || fromId == null || toId == null) {
-      return const SizedBox.shrink();
-    }
-
-    final dayIndex = plan.days.indexWhere((d) => d.dayOfWeek == dayOfWeek);
-    if (dayIndex < 0) return const SizedBox.shrink();
-    PlannedExercise? original;
-    for (final ex in plan.days[dayIndex].exercises) {
-      if (ex.exerciseId == fromId) {
-        original = ex;
-        break;
-      }
-    }
-    if (original == null) return const SizedBox.shrink();
-
-    final toExercise = appState.exercises
-        .where((e) => e.id == toId)
-        .firstOrNull;
-    final toName = toExercise?.name ?? toId;
-
     return _BeforeAfterRow(
       before: _ExerciseSpec(
-        name: original.exerciseName,
-        sets: original.targetSets,
-        reps: original.targetReps,
-        rest: original.restSeconds,
+        name: preview.originalExercise.exerciseName,
+        sets: preview.originalExercise.targetSets,
+        reps: preview.originalExercise.targetReps,
+        rest: preview.originalExercise.restSeconds,
       ),
       after: _ExerciseSpec(
-        name: toName,
-        sets: original.targetSets,
-        reps: original.targetReps,
-        rest: original.restSeconds,
+        name: preview.toExerciseName,
+        sets: preview.originalExercise.targetSets,
+        reps: preview.originalExercise.targetReps,
+        rest: preview.originalExercise.restSeconds,
       ),
     );
   }
@@ -348,32 +305,20 @@ class _ExerciseSpec extends StatelessWidget {
 // ─── rescheduleWeek ──────────────────────────────────────────────────
 
 class _RescheduleDiff extends StatelessWidget {
-  const _RescheduleDiff({required this.action, required this.plan});
+  const _RescheduleDiff({required this.preview});
 
-  final AgentAction action;
-  final WorkoutPlan? plan;
+  final ReschedulePreview preview;
 
   @override
   Widget build(BuildContext context) {
-    if (plan == null) return const _Hint('无法预览：当前没有训练计划。');
-    final raw = action.payload['availableWeekdays'];
-    if (raw is! List) return const SizedBox.shrink();
-    final weekdays = raw.whereType<num>().map((n) => n.toInt()).toList();
-    if (weekdays.isEmpty) return const SizedBox.shrink();
-
-    final result = reschedulePlanToWeekdays(
-      plan: plan!,
-      availableWeekdays: weekdays,
-    );
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (var d = 1; d <= 7; d++)
           _RescheduleRow(
             dayOfWeek: d,
-            before: _dayTypeOf(plan!, d),
-            after: _dayTypeOf(result.plan, d),
+            before: _dayTypeOf(preview.originalPlan, d),
+            after: _dayTypeOf(preview.newPlan, d),
           ),
       ],
     );
@@ -444,26 +389,15 @@ class _RescheduleRow extends StatelessWidget {
 // ─── generatePlan ────────────────────────────────────────────────────
 
 class _GeneratePlanDiff extends StatelessWidget {
-  const _GeneratePlanDiff({required this.appState});
+  const _GeneratePlanDiff({required this.preview});
 
-  final AppState appState;
+  final GeneratePlanPreview preview;
 
   @override
   Widget build(BuildContext context) {
-    if (appState.profile == null) {
-      return const _Hint('需要先完成个人信息设置才能预览计划。');
-    }
-
-    final WorkoutPlan preview;
-    try {
-      preview = appState.previewPlan();
-    } catch (_) {
-      return const SizedBox.shrink();
-    }
-
     return _BeforeAfterRow(
-      before: _PlanSummary(plan: appState.activePlan),
-      after: _PlanSummary(plan: preview),
+      before: _PlanSummary(plan: preview.originalPlan),
+      after: _PlanSummary(plan: preview.previewPlan),
     );
   }
 }

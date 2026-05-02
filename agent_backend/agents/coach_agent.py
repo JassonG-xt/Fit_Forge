@@ -1,12 +1,16 @@
-"""Mock Coach Agent.
+"""Coach Agent provider — switches between mock and real LLM based on env.
 
-Milestone 4 implementation: keyword-based intent detection that mirrors the
-Flutter `MockAgentClient`. Milestone 5 will swap this for an OpenAI-Agents
-backed implementation while keeping the same `AgentResponse` schema.
+Provider selection:
+  - FITFORGE_AGENT_MODE=mock  → keyword-based mock (default)
+  - FITFORGE_AGENT_MODE=real  → real LLM via llm_provider
+  - unset / empty             → mock
+
+The real provider reads LLM_BASE_URL, LLM_API_KEY, LLM_MODEL from env.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from typing import Iterable
@@ -16,6 +20,10 @@ from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
 from safety.fitness_guardrails import assess_message_safety
 
+
+# ──────────────────────────────────────────────
+# Mock implementation (keyword-based, unchanged)
+# ──────────────────────────────────────────────
 
 _DAY_LOOKUP = {
     "周一": 1,
@@ -306,9 +314,8 @@ def _has_any(text: str, keys: Iterable[str]) -> bool:
     return any(k in text for k in keys)
 
 
-def run_coach_agent(request: AgentRequest) -> AgentResponse:
+def _run_mock_coach_agent(request: AgentRequest) -> AgentResponse:
     """Mock implementation: routes the user message to a fixed response."""
-
     message = request.message
 
     if assess_message_safety(message).has_medical_concern:
@@ -336,3 +343,20 @@ def run_coach_agent(request: AgentRequest) -> AgentResponse:
         return _nutrition_response()
 
     return _fallback_response()
+
+
+# ──────────────────────────────────────────────
+# Provider switching
+# ──────────────────────────────────────────────
+
+def run_coach_agent(request: AgentRequest) -> AgentResponse:
+    """Dispatch to mock or real provider based on FITFORGE_AGENT_MODE env var."""
+    mode = os.environ.get("FITFORGE_AGENT_MODE", "mock").lower()
+
+    if mode == "real":
+        from agents.llm_provider import run_real_coach_agent
+
+        return run_real_coach_agent(request)
+
+    # Default: mock
+    return _run_mock_coach_agent(request)

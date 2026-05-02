@@ -4,16 +4,43 @@ FastAPI 服务，负责接收 Flutter 客户端的自然语言请求并返回结
 
 ## Current implementation status
 
-当前实现是**关键字 mock**：根据触发词映射到 7 个核心 intent 之一，行为与 Flutter 端 `MockAgentClient` 对齐。
-真实模型接入（OpenAI / Claude / 本地 LLM）和多 Agent 编排留作后续 milestone。
-
 | Capability | Status |
 |---|---|
 | Mock keyword-based routing | ✅ implemented |
 | Structured `AgentResponse` schema | ✅ implemented |
 | Safety guardrails (12 keywords) | ✅ implemented |
-| Real LLM-backed Coach Agent | 📋 planned |
+| Real LLM-backed Coach Agent | ✅ implemented (provider-agnostic) |
 | Multi-agent orchestration | 📋 planned |
+
+## Real LLM Provider
+
+通过环境变量切换 mock / real 模式：
+
+| 变量 | 说明 | 默认值 |
+|---|---|---|
+| `FITFORGE_AGENT_MODE` | `mock` 或 `real` | `mock` |
+| `LLM_BASE_URL` | OpenAI-compatible endpoint base URL | （real 模式必填） |
+| `LLM_API_KEY` | API key（**只存在 backend 环境变量，绝不写入代码**） | （real 模式必填） |
+| `LLM_MODEL` | 模型名称 | `gpt-4o-mini` |
+
+支持任何 OpenAI-compatible `/v1/chat/completions` endpoint（OpenAI、Claude via proxy、MiMo、本地模型等）。
+
+```bash
+# Real 模式示例（不要把 API key 写入代码或提交到 git）
+export FITFORGE_AGENT_MODE=real
+export LLM_BASE_URL=https://api.openai.com
+export LLM_API_KEY=sk-your-key-here
+export LLM_MODEL=gpt-4o-mini
+uvicorn main:app --reload --port 8000
+```
+
+**安全设计：**
+- API key 只存在 backend 环境变量，Flutter 客户端完全不接触
+- Safety 关键词在 LLM 调用前短路（不浪费 token）
+- LLM 返回的 mutation action 会被注入 `sourceContextHash`（从 `context.planContextHash`，不从 LLM 生成）
+- LLM 返回的 mutation action 强制 `requiresConfirmation=true`（即使 LLM 返回 false）
+- LLM 返回 malformed JSON 时回退到安全的 `answerOnly` 响应
+- Safety response 中的 mutation action 会被自动剥离
 
 ## 目录结构
 

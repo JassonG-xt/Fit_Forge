@@ -12,6 +12,7 @@ class AgentContextSnapshot {
     required this.bodyMetrics,
     required this.progressSummary,
     required this.availableExerciseSummary,
+    this.planContextHash,
   });
 
   final String locale;
@@ -23,6 +24,9 @@ class AgentContextSnapshot {
   final Map<String, dynamic> progressSummary;
   final List<Map<String, dynamic>> availableExerciseSummary;
 
+  /// activePlan 的 contextHash，供 agent 生成 action 时写入 sourceContextHash。
+  final String? planContextHash;
+
   Map<String, dynamic> toJson() => {
     'locale': locale,
     'profile': profile,
@@ -32,5 +36,6 @@ class AgentContextSnapshot {
     'bodyMetrics': bodyMetrics,
     'progressSummary': progressSummary,
     'availableExerciseSummary': availableExerciseSummary,
+    if (planContextHash != null) 'planContextHash': planContextHash,
   };
 }

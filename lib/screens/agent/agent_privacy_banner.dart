@@ -14,10 +14,12 @@ class AgentPrivacyBanner extends StatelessWidget {
     super.key,
     required this.runtime,
     required this.onDismiss,
+    this.onClearLogs,
   });
 
   final AgentRuntime runtime;
   final VoidCallback onDismiss;
+  final VoidCallback? onClearLogs;
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +70,15 @@ class AgentPrivacyBanner extends StatelessWidget {
             '出现胸痛、晕厥、严重头晕、呼吸困难或急性损伤时请停止训练并咨询专业医疗人员。',
             style: theme.textTheme.bodySmall,
           ),
+          if (onClearLogs != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onClearLogs,
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('清除本地 AI 教练日志'),
+              ),
+            ),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(onPressed: onDismiss, child: const Text('我知道了')),
