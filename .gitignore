@@ -79,3 +79,10 @@ agent_backend/.pytest_cache/
 .env
 .env.*
 !.env.example
+
+# Coach Agent real-LLM eval results (manual harness output) — local-only.
+# Real LLM responses are not deterministic and may include token usage info,
+# so each run is treated as a private artifact unless explicitly redacted.
+agent_backend/evals/results/*.json
+agent_backend/evals/results/*.md
+!agent_backend/evals/results/.gitkeep
