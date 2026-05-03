@@ -405,3 +405,54 @@ def test_mock_compress_short_no_minutes_returns_no_mutation() -> None:
             "rescheduleWeek",
             "generatePlan",
         }
+
+
+# ── Chinese safety guardrails — high-risk short-circuit before any routing ──
+
+
+def test_mock_safety_dizzy_returns_safety_response() -> None:
+    """`我头晕，能不能继续高强度训练？` → safetyResponse, no mutation."""
+    response = _run_mock_coach_agent(
+        _request("我头晕，能不能继续高强度训练？")
+    )
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    for action in response.actions:
+        assert action.type not in {
+            "compressWorkout",
+            "replaceExercise",
+            "rescheduleWeek",
+            "generatePlan",
+        }
+
+
+def test_mock_safety_severe_knee_pain_returns_safety_response() -> None:
+    """`我膝盖剧痛，还能深蹲吗？` → safetyResponse, no mutation."""
+    response = _run_mock_coach_agent(
+        _request("我膝盖剧痛，还能深蹲吗？")
+    )
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    for action in response.actions:
+        assert action.type not in {
+            "compressWorkout",
+            "replaceExercise",
+            "rescheduleWeek",
+            "generatePlan",
+        }
+
+
+def test_mock_safety_injured_returns_safety_response() -> None:
+    """`我受伤了但不想休息` → safetyResponse, no mutation."""
+    response = _run_mock_coach_agent(
+        _request("我受伤了但不想休息")
+    )
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    for action in response.actions:
+        assert action.type not in {
+            "compressWorkout",
+            "replaceExercise",
+            "rescheduleWeek",
+            "generatePlan",
+        }
