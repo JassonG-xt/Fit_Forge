@@ -219,4 +219,5 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
 - `docs/real_llm_eval_harness.md` — 怎么跑 real LLM eval、报告字段、安全注意
 - `docs/agent_real_mode_smoke_test.md` — backend real 模式手动 smoke test 流程
 - `docs/privacy.md` — 用户数据处理 / 导入导出
+- `docs/generate_plan_agent_boundary.md` — generatePlan 产品边界：LLM 是路由，不是计划生成器
 - `agent_backend/dev/fake_llm_server.py` — 离线开发用的 OpenAI-compatible fake endpoint
