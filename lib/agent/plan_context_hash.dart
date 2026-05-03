@@ -55,18 +55,32 @@ String computePlanContextHash(WorkoutPlan plan) {
     }
   }
 
-  // 使用简单字符串哈希，不引入 crypto 依赖
-  return _fnv1a64(buffer.toString());
+  // 使用简单字符串哈希，不引入 crypto 依赖。
+  // 用 32-bit FNV-1a 而不是 64-bit，是因为 dart2js (flutter build web)
+  // 无法精确表示 64-bit 字面量（JS number 上限 2^53-1）。
+  return _fnv1a32(buffer.toString());
 }
 
-/// FNV-1a 64-bit hash — deterministic, no external dependency.
-String _fnv1a64(String input) {
-  const fnvOffset = 0xcbf29ce484222325;
-  const fnvPrime = 0x100000001b3;
+/// FNV-1a 32-bit hash — deterministic, no external dependency.
+///
+/// Uses 32-bit constants so the implementation compiles cleanly to JavaScript
+/// (`flutter build web` / dart2js cannot represent 64-bit literals like
+/// `0xcbf29ce484222325` exactly because JS numbers max out at `2^53 - 1`).
+/// Native targets (iOS / Android / Linux) keep the same 32-bit math, so all
+/// platforms produce identical hashes.
+///
+/// 32-bit FNV-1a is sufficient for stale-action protection: collisions only
+/// matter for security if an attacker can choose plan content to produce a
+/// target hash, which is not the threat model — `sourceContextHash` is
+/// injected from the trusted server context, never trusted from the LLM.
+String _fnv1a32(String input) {
+  const fnvOffset = 0x811c9dc5;
+  const fnvPrime = 0x01000193;
   var hash = fnvOffset;
   for (var i = 0; i < input.length; i++) {
     hash ^= input.codeUnitAt(i);
-    hash = (hash * fnvPrime) & 0x7fffffffffffffff;
+    // Multiply, then mask to 32 bits. `& 0xffffffff` is JS-safe.
+    hash = (hash * fnvPrime) & 0xffffffff;
   }
   return hash.toRadixString(36);
 }

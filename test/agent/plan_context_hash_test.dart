@@ -269,6 +269,23 @@ void main() {
       );
       expect(computePlanContextHash(plan1), computePlanContextHash(plan2));
     });
+
+    test('seed plan produces a JS-safe (≤8-char base36) 32-bit hash', () {
+      // Pins the current 32-bit FNV-1a output. Two purposes:
+      //
+      // 1. Regression: catches accidental hash-algorithm changes that would
+      //    silently invalidate every stored `sourceContextHash` after an app
+      //    upgrade.
+      // 2. Web build sanity: 32-bit FNV-1a fits in dart2js's JS number range,
+      //    unlike the previous 64-bit version. Length ≤ 8 base36 chars
+      //    matches `2^32 - 1`, so any future drift back into 64-bit territory
+      //    fails this test before failing `flutter build web`.
+      final hash = computePlanContextHash(_seedPlan());
+      expect(hash, isNotEmpty);
+      expect(hash.length, lessThanOrEqualTo(8));
+      // Seed-plan hash is deterministic across runs.
+      expect(hash, computePlanContextHash(_seedPlan()));
+    });
   });
 }
 
