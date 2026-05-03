@@ -329,6 +329,7 @@ Current project documentation lives in:
 - [docs/architecture.md](docs/architecture.md) — runtime architecture and module boundaries
 - [docs/testing.md](docs/testing.md) — test commands, scope, and current gaps
 - [docs/release.md](docs/release.md) — versioning, Android release tags, and web deploy flow
+- [docs/agent_mvp_status.md](docs/agent_mvp_status.md) — Coach Agent MVP stability snapshot, eval status, runtime modes, next-stage roadmap
 - [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow, lint, tests, PR process
 - [CHANGELOG.md](CHANGELOG.md) — release history and planned work
 - `.github/workflows/` — CI, release, and web deploy automation
