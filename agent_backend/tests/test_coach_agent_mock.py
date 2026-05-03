@@ -31,12 +31,20 @@ from schemas.agent_request import AgentRequest
 _TRUSTED_HASH = "trusted_plan_hash_v1"
 
 
+_COMPLETE_PROFILE = {
+    "goal": "buildMuscle",
+    "weeklyFrequency": 4,
+    "experienceLevel": "beginner",
+}
+
+
 def _request(
     message: str,
     *,
     plan_hash: Optional[str] = _TRUSTED_HASH,
     today_workout: Optional[Dict[str, Any]] = None,
     available_exercises: Optional[list] = None,
+    profile: Optional[Dict[str, Any]] = _COMPLETE_PROFILE,
 ) -> AgentRequest:
     context: Dict[str, Any] = {
         "locale": "zh-CN",
@@ -55,6 +63,8 @@ def _request(
     }
     if plan_hash is not None:
         context["planContextHash"] = plan_hash
+    if profile is not None:
+        context["profile"] = profile
     return AgentRequest(message=message, context=context)
 
 
@@ -456,3 +466,138 @@ def test_mock_safety_injured_returns_safety_response() -> None:
             "rescheduleWeek",
             "generatePlan",
         }
+
+
+# ── generatePlan context completeness guard ──
+
+
+def test_mock_generate_plan_stripped_when_profile_missing_goal() -> None:
+    """Mock returns generatePlan but profile has no goal → clarify."""
+    response = _run_mock_coach_agent(
+        _request(
+            "帮我生成一个增肌计划",
+            profile={"weeklyFrequency": 4, "experienceLevel": "beginner"},
+        )
+    )
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert "目标" in response.message
+
+
+def test_mock_generate_plan_stripped_when_profile_missing_frequency() -> None:
+    """Mock returns generatePlan but profile has no weeklyFrequency → clarify."""
+    response = _run_mock_coach_agent(
+        _request(
+            "帮我生成一个增肌计划",
+            profile={"goal": "buildMuscle", "experienceLevel": "beginner"},
+        )
+    )
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+
+
+def test_mock_generate_plan_stripped_when_profile_missing_experience() -> None:
+    """Mock returns generatePlan but profile has no experienceLevel → clarify."""
+    response = _run_mock_coach_agent(
+        _request(
+            "帮我生成一个增肌计划",
+            profile={"goal": "buildMuscle", "weeklyFrequency": 4},
+        )
+    )
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+
+
+def test_mock_generate_plan_stripped_when_profile_is_none() -> None:
+    """Mock returns generatePlan but context has no profile → clarify."""
+    response = _run_mock_coach_agent(
+        _request("帮我生成一个增肌计划", profile=None)
+    )
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+
+
+def test_mock_generate_plan_allowed_when_profile_complete() -> None:
+    """Mock returns generatePlan and profile is complete → action allowed."""
+    response = _run_mock_coach_agent(
+        _request(
+            "帮我生成一个增肌计划",
+            profile={
+                "goal": "buildMuscle",
+                "weeklyFrequency": 4,
+                "experienceLevel": "beginner",
+            },
+        )
+    )
+    assert response.intent == "generatePlan"
+    assert len(response.actions) == 1
+    assert response.actions[0].type == "generatePlan"
+    assert response.actions[0].requiresConfirmation is True
+    assert response.actions[0].sourceContextHash == _TRUSTED_HASH
+
+
+def test_mock_generate_plan_allowed_with_extra_profile_fields() -> None:
+    """Extra profile fields don't interfere with the guard."""
+    response = _run_mock_coach_agent(
+        _request(
+            "帮我生成一个增肌计划",
+            profile={
+                "goal": "loseFat",
+                "weeklyFrequency": 3,
+                "experienceLevel": "intermediate",
+                "heightCm": 170.0,
+                "weightKg": 70.0,
+                "availableEquipment": ["barbell"],
+            },
+        )
+    )
+    assert response.intent == "generatePlan"
+    assert len(response.actions) == 1
+
+
+# ── Non-regression: other mutation types unaffected by generatePlan guard ──
+
+
+def test_mock_compress_unaffected_by_generate_plan_guard() -> None:
+    """compressWorkout with incomplete profile still works."""
+    response = _run_mock_coach_agent(
+        _request("今天只有20分钟，帮我压缩训练", profile=None)
+    )
+    assert response.actions
+    assert response.actions[0].type == "compressWorkout"
+
+
+def test_mock_replace_unaffected_by_generate_plan_guard() -> None:
+    """replaceExercise with incomplete profile still works."""
+    response = _run_mock_coach_agent(
+        _request("没有杠铃，帮我替换今天的动作", profile=None)
+    )
+    assert response.actions
+    assert response.actions[0].type == "replaceExercise"
+
+
+def test_mock_reschedule_unaffected_by_generate_plan_guard() -> None:
+    """rescheduleWeek with incomplete profile still works."""
+    response = _run_mock_coach_agent(
+        _request("这周只能周二周五训练", profile=None)
+    )
+    assert response.actions
+    assert response.actions[0].type == "rescheduleWeek"
+
+
+def test_mock_safety_still_short_circuits_with_complete_profile() -> None:
+    """Safety short-circuit happens before generatePlan guard."""
+    response = _run_mock_coach_agent(
+        _request(
+            "我胸口疼但想生成计划",
+            profile={
+                "goal": "buildMuscle",
+                "weeklyFrequency": 4,
+                "experienceLevel": "beginner",
+            },
+        )
+    )
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    for action in response.actions:
+        assert action.type != "generatePlan"

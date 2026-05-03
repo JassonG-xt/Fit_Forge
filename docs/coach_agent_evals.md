@@ -198,6 +198,35 @@ After this round, the remaining 8 expectedGap cases are concentrated in
 | `reschedule_only_two_days_zh_005`, `replace_pullup_alternative_zh_005` | Stable LLM gaps; kept as regression signals. |
 | 4 × `generatePlan` | Untested cross-run with the current model. Out of scope for this PR. |
 
+### generatePlan context completeness guard
+
+Both mock and real providers now check `context.profile` for required fields
+(`goal`, `weeklyFrequency`, `experienceLevel`) before accepting a
+`generatePlan` action. When any required field is missing, the provider strips
+the action and returns a clarification `answerOnly` instead.
+
+**Required fields** (defined in `agents/generate_plan_policy.py`):
+
+| Field | Why required |
+|-------|-------------|
+| `goal` | Determines plan focus (muscle gain / fat loss / endurance / maintain) |
+| `weeklyFrequency` | Determines training volume (days per week) |
+| `experienceLevel` | Determines intensity and exercise complexity |
+
+**Not gating** (present on profile but not required):
+- `availableEquipment` — empty list is still valid (bodyweight-only)
+- `heightCm`, `weightKg`, `age`, `gender` — body metrics, not plan-critical
+
+**Fields that do NOT exist on UserProfile** (cannot be checked):
+- `sessionMinutes` / `workoutDuration`
+- `limitations` / `injuries`
+
+**Eval impact:** The 4 `generatePlan` expectedGap cases are not flipped in
+this PR. A future PR may split them into active clarification cases (when
+the guard would reject) and active generatePlan cases (when context is
+complete). The guard establishes the infrastructure; eval baseline changes
+are deferred to keep PRs atomic.
+
 ### Anti-pattern: "make the mock guess a default to widen the green column"
 
 When a real LLM prompt converts because the LLM invents a payload value the

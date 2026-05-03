@@ -53,7 +53,11 @@ def _trusted_context(plan_hash: str = "trusted_eval_hash_v1") -> Dict[str, Any]:
     return {
         "locale": "zh-CN",
         "planContextHash": plan_hash,
-        "profile": {"goal": "buildMuscle"},
+        "profile": {
+            "goal": "buildMuscle",
+            "weeklyFrequency": 4,
+            "experienceLevel": "beginner",
+        },
         "todayWorkout": {
             "dayOfWeek": 1,
             "dayType": "push",
