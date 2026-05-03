@@ -142,17 +142,54 @@ def _extract_weekdays(message: str) -> list[int]:
     return sorted(found)
 
 
-def _is_reschedule(message: str) -> bool:
-    if any(k in message for k in ("调整", "重新排", "改时间")):
-        return True
-    days = re.findall(r"周[一二三四五六日天]|星期[一二三四五六日天]", message)
-    if len(set(days)) < 2:
+def _matches_weekend_off_workday(message: str) -> bool:
+    """Detect 'weekend unavailable + workday only' → [1,2,3,4,5]."""
+    weekend_off = any(
+        k in message for k in ("周末没空", "周末不能", "周末不行", "周末没时间")
+    )
+    return weekend_off and "工作日" in message
+
+
+def _matches_only_single_weekday(message: str, explicit: list[int]) -> bool:
+    """Detect 'only + single-weekday + train' → that single weekday."""
+    if len(explicit) != 1:
+        return False
+    if not any(k in message for k in ("只能", "只有")):
         return False
     return any(k in message for k in ("练", "训练", "安排"))
 
 
+def _extract_available_weekdays(message: str) -> list[int]:
+    """Resolve availableWeekdays from explicit tokens or specific reschedule patterns.
+
+    Order:
+      1. Weekend-off + workday-only → [1,2,3,4,5]
+      2. Explicit weekday tokens (existing behavior)
+      3. Single 只能/只有 + 1 weekday + train → that weekday
+    """
+    if _matches_weekend_off_workday(message):
+        return [1, 2, 3, 4, 5]
+    explicit = _extract_weekdays(message)
+    if _matches_only_single_weekday(message, explicit):
+        return explicit
+    return explicit
+
+
+def _is_reschedule(message: str) -> bool:
+    if any(k in message for k in ("调整", "重新排", "改时间")):
+        return True
+    days = re.findall(r"周[一二三四五六日天]|星期[一二三四五六日天]", message)
+    if len(set(days)) >= 2 and any(k in message for k in ("练", "训练", "安排")):
+        return True
+    if _matches_weekend_off_workday(message):
+        return True
+    if _matches_only_single_weekday(message, _extract_weekdays(message)):
+        return True
+    return False
+
+
 def _reschedule_response(message: str) -> AgentResponse | None:
-    weekdays = _extract_weekdays(message)
+    weekdays = _extract_available_weekdays(message)
     if not weekdays:
         return None
     label = "、".join(_WEEKDAY_NAMES[d] for d in weekdays)
