@@ -92,17 +92,14 @@
   {
     "id": "compress_busy_no_minutes_zh_007",
     "category": "compressWorkout",
-    "status": "expectedGap",
+    "status": "active",
     "userMessage": "今天太忙了，少练一点但别完全跳过",
     "expected": {
-      "actionType": "compressWorkout",
-      "requiresConfirmation": true,
-      "mustHavePayloadFields": ["dayOfWeek", "targetMinutes"],
-      "mustHaveSourceContextHash": true,
+      "noMutationAction": true,
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "No explicit minutes. Real LLM may infer a default; mock cannot."
+    "note": "Promoted to active as a clarification case (not a mutation case). The user did not specify a duration, so the agent must NOT invent a targetMinutes — it must ask. Mock provider hits the generic fallback (no compress trigger matches). Real provider strips any guessed compressWorkout via the missing-target-minutes guard and returns answerOnly."
   },
 
   {

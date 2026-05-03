@@ -235,7 +235,10 @@ def test_safety_fallback_for_generic_error() -> None:
 @patch("agents.llm_provider._call_llm")
 def test_real_provider_injects_source_context_hash(mock_call_llm) -> None:
     mock_call_llm.return_value = _valid_llm_response()
-    request = _make_request(plan_context_hash="my_plan_hash")
+    request = _make_request(
+        message="帮我把今天压缩到20分钟",
+        plan_context_hash="my_plan_hash",
+    )
 
     resp = run_real_coach_agent(request)
 
@@ -425,7 +428,10 @@ def test_real_provider_prompt_injection_cannot_bypass_confirmation(mock_call_llm
         "safety": {"hasMedicalConcern": False, "shouldStopWorkout": False},
     }
     mock_call_llm.return_value = json.dumps(resp_data)
-    request = _make_request(plan_context_hash="trusted_hash")
+    request = _make_request(
+        message="今天只能练15分钟",
+        plan_context_hash="trusted_hash",
+    )
 
     resp = run_real_coach_agent(request)
 
@@ -631,3 +637,153 @@ def test_call_llm_explicit_timeout_overrides_env(
 
     _, kwargs = mock_urlopen.call_args
     assert kwargs.get("timeout") == 5.0
+
+
+# ── Compress without explicit target minutes — guard against guessed payload ──
+#
+# When the LLM returns a `compressWorkout` action but the user message did NOT
+# specify a duration (e.g. `今天太忙了，少练一点但别完全跳过`), the real
+# provider must drop that action and respond with a clarifying message rather
+# than letting a guessed `targetMinutes` reach the confirmation card.
+
+
+_COMPRESS_NO_MINUTES_MSG = "今天太忙了，少练一点但别完全跳过"
+_REPLACE_PROBE_MSG = "今天没有杠铃，帮我换个深蹲替代"
+_RESCHEDULE_PROBE_MSG = "我周末没空，把训练安排到工作日"
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_drops_compress_when_user_did_not_name_minutes(
+    mock_call_llm: MagicMock,
+) -> None:
+    """LLM guesses targetMinutes=20; user said no number → action stripped."""
+    mock_call_llm.return_value = _valid_llm_response(
+        "compressWorkout",
+        payload={"dayOfWeek": 1, "targetMinutes": 20},
+    )
+    request = _make_request(message=_COMPRESS_NO_MINUTES_MSG)
+
+    from agents.coach_agent import run_coach_agent
+
+    resp = run_coach_agent(request)
+    assert resp.actions == [], (
+        f"expected no actions, got {[a.type for a in resp.actions]}"
+    )
+    assert resp.intent == "answerOnly"
+    # Clarification message must mention asking for a duration in some form.
+    assert "分钟" in resp.message
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_accepts_compress_when_user_named_minutes(
+    mock_call_llm: MagicMock,
+) -> None:
+    """User said `20分钟` → LLM compress action is accepted, safety injected."""
+    mock_call_llm.return_value = _valid_llm_response(
+        "compressWorkout",
+        payload={"dayOfWeek": 1, "targetMinutes": 20},
+    )
+    request = _make_request(
+        message="今天只有20分钟，帮我压缩训练",
+        plan_context_hash="trusted_hash_1",
+    )
+
+    from agents.coach_agent import run_coach_agent
+
+    resp = run_coach_agent(request)
+    assert len(resp.actions) == 1
+    action = resp.actions[0]
+    assert action.type == "compressWorkout"
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == "trusted_hash_1"
+    assert action.payload.get("targetMinutes") == 20
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_accepts_compress_for_half_hour_shorthand(
+    mock_call_llm: MagicMock,
+) -> None:
+    """`半小时` counts as an explicit duration; compress is accepted."""
+    mock_call_llm.return_value = _valid_llm_response(
+        "compressWorkout",
+        payload={"dayOfWeek": 1, "targetMinutes": 30},
+    )
+    request = _make_request(
+        message="我只有半小时，帮我调整今天训练",
+        plan_context_hash="trusted_hash_2",
+    )
+
+    from agents.coach_agent import run_coach_agent
+
+    resp = run_coach_agent(request)
+    assert len(resp.actions) == 1
+    action = resp.actions[0]
+    assert action.type == "compressWorkout"
+    assert action.payload.get("targetMinutes") == 30
+    assert action.sourceContextHash == "trusted_hash_2"
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_replace_unaffected_by_compress_guard(
+    mock_call_llm: MagicMock,
+) -> None:
+    """Guard targets compressWorkout only — replaceExercise must pass through."""
+    mock_call_llm.return_value = _valid_llm_response(
+        "replaceExercise",
+        payload={
+            "dayOfWeek": 1,
+            "fromExerciseId": "barbell_squat",
+            "toExerciseId": "goblet_squat",
+            "reason": "no barbell",
+        },
+    )
+    request = _make_request(message=_REPLACE_PROBE_MSG)
+
+    from agents.coach_agent import run_coach_agent
+
+    resp = run_coach_agent(request)
+    assert len(resp.actions) == 1
+    assert resp.actions[0].type == "replaceExercise"
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_reschedule_unaffected_by_compress_guard(
+    mock_call_llm: MagicMock,
+) -> None:
+    """Guard targets compressWorkout only — rescheduleWeek must pass through."""
+    mock_call_llm.return_value = _valid_llm_response(
+        "rescheduleWeek",
+        payload={"availableWeekdays": [1, 2, 3, 4, 5]},
+    )
+    request = _make_request(message=_RESCHEDULE_PROBE_MSG)
+
+    from agents.coach_agent import run_coach_agent
+
+    resp = run_coach_agent(request)
+    assert len(resp.actions) == 1
+    assert resp.actions[0].type == "rescheduleWeek"

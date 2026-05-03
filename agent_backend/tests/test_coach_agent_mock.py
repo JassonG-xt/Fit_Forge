@@ -368,3 +368,40 @@ def test_mock_reschedule_only_two_days_remains_unmatched() -> None:
     assert response.intent != "rescheduleWeek"
     for action in response.actions:
         assert action.type != "rescheduleWeek"
+
+
+# ── Compress without explicit target minutes — clarification, not invention ──
+#
+# Product decision: when the user expresses a "shorten today" intent without
+# naming a duration, the agent must NOT invent a default targetMinutes. Mock
+# already routes such messages to the generic fallback (no compress trigger
+# matches). These tests pin that behavior so a future "helpful default"
+# refactor cannot silently regress it.
+
+
+def test_mock_compress_busy_no_minutes_returns_no_mutation() -> None:
+    """`今天太忙了，少练一点但别完全跳过` → no mutation action (must clarify)."""
+    response = _run_mock_coach_agent(
+        _request("今天太忙了，少练一点但别完全跳过")
+    )
+    for action in response.actions:
+        assert action.type not in {
+            "compressWorkout",
+            "replaceExercise",
+            "rescheduleWeek",
+            "generatePlan",
+        }
+
+
+def test_mock_compress_short_no_minutes_returns_no_mutation() -> None:
+    """`今晚时间不够，把训练缩短一点` (compress trigger but no duration) → no mutation."""
+    response = _run_mock_coach_agent(
+        _request("今晚时间不够，把训练缩短一点")
+    )
+    for action in response.actions:
+        assert action.type not in {
+            "compressWorkout",
+            "replaceExercise",
+            "rescheduleWeek",
+            "generatePlan",
+        }

@@ -80,8 +80,10 @@ AppState (lib/services/app_state.dart)
 源数据：`agent_backend/evals/coach_agent_eval_cases.json`。
 
 - Eval cases 总数：**41**
-- `active`：**27**（mock router 必须保持通过）
-- `expectedGap`：**14**（mock router 不识别，pytest 跳过；real LLM 通常能处理）
+- `active`：**30**（mock router 必须保持通过；含一个非 mutation 的 clarification case）
+- `expectedGap`：**11**（mock router 不识别，pytest 跳过；real LLM 通常能处理）
+
+> 自 `agent-mvp-eval-v1` 以来的促进：MiMo v2.5 Pro post-timeout 跨多 run stable converted 的 2 个 reschedule paraphrase 已升级为 active；`compress_busy_no_minutes_zh_007` 升级为 clarification case（不允许猜 `targetMinutes`）。详细历史见 `docs/coach_agent_evals.md`。
 
 覆盖类别（每个类别都有多条 active + 多条 expectedGap，详情见 `docs/coach_agent_evals.md`）：
 

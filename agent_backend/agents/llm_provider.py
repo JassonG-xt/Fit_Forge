@@ -24,6 +24,7 @@ from agents.action_safety import (
     MUTATION_ACTION_TYPES as _MUTATION_ACTION_TYPES,
     inject_action_safety as _inject_action_safety,
 )
+from agents.coach_agent import has_explicit_target_minutes as _has_explicit_target_minutes
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -201,6 +202,36 @@ def _safety_fallback_response(message: str) -> AgentResponse:
     )
 
 
+_COMPRESS_CLARIFICATION_MESSAGE = (
+    "可以帮你压缩训练。你今天大概能练多少分钟？比如 15、20 或 30 分钟。"
+)
+
+
+def _strip_unsupported_compress_actions(
+    response: AgentResponse,
+    user_message: str,
+) -> AgentResponse:
+    """If the LLM proposed `compressWorkout` without an explicit user duration,
+    drop the action and ask a clarifying question instead.
+
+    `compressWorkout.payload.targetMinutes` is supposed to come from the user.
+    When the user did not specify minutes, we refuse to invent one — letting
+    the action through would create a confirmation card with a guessed value.
+    Other mutation types (replace / reschedule / generate) are unaffected.
+    """
+    if _has_explicit_target_minutes(user_message):
+        return response
+
+    has_compress = any(a.type == "compressWorkout" for a in response.actions)
+    if not has_compress:
+        return response
+
+    response.actions = []
+    response.intent = "answerOnly"
+    response.message = _COMPRESS_CLARIFICATION_MESSAGE
+    return response
+
+
 def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
     """Real LLM-backed coach agent entry point.
 
@@ -235,6 +266,11 @@ def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
     response = _parse_agent_response(raw)
     if response is None:
         return _safety_fallback_response(request.message)
+
+    # Guard: if the user did not name a duration, refuse a guessed
+    # `compressWorkout` and ask for clarification instead. See
+    # `_strip_unsupported_compress_actions` for the rationale.
+    response = _strip_unsupported_compress_actions(response, request.message)
 
     # Inject sourceContextHash and enforce requiresConfirmation
     response.actions = _inject_action_safety(
