@@ -48,12 +48,17 @@ request — keys live only in your shell:
 | `LLM_BASE_URL` | `https://api.openai.com` | OpenAI-compatible endpoint base URL |
 | `LLM_API_KEY`  | `sk-...`                 | Bearer token for the endpoint |
 | `LLM_MODEL`    | `gpt-4o-mini`            | Model name |
+| `LLM_TIMEOUT_SECONDS` | `60` | Optional. HTTP request timeout in seconds. Default: `30`. Falls back to `30` for missing, empty, zero, negative, non-numeric, NaN, or inf. Useful for slow / cold-starting endpoints during manual eval runs. |
 
 The harness validates these env vars before any call. If any is missing,
 it exits non-zero with a clear message — it does **not** crash silently.
 
 `--dry-run` ignores these env vars entirely and uses canonical fake responses
 (no network).
+
+`LLM_TIMEOUT_SECONDS` only affects the backend real provider's HTTP request
+timeout. It has no effect on mock mode, the Flutter client, or CI (CI does
+not run real LLM calls).
 
 ## Running
 
@@ -75,6 +80,8 @@ python -m evals.run_real_llm_eval --dry-run --limit 5
 export LLM_BASE_URL=https://api.openai.com
 export LLM_API_KEY=sk-your-key-here
 export LLM_MODEL=gpt-4o-mini
+# Optional: bump timeout for slow / cold-starting endpoints (default 30s)
+export LLM_TIMEOUT_SECONDS=60
 
 python -m evals.run_real_llm_eval \
   --category compressWorkout \

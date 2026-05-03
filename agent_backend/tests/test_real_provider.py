@@ -3,12 +3,15 @@
 import json
 import os
 from typing import Optional
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
 from agents.llm_provider import (
+    DEFAULT_LLM_TIMEOUT_SECONDS,
     _build_messages,
+    _call_llm,
+    _get_llm_timeout_seconds,
     _inject_action_safety,
     _parse_agent_response,
     _safety_fallback_response,
@@ -499,3 +502,132 @@ def test_real_mode_delegates_to_llm(mock_call_llm) -> None:
     resp = run_coach_agent(request)
     assert resp.intent == "rescheduleWeek"
     mock_call_llm.assert_called_once()
+
+
+# ── LLM_TIMEOUT_SECONDS env parsing ──
+
+
+def test_timeout_default_when_env_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LLM_TIMEOUT_SECONDS", raising=False)
+    assert _get_llm_timeout_seconds() == DEFAULT_LLM_TIMEOUT_SECONDS == 30.0
+
+
+def test_timeout_default_when_env_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "")
+    assert _get_llm_timeout_seconds() == 30.0
+
+
+def test_timeout_accepts_positive_int(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "45")
+    assert _get_llm_timeout_seconds() == 45.0
+
+
+def test_timeout_accepts_positive_float(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "2.5")
+    assert _get_llm_timeout_seconds() == 2.5
+
+
+def test_timeout_rejects_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "0")
+    assert _get_llm_timeout_seconds() == 30.0
+
+
+def test_timeout_rejects_negative(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "-1")
+    assert _get_llm_timeout_seconds() == 30.0
+
+
+def test_timeout_rejects_non_numeric(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "abc")
+    assert _get_llm_timeout_seconds() == 30.0
+
+
+def test_timeout_rejects_nan(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "NaN")
+    assert _get_llm_timeout_seconds() == 30.0
+
+
+def test_timeout_rejects_inf(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "inf")
+    assert _get_llm_timeout_seconds() == 30.0
+
+
+def test_timeout_rejects_negative_inf(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "-inf")
+    assert _get_llm_timeout_seconds() == 30.0
+
+
+# ── _call_llm forwards env-derived timeout to urlopen ──
+
+
+@patch("agents.llm_provider.urllib.request.urlopen")
+def test_call_llm_forwards_env_timeout_to_urlopen(
+    mock_urlopen: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When LLM_TIMEOUT_SECONDS is set, _call_llm must pass it to urlopen."""
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "60")
+
+    fake_resp = MagicMock()
+    fake_resp.read.return_value = json.dumps(
+        {"choices": [{"message": {"content": "ok"}}]}
+    ).encode("utf-8")
+    mock_urlopen.return_value.__enter__.return_value = fake_resp
+
+    _call_llm(
+        messages=[{"role": "user", "content": "hi"}],
+        base_url="http://fake-llm",
+        api_key="sk-test",
+        model="m",
+    )
+
+    assert mock_urlopen.call_count == 1
+    _, kwargs = mock_urlopen.call_args
+    assert kwargs.get("timeout") == 60.0
+
+
+@patch("agents.llm_provider.urllib.request.urlopen")
+def test_call_llm_uses_default_timeout_when_env_missing(
+    mock_urlopen: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("LLM_TIMEOUT_SECONDS", raising=False)
+
+    fake_resp = MagicMock()
+    fake_resp.read.return_value = json.dumps(
+        {"choices": [{"message": {"content": "ok"}}]}
+    ).encode("utf-8")
+    mock_urlopen.return_value.__enter__.return_value = fake_resp
+
+    _call_llm(
+        messages=[{"role": "user", "content": "hi"}],
+        base_url="http://fake-llm",
+        api_key="sk-test",
+        model="m",
+    )
+
+    _, kwargs = mock_urlopen.call_args
+    assert kwargs.get("timeout") == 30.0
+
+
+@patch("agents.llm_provider.urllib.request.urlopen")
+def test_call_llm_explicit_timeout_overrides_env(
+    mock_urlopen: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Explicit timeout argument bypasses env lookup."""
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "60")
+
+    fake_resp = MagicMock()
+    fake_resp.read.return_value = json.dumps(
+        {"choices": [{"message": {"content": "ok"}}]}
+    ).encode("utf-8")
+    mock_urlopen.return_value.__enter__.return_value = fake_resp
+
+    _call_llm(
+        messages=[{"role": "user", "content": "hi"}],
+        base_url="http://fake-llm",
+        api_key="sk-test",
+        model="m",
+        timeout=5.0,
+    )
+
+    _, kwargs = mock_urlopen.call_args
+    assert kwargs.get("timeout") == 5.0
