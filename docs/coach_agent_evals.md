@@ -84,7 +84,7 @@ records the case so we can flip it to `active` once a real LLM is wired up."*
 ## Active vs. gap distribution (current)
 
 ```
-compressWorkout   : 5 active / 2 expectedGap
+compressWorkout   : 6 active / 1 expectedGap
 replaceExercise   : 4 active / 2 expectedGap
 rescheduleWeek    : 5 active / 1 expectedGap
 generatePlan      : 1 active / 4 expectedGap
@@ -92,7 +92,7 @@ nonMutatingCoaching: 5 active / 0
 safety            : 3 active / 3 expectedGap
 promptInjection   : 6 active / 0
                   ────────────────────────
-total             : 29 active / 12 expectedGap (41 cases)
+total             : 30 active / 11 expectedGap (41 cases)
 ```
 
 ### Cross-run promotion of three paraphrases (history)
@@ -124,6 +124,38 @@ recognize these specific paraphrases that the real LLM already handles. It is
 cases and stable-gap cases stay as `expectedGap` and remain the responsibility
 of the real LLM in the production path.
 
+### Promoted as a clarification case (history)
+
+`compress_busy_no_minutes_zh_007` (`今天太忙了，少练一点但别完全跳过`) was
+promoted from `expectedGap` to `active` — but as a **non-mutation
+clarification** case, not as a mutation case.
+
+**Product decision.** When the user expresses a "shorten today" intent
+without naming a duration, the agent must **not** invent a target
+`targetMinutes`. Even though MiMo v2.5 Pro reached 3/3 stable conversion on
+this prompt by guessing a number, accepting that would violate the contract
+that mutation actions reflect what the user actually asked for.
+
+**Backend enforcement.**
+
+- The mock keyword router is unchanged — it already does not match this
+  paraphrase (no `压缩 / 短一点 / 快一点 / 只有 / 只能` token), so it falls
+  through to the generic answerOnly fallback.
+- The real provider has a guard
+  (`agents.llm_provider._strip_unsupported_compress_actions`) that drops any
+  `compressWorkout` action when the user's message did not contain an
+  explicit duration (`<digits> 分钟` or `半小时`). The provider then replies
+  with a clarifying question instead.
+- The detector itself
+  (`agents.coach_agent.has_explicit_target_minutes`) is independent of the
+  compress trigger keywords, so it correctly accepts `今天只有20分钟` but
+  rejects `少练一点`.
+
+**The case's eval expectation.** The case asserts only `noMutationAction:
+true` and `mustNotExecuteDirectly: true` — there is no `actionType`, because
+the contract is "no mutation, ask a question". This uses existing eval
+runner fields; no runner extension was needed.
+
 ### Cases that remain `expectedGap` (and why)
 
 After Run 4-6, three eval cases stay as `expectedGap` even though they showed
@@ -131,9 +163,18 @@ some real-LLM activity:
 
 | caseId | reason it is NOT promoted |
 |--------|----------------------------|
-| `compress_busy_no_minutes_zh_007` (`今天太忙了，少练一点但别完全跳过`) | LLM is 3/3 stable converted, but the prompt does not specify a target minute count. `compressWorkout` payload requires `targetMinutes`. Choosing a default (20? 25? 50% of current?) is a product semantic decision, not a router keyword fix. Promotion is blocked on that decision. |
 | `replace_too_hard_zh_006` (`这个动作太难了，换简单一点`) | LLM behavior is volatile (2/4 converted across runs). Defer until a future model run. |
-| Other stable-gap cases (e.g. `compress_short_no_minutes_zh_004`, `reschedule_only_two_days_zh_005`, `replace_pullup_alternative_zh_005`) | Confirmed real LLM gap (not timeout pollution). Kept as regression signals. |
+| Other stable-gap cases (e.g. `compress_short_no_minutes_zh_004`, `reschedule_only_two_days_zh_005`, `replace_pullup_alternative_zh_005`) | Confirmed real LLM gap (not timeout pollution). Kept as regression signals. **Note**: `compress_short_no_minutes_zh_004` will now also be guarded against guessed `compressWorkout` if the LLM ever tries — same rationale as the `compress_busy` case. |
+
+### Anti-pattern: "make the mock guess a default to widen the green column"
+
+When a real LLM prompt converts because the LLM invents a payload value the
+user never specified (typically `targetMinutes`), the right response is to
+make that **active as a clarification** case (no mutation, ask a question)
+rather than to make the mock guess the same default. Inventing defaults in
+the mock would put the mock and the user-confirmation contract out of sync,
+and ship a "20-minute compression" the user never asked for. The detector
++ guard pattern used here is the template for future similar cases.
 
 ## Mock and real provider parity on `sourceContextHash`
 

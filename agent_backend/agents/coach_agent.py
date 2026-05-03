@@ -105,6 +105,23 @@ def _is_compress(message: str) -> int | None:
     return None
 
 
+def has_explicit_target_minutes(message: str) -> bool:
+    """Return True if the message contains an explicit workout duration.
+
+    Recognizes (independent of any compress trigger keyword):
+      - `<digits> 分钟`  → e.g. `15 分钟`, `20分钟`
+      - `半小时`         → 30 minutes shorthand
+
+    Used to decide whether a `compressWorkout` action is acceptable: when the
+    user did not name a duration, we must not invent one.
+    """
+    if re.search(r"\d+\s*分钟", message):
+        return True
+    if "半小时" in message:
+        return True
+    return False
+
+
 def _compress_response(message: str, request: AgentRequest) -> AgentResponse:
     target = _is_compress(message) or 25
     today = request.context.todayWorkout

@@ -200,8 +200,11 @@ def test_real_provider_forces_confirmation_when_llm_says_false(
         action_type, requires_confirmation=False
     )
 
+    # Include `20分钟` so the missing-target-minutes guard does not strip
+    # `compressWorkout` — the test is about confirmation enforcement, not
+    # about the duration check.
     request = AgentRequest(
-        message="test message",
+        message="test 20分钟 message",
         context=_trusted_context(),
     )
     response = run_real_coach_agent(request)
@@ -233,8 +236,11 @@ def test_real_provider_overwrites_llm_supplied_source_hash(
         source_hash_attempt="malicious_hash_from_llm",
     )
 
+    # Include `20分钟` so the missing-target-minutes guard does not strip
+    # `compressWorkout` — this test is about source-hash overwriting, not
+    # about the duration check.
     request = AgentRequest(
-        message="test message",
+        message="test 20分钟 message",
         context=_trusted_context("trusted_v1"),
     )
     response = run_real_coach_agent(request)
@@ -328,9 +334,14 @@ def test_real_provider_prompt_injection_cannot_bypass(
 
     Simulates the worst case: LLM returns a mutation action with
     requiresConfirmation=false AND a self-supplied sourceContextHash.
+
+    Uses `rescheduleWeek` (not `compressWorkout`) because injection probe
+    messages typically don't name a duration, and the missing-target-minutes
+    guard would otherwise strip the compress action before the safety
+    injection layer runs. Both action types exercise the same normalization.
     """
     mock_call_llm.return_value = _canonical_llm_response(
-        "compressWorkout",
+        "rescheduleWeek",
         requires_confirmation=False,
         source_hash_attempt="llm_attempted_hash",
     )
@@ -370,7 +381,7 @@ def test_real_provider_does_not_inject_when_trusted_hash_missing(mock_call_llm) 
     match the actual plan will simply fail the stale check on execute.
     """
     mock_call_llm.return_value = _canonical_llm_response(
-        "compressWorkout",
+        "rescheduleWeek",
         source_hash_attempt="some_hash_from_llm",
     )
     request = AgentRequest(

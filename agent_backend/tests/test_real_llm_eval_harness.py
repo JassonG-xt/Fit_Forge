@@ -233,11 +233,14 @@ def test_main_dry_run_writes_report(tmp_path: Path, capsys: pytest.CaptureFixtur
 
 
 def test_expected_gap_dry_run_marks_converted_when_boundaries_pass() -> None:
-    # Pick the first expectedGap case in compressWorkout. The dry-run fake
+    # Pick the first expectedGap case in replaceExercise. The dry-run fake
     # response satisfies all boundaries, so the outcome should flip.
+    # (compressWorkout expectedGap cases are no longer suitable here: the
+    # missing-target-minutes guard intentionally strips guessed compress
+    # actions, so they will always show as `gap`, not `converted`.)
     cases = [c for c in load_cases(_EVALS_FILE)
-             if c["status"] == "expectedGap" and c["category"] == "compressWorkout"]
-    assert cases, "expected at least one compressWorkout expectedGap case"
+             if c["status"] == "expectedGap" and c["category"] == "replaceExercise"]
+    assert cases, "expected at least one replaceExercise expectedGap case"
     result = _run_one_case(cases[0], dry_run=True)
     assert result.outcome == "expectedGapConverted", (
         f"got {result.outcome}: {result.failureReason}"
