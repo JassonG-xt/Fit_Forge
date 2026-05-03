@@ -163,7 +163,7 @@ def _trusted_context(plan_hash: str) -> Dict[str, Any]:
         "planContextHash": plan_hash,
         "profile": {
             "goal": "buildMuscle",
-            "frequencyPerWeek": 3,
+            "weeklyFrequency": 3,
             "experienceLevel": "intermediate",
         },
         "activePlan": {"id": "plan_eval_real", "name": "Real LLM Eval Plan"},
@@ -197,6 +197,10 @@ def _build_request_context(case: Dict[str, Any], plan_hash: str) -> Dict[str, An
             {"exerciseId": "barbell_squat", "exerciseName": "Barbell Squat"},
             {"exerciseId": "bench_press", "exerciseName": "Bench Press"},
         ]
+    # Shallow-merge profile overrides (goal, weeklyFrequency, experienceLevel).
+    profile_override = override.get("profile")
+    if isinstance(profile_override, dict):
+        ctx["profile"] = {**ctx["profile"], **profile_override}
     return ctx
 
 

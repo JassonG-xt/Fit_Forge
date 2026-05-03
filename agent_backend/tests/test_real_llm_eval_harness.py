@@ -26,10 +26,12 @@ import pytest
 from evals.run_real_llm_eval import (
     CaseResult,
     _build_arg_parser,
+    _build_request_context,
     _check_real_env,
     _evaluate_response,
     _expected_trusted_hash,
     _run_one_case,
+    _trusted_context,
     filter_cases,
     load_cases,
     main,
@@ -389,3 +391,152 @@ def test_arg_parser_accepts_documented_flags() -> None:
     assert args.only_status == "expectedGap"
     assert args.limit == 10
     assert args.model == "gpt-4o-mini"
+
+
+# ── _trusted_context field name fix ──
+
+
+def test_trusted_context_uses_weekly_frequency() -> None:
+    ctx = _trusted_context("hash")
+    assert "weeklyFrequency" in ctx["profile"]
+    assert ctx["profile"]["weeklyFrequency"] == 3
+
+
+def test_trusted_context_does_not_use_frequency_per_week() -> None:
+    ctx = _trusted_context("hash")
+    assert "frequencyPerWeek" not in ctx["profile"]
+
+
+# ── contextOverride.profile merging ──
+
+
+def test_context_override_profile_goal() -> None:
+    case = {"contextOverride": {"profile": {"goal": "loseFat"}}}
+    ctx = _build_request_context(case, "hash")
+    assert ctx["profile"]["goal"] == "loseFat"
+    # Other defaults preserved
+    assert ctx["profile"]["weeklyFrequency"] == 3
+    assert ctx["profile"]["experienceLevel"] == "intermediate"
+
+
+def test_context_override_profile_weekly_frequency() -> None:
+    case = {"contextOverride": {"profile": {"weeklyFrequency": 5}}}
+    ctx = _build_request_context(case, "hash")
+    assert ctx["profile"]["weeklyFrequency"] == 5
+    assert ctx["profile"]["goal"] == "buildMuscle"
+
+
+def test_context_override_profile_experience_level() -> None:
+    case = {"contextOverride": {"profile": {"experienceLevel": "beginner"}}}
+    ctx = _build_request_context(case, "hash")
+    assert ctx["profile"]["experienceLevel"] == "beginner"
+
+
+def test_context_override_does_not_change_plan_context_hash() -> None:
+    case = {"contextOverride": {"profile": {"goal": "endurance"}}}
+    ctx = _build_request_context(case, "my_hash_123")
+    assert ctx["planContextHash"] == "my_hash_123"
+
+
+def test_context_override_empty_dict_is_noop() -> None:
+    case: Dict[str, Any] = {"contextOverride": {}}
+    ctx = _build_request_context(case, "hash")
+    default = _trusted_context("hash")
+    assert ctx["profile"] == default["profile"]
+
+
+def test_context_override_none_is_noop() -> None:
+    case: Dict[str, Any] = {"contextOverride": None}
+    ctx = _build_request_context(case, "hash")
+    default = _trusted_context("hash")
+    assert ctx["profile"] == default["profile"]
+
+
+def test_context_override_missing_is_noop() -> None:
+    case: Dict[str, Any] = {}
+    ctx = _build_request_context(case, "hash")
+    default = _trusted_context("hash")
+    assert ctx["profile"] == default["profile"]
+
+
+def test_context_override_unknown_keys_preserved_in_profile() -> None:
+    """Unknown profile keys are shallow-merged but don't crash."""
+    case = {"contextOverride": {"profile": {"unknownField": "value"}}}
+    ctx = _build_request_context(case, "hash")
+    assert ctx["profile"]["unknownField"] == "value"
+    # Known defaults still present
+    assert ctx["profile"]["goal"] == "buildMuscle"
+
+
+# ── generatePlan context completeness with overrides ──
+
+
+def _generate_plan_cases_with_override() -> List[Dict[str, Any]]:
+    return [
+        c for c in load_cases(_EVALS_FILE)
+        if c["category"] == "generatePlan"
+        and c["status"] == "expectedGap"
+        and c.get("contextOverride", {}).get("profile")
+    ]
+
+
+def test_generate_plan_cases_with_override_satisfy_policy() -> None:
+    """After applying contextOverride, generatePlan cases must have
+    sufficient context so the guard doesn't strip the action."""
+    from agents.generate_plan_policy import has_sufficient_generate_plan_context
+
+    cases = _generate_plan_cases_with_override()
+    assert len(cases) == 4, f"expected 4 generatePlan cases with override, got {len(cases)}"
+    for case in cases:
+        ctx = _build_request_context(case, "hash")
+        assert has_sufficient_generate_plan_context(ctx["profile"]), (
+            f"{case['id']}: contextOverride.profile should satisfy "
+            f"generatePlan policy, but got missing fields: "
+            f"{ctx['profile']}"
+        )
+
+
+def test_generate_plan_cases_override_goal_matches_user_message() -> None:
+    """Each generatePlan case override should set a goal that semantically
+    matches the user message (loseFat for 减脂, endurance for 耐力, etc.)."""
+    cases = _generate_plan_cases_with_override()
+    for case in cases:
+        ctx = _build_request_context(case, "hash")
+        goal = ctx["profile"]["goal"]
+        msg = case["userMessage"]
+        # Just verify the override was applied — semantic match is a human check
+        assert goal in ("loseFat", "buildMuscle", "endurance", "maintain"), (
+            f"{case['id']}: unexpected goal {goal!r}"
+        )
+
+
+# ── non-generatePlan cases unaffected ──
+
+
+def test_non_generate_plan_cases_without_override_still_work() -> None:
+    """compressWorkout / replaceExercise / rescheduleWeek cases without
+    contextOverride still produce valid context."""
+    for category in ("compressWorkout", "replaceExercise", "rescheduleWeek"):
+        cases = [c for c in load_cases(_EVALS_FILE) if c["category"] == category]
+        assert cases, f"no {category} cases found"
+        case = cases[0]
+        ctx = _build_request_context(case, "hash")
+        assert ctx["profile"]["goal"] == "buildMuscle"
+        assert ctx["profile"]["weeklyFrequency"] == 3
+        assert ctx["profile"]["experienceLevel"] == "intermediate"
+
+
+# ── todayHasSquat still works alongside profile override ──
+
+
+def test_today_has_squat_and_profile_override_coexist() -> None:
+    case = {
+        "contextOverride": {
+            "todayHasSquat": True,
+            "profile": {"goal": "loseFat"},
+        }
+    }
+    ctx = _build_request_context(case, "hash")
+    exercise_ids = [e["exerciseId"] for e in ctx["todayWorkout"]["exercises"]]
+    assert "barbell_squat" in exercise_ids
+    assert ctx["profile"]["goal"] == "loseFat"

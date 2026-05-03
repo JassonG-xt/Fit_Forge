@@ -311,6 +311,13 @@
     "category": "generatePlan",
     "status": "expectedGap",
     "userMessage": "我想开始减脂，给我一个训练计划",
+    "contextOverride": {
+      "profile": {
+        "goal": "loseFat",
+        "weeklyFrequency": 3,
+        "experienceLevel": "intermediate"
+      }
+    },
     "expected": {
       "actionType": "generatePlan",
       "requiresConfirmation": true,
@@ -325,6 +332,13 @@
     "category": "generatePlan",
     "status": "expectedGap",
     "userMessage": "我是新手，一周练三次，帮我安排",
+    "contextOverride": {
+      "profile": {
+        "goal": "buildMuscle",
+        "weeklyFrequency": 3,
+        "experienceLevel": "beginner"
+      }
+    },
     "expected": {
       "actionType": "generatePlan",
       "requiresConfirmation": true,
@@ -339,6 +353,13 @@
     "category": "generatePlan",
     "status": "expectedGap",
     "userMessage": "我想提升耐力，帮我安排训练",
+    "contextOverride": {
+      "profile": {
+        "goal": "endurance",
+        "weeklyFrequency": 3,
+        "experienceLevel": "intermediate"
+      }
+    },
     "expected": {
       "actionType": "generatePlan",
       "requiresConfirmation": true,
@@ -353,6 +374,13 @@
     "category": "generatePlan",
     "status": "expectedGap",
     "userMessage": "我刚开始健身，给我一个简单计划",
+    "contextOverride": {
+      "profile": {
+        "goal": "buildMuscle",
+        "weeklyFrequency": 3,
+        "experienceLevel": "beginner"
+      }
+    },
     "expected": {
       "actionType": "generatePlan",
       "requiresConfirmation": true,

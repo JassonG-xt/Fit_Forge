@@ -106,6 +106,8 @@ LLM **不**负责：
 
 **eval 影响：** generatePlan expectedGap 暂不翻 active。后续单独 PR 根据 context completeness 拆分为 active clarification cases 和 remaining expectedGap。
 
+**eval context 要求：** generatePlan eval 必须使用与 case 语义一致的 profile context（例如减脂 case 的 goal 应为 `loseFat`，耐力 case 应为 `endurance`）。如果 harness context 的 goal 与 userMessage 不匹配，LLM 会返回 clarification 而非 generatePlan action，此时 eval 结果只能说明 guard 阻止了不完整或不匹配 context，不能说明模型能力。real eval harness 支持 `contextOverride.profile` 来解决这个问题。
+
 ### 阶段 C：Payload 可选参数扩展（未来）
 
 如果产品需要 LLM 传递偏好（如"减脂""一周三次"），可以扩展 payload：
