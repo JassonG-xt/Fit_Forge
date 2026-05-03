@@ -118,6 +118,49 @@ python -m evals.run_real_llm_eval \
 The harness always exits 0 on a completed run. **Failures show up in the
 report, not the shell exit code** — this is observational tooling.
 
+## Per-case context overrides
+
+Each eval case can optionally include a `contextOverride` object to customize
+the context the harness builds for that case. This is useful when the default
+trusted context doesn't match the case's user message — for example,
+generatePlan cases that ask about fat loss when the default goal is `buildMuscle`.
+
+```json
+{
+  "id": "generate_lose_fat_zh_002",
+  "contextOverride": {
+    "profile": {
+      "goal": "loseFat",
+      "weeklyFrequency": 3,
+      "experienceLevel": "intermediate"
+    }
+  },
+  ...
+}
+```
+
+**Merge rule:** `contextOverride.profile` is shallow-merged onto the default
+`_trusted_context` profile. Only the specified fields are overridden; all other
+defaults (and all other context top-level keys) are preserved.
+
+Supported override keys:
+
+| Key | Effect |
+|-----|--------|
+| `contextOverride.profile.goal` | Overrides default profile goal |
+| `contextOverride.profile.weeklyFrequency` | Overrides default weekly frequency |
+| `contextOverride.profile.experienceLevel` | Overrides default experience level |
+| `contextOverride.todayHasSquat` | Swaps today's workout to include barbell squat |
+
+`planContextHash` is **not** overridable — it is always a deterministic per-case
+fake hash used for stale-action protection testing.
+
+This feature is especially important for `generatePlan` eval: if the profile
+context doesn't match the user message (e.g., goal is `buildMuscle` but the
+message asks for fat loss), the LLM may return a clarification instead of a
+plan action, making the eval result uninformative about the model's actual
+capability.
+
 ## Reading the report
 
 ### Outcome categories

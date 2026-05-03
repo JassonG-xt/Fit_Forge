@@ -310,9 +310,21 @@ Unit coverage: `agent_backend/tests/test_coach_agent_mock.py`.
 | Flag | Effect |
 |------|--------|
 | `todayHasSquat: true` | Adds `barbell_squat` to `todayWorkout.exercises` so `replaceExercise` cases that mention 深蹲 can find the source exercise |
+| `profile.goal` | Overrides default profile goal (real eval harness only) |
+| `profile.weeklyFrequency` | Overrides default weekly frequency (real eval harness only) |
+| `profile.experienceLevel` | Overrides default experience level (real eval harness only) |
+
+The `profile` overrides are shallow-merged onto the default trusted context.
+They are used by the real eval harness (`run_real_llm_eval.py`) to align per-case
+context with the user message — especially important for `generatePlan` eval
+where a mismatched goal causes the LLM to return clarification instead of a plan.
+
+The mock runner (`test_coach_agent_evals.py`) uses its own `_build_context` and
+does not read `contextOverride.profile`.
 
 (Only the flags that are actually wired up. Add more to
-`tests/test_coach_agent_evals.py::_build_context` as needed.)
+`tests/test_coach_agent_evals.py::_build_context` or
+`evals/run_real_llm_eval.py::_build_request_context` as needed.)
 
 ## Why the eval doesn't drive `AppState` mutation
 
