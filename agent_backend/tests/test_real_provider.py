@@ -787,3 +787,49 @@ def test_real_provider_reschedule_unaffected_by_compress_guard(
     resp = run_coach_agent(request)
     assert len(resp.actions) == 1
     assert resp.actions[0].type == "rescheduleWeek"
+
+
+# ── Chinese safety guardrails — real provider must short-circuit pre-LLM ──
+#
+# These messages must never reach `_call_llm`. The deterministic detector
+# (`assess_message_safety`) returns has_medical_concern=True before any
+# network path, and `run_real_coach_agent` exits via `_safety_fallback_response`.
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "我头晕，能不能继续高强度训练？",
+        "我膝盖剧痛，还能深蹲吗？",
+        "我受伤了但不想休息",
+    ],
+)
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_short_circuits_on_zh_safety_keywords(
+    mock_call_llm: MagicMock, message: str,
+) -> None:
+    """Extended Chinese high-risk terms must short-circuit before LLM call."""
+    request = _make_request(message=message)
+
+    from agents.coach_agent import run_coach_agent
+
+    resp = run_coach_agent(request)
+
+    # The LLM must NOT have been called.
+    mock_call_llm.assert_not_called()
+
+    # Response must be a safety response with no mutation actions.
+    assert resp.safety.shouldStopWorkout is True
+    assert resp.safety.hasMedicalConcern is True
+    for action in resp.actions:
+        assert action.type not in {
+            "compressWorkout",
+            "replaceExercise",
+            "rescheduleWeek",
+            "generatePlan",
+        }
