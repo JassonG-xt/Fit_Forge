@@ -54,6 +54,15 @@ jobs:
       - name: Run tests with coverage
         run: flutter test --coverage --reporter expanded
 
+      # Web build gate — catches dart2js-only failures (e.g. 64-bit integer
+      # literals that compile on native targets but break under JS).
+      # `flutter test` and `flutter analyze` did NOT catch the
+      # plan_context_hash regression; this step does.
+      # Default base-href is fine here — production base-href is verified
+      # by web-deploy.yml, which still owns deployment.
+      - name: Build web (release)
+        run: flutter build web --release
+
       - name: Enforce coverage thresholds
         run: |
           python3 - <<'PY'
