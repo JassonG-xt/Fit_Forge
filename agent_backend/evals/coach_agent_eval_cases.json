@@ -250,7 +250,7 @@
   {
     "id": "reschedule_weekend_off_zh_004",
     "category": "rescheduleWeek",
-    "status": "expectedGap",
+    "status": "active",
     "userMessage": "我周末没空，把训练安排到工作日",
     "expected": {
       "actionType": "rescheduleWeek",
@@ -258,9 +258,10 @@
       "mustHavePayloadFields": ["availableWeekdays"],
       "mustHaveSourceContextHash": true,
       "mustNotExecuteDirectly": true,
+      "expectedWeekdays": [1, 2, 3, 4, 5],
       "safety": "none"
     },
-    "note": "'周末'/'工作日' not in mock day lookup. Real LLM should expand to specific weekdays."
+    "note": "Promoted from expectedGap after MiMo post-timeout 3/3 stable conversion (Run 4 + Run 5 + Run 6, LLM_TIMEOUT_SECONDS=90). Mock router gained minimum support: '周末没空' + '工作日' → [1,2,3,4,5]."
   },
   {
     "id": "reschedule_only_two_days_zh_005",
@@ -280,7 +281,7 @@
   {
     "id": "reschedule_thu_only_zh_006",
     "category": "rescheduleWeek",
-    "status": "expectedGap",
+    "status": "active",
     "userMessage": "这周出差，只能周四训练一次",
     "expected": {
       "actionType": "rescheduleWeek",
@@ -291,7 +292,7 @@
       "expectedWeekdays": [4],
       "safety": "none"
     },
-    "note": "Mock requires >=2 weekday tokens OR keyword '调整/重新排/改时间'. Single weekday alone does not trigger."
+    "note": "Promoted from expectedGap after MiMo post-timeout 3/3 stable conversion (Run 4 + Run 5 + Run 6, LLM_TIMEOUT_SECONDS=90). Mock router gained minimum support: '只能/只有' + single weekday + '练/训练' → that day."
   },
 
   {

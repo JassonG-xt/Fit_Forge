@@ -86,13 +86,13 @@ records the case so we can flip it to `active` once a real LLM is wired up."*
 ```
 compressWorkout   : 5 active / 2 expectedGap
 replaceExercise   : 4 active / 2 expectedGap
-rescheduleWeek    : 3 active / 3 expectedGap
+rescheduleWeek    : 5 active / 1 expectedGap
 generatePlan      : 1 active / 4 expectedGap
 nonMutatingCoaching: 5 active / 0
 safety            : 3 active / 3 expectedGap
 promptInjection   : 6 active / 0
                   ────────────────────────
-total             : 27 active / 14 expectedGap (41 cases)
+total             : 29 active / 12 expectedGap (41 cases)
 ```
 
 ### Cross-run promotion of three paraphrases (history)
@@ -106,11 +106,34 @@ real-LLM cross-run stable conversion (mimo-v2.5-pro 2/2 across independent runs)
 | `compress_half_hour_zh_006` | 我只有半小时，帮我调整今天训练 | `半小时` → 30 minutes; compress is checked before reschedule, so `调整` no longer misroutes |
 | `replace_no_equipment_bodyweight_zh_004` | 家里没有器械，能不能换成自重动作 | added `换成` to replace triggers |
 
+### Cross-run promotion of two reschedule paraphrases (history)
+
+After `LLM_TIMEOUT_SECONDS` was added (PR #9) and timeout-induced gaps stopped
+contaminating real-LLM runs, two more reschedule paraphrases reached 3/3
+clean conversion across Run 4, Run 5, and Run 6 (mimo-v2.5-pro,
+`LLM_TIMEOUT_SECONDS=90`) and were promoted from `expectedGap` to `active`:
+
+| caseId | userMessage | mock router change |
+|--------|-------------|--------------------|
+| `reschedule_weekend_off_zh_004` | 我周末没空，把训练安排到工作日 | added semantic rule: `周末没空/不能/不行/没时间` + `工作日` → `availableWeekdays = [1,2,3,4,5]` |
+| `reschedule_thu_only_zh_006` | 这周出差，只能周四训练一次 | extended single-weekday rule: `只能/只有` + 1 explicit weekday + `练/训练/安排` → that single day |
+
 The router change is intentionally minimal: it lets the offline CI baseline
 recognize these specific paraphrases that the real LLM already handles. It is
 **not** a long-term direction to keep extending the keyword router. Mixed
 cases and stable-gap cases stay as `expectedGap` and remain the responsibility
 of the real LLM in the production path.
+
+### Cases that remain `expectedGap` (and why)
+
+After Run 4-6, three eval cases stay as `expectedGap` even though they showed
+some real-LLM activity:
+
+| caseId | reason it is NOT promoted |
+|--------|----------------------------|
+| `compress_busy_no_minutes_zh_007` (`今天太忙了，少练一点但别完全跳过`) | LLM is 3/3 stable converted, but the prompt does not specify a target minute count. `compressWorkout` payload requires `targetMinutes`. Choosing a default (20? 25? 50% of current?) is a product semantic decision, not a router keyword fix. Promotion is blocked on that decision. |
+| `replace_too_hard_zh_006` (`这个动作太难了，换简单一点`) | LLM behavior is volatile (2/4 converted across runs). Defer until a future model run. |
+| Other stable-gap cases (e.g. `compress_short_no_minutes_zh_004`, `reschedule_only_two_days_zh_005`, `replace_pullup_alternative_zh_005`) | Confirmed real LLM gap (not timeout pollution). Kept as regression signals. |
 
 ## Mock and real provider parity on `sourceContextHash`
 

@@ -324,3 +324,47 @@ def test_mock_replace_recognizes_huan_cheng_paraphrase() -> None:
     assert "toExerciseId" in action.payload
     assert action.requiresConfirmation is True
     assert action.sourceContextHash == _TRUSTED_HASH
+
+
+# ── Promoted-from-expectedGap reschedule paraphrases (Run 4 + Run 5 + Run 6 stable) ──
+#
+# These two Chinese reschedule paraphrases were promoted from `expectedGap` to
+# `active` after MiMo post-timeout 3/3 clean conversion. The mock router got
+# the minimum semantic extension to keep the offline CI baseline aligned. Tests
+# pin the new behavior so future router refactors can't silently regress them.
+
+
+def test_mock_reschedule_recognizes_weekend_off_workday() -> None:
+    """`周末没空` + `工作日` → availableWeekdays = [1,2,3,4,5]."""
+    response = _run_mock_coach_agent(_request("我周末没空，把训练安排到工作日"))
+    assert response.actions, "expected at least one action"
+    action = response.actions[0]
+    assert action.type == "rescheduleWeek"
+    assert action.payload["availableWeekdays"] == [1, 2, 3, 4, 5]
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+
+
+def test_mock_reschedule_recognizes_only_single_weekday() -> None:
+    """`只能周四训练` → availableWeekdays = [4]."""
+    response = _run_mock_coach_agent(_request("这周出差，只能周四训练一次"))
+    assert response.actions, "expected at least one action"
+    action = response.actions[0]
+    assert action.type == "rescheduleWeek"
+    assert action.payload["availableWeekdays"] == [4]
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+
+
+def test_mock_reschedule_only_two_days_remains_unmatched() -> None:
+    """Stable gap regression: `这周只有两天能练` (no specific days) must still gap.
+
+    The single-weekday extension only triggers when exactly one weekday token
+    is present alongside `只能/只有`. Zero weekdays → unchanged fallback.
+    """
+    response = _run_mock_coach_agent(_request("这周只有两天能练"))
+    # Either no actions, or any action that is NOT rescheduleWeek (i.e. fallback
+    # answerOnly with empty actions list).
+    assert response.intent != "rescheduleWeek"
+    for action in response.actions:
+        assert action.type != "rescheduleWeek"
