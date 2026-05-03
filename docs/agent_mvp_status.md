@@ -188,19 +188,20 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
 
 ## 下一阶段建议（按优先级）
 
-1. **`feature/llm-timeout-config`**
-   `agent_backend/agents/llm_provider.py::_call_llm` 当前硬编码 30s 超时，对慢启动 OpenAI-compatible endpoint（如 mimo-v2.5-pro 冷启动）偏紧，会把网络超时和真正的 LLM gap 混在一起。新增 `LLM_TIMEOUT_SECONDS` env 让单次 eval 噪声更干净。
+1. ~~**`feature/llm-timeout-config`**~~ ✅ 已完成（PR #9）
 
 2. **Real LLM eval 多模型对比（脱敏 summary）**
    - 仍然**不**进 per-PR CI
    - 用 `evals/run_real_llm_eval.py` 在 OpenAI-compatible / MiMo / Claude 等 provider 上跑同一份 `coach_agent_eval_cases.json`
    - 只提交脱敏后的 `summary` 块（每类别通过/失败计数 + 升级候选清单），**不**提交 raw JSON
 
-3. **Safety guardrails 收紧（小 PR 单独做）**
-   `agent_backend/safety/fitness_guardrails.py` 当前关键词集偏窄。例：剧痛、头晕、急性损伤的多种中文表达。每次扩展都要伴随一条新的 `safety` eval case，避免漂移。
+3. ~~**Safety guardrails 收紧（小 PR 单独做）**~~ ✅ 已完成（PR #12）
 
-4. **再考虑 streaming 或 multi-agent**
-   前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。
+4. **generatePlan context completeness guard** ✅ 已实现
+   `agent_backend/agents/generate_plan_policy.py` 定义必需 profile 字段（`goal` / `weeklyFrequency` / `experienceLevel`）。mock 和 real provider 在接受 generatePlan action 前检查 context 完整性；不足时返回 clarification。eval baseline 暂不变，后续单独 PR 拆分 generatePlan expectedGap。
+
+5. **再考虑 streaming 或 multi-agent**
+   前提：上面 1–4 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。
 
 ## 操作守则（合并任何 agent 相关 PR 前 self-check）
 

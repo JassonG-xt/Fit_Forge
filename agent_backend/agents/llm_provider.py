@@ -25,6 +25,9 @@ from agents.action_safety import (
     inject_action_safety as _inject_action_safety,
 )
 from agents.coach_agent import has_explicit_target_minutes as _has_explicit_target_minutes
+from agents.generate_plan_policy import (
+    has_sufficient_generate_plan_context as _has_sufficient_generate_plan_context,
+)
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -232,6 +235,36 @@ def _strip_unsupported_compress_actions(
     return response
 
 
+_GENERATE_PLAN_CLARIFICATION_MESSAGE = (
+    "可以帮你生成训练计划。为了安排得更合适，我需要先确认你的目标、"
+    "每周能练几次、以及你的训练经验水平。"
+)
+
+
+def _strip_unsupported_generate_plan_actions(
+    response: AgentResponse,
+    context_profile: Optional[Dict[str, Any]],
+) -> AgentResponse:
+    """If the LLM proposed `generatePlan` but the profile is incomplete,
+    drop the action and ask a clarifying question instead.
+
+    The actual plan generation is owned by the deterministic local PlanEngine.
+    Without goal / weeklyFrequency / experienceLevel, the engine would produce
+    a generic plan that doesn't match the user's situation.
+    """
+    has_generate = any(a.type == "generatePlan" for a in response.actions)
+    if not has_generate:
+        return response
+
+    if _has_sufficient_generate_plan_context(context_profile):
+        return response
+
+    response.actions = []
+    response.intent = "answerOnly"
+    response.message = _GENERATE_PLAN_CLARIFICATION_MESSAGE
+    return response
+
+
 def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
     """Real LLM-backed coach agent entry point.
 
@@ -271,6 +304,12 @@ def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
     # `compressWorkout` and ask for clarification instead. See
     # `_strip_unsupported_compress_actions` for the rationale.
     response = _strip_unsupported_compress_actions(response, request.message)
+
+    # Guard: if the LLM returned `generatePlan` but the profile lacks required
+    # fields (goal / weeklyFrequency / experienceLevel), refuse and clarify.
+    response = _strip_unsupported_generate_plan_actions(
+        response, request.context.profile
+    )
 
     # Inject sourceContextHash and enforce requiresConfirmation
     response.actions = _inject_action_safety(

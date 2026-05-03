@@ -87,17 +87,24 @@ LLM **不**负责：
 
 明确 generatePlan 的 LLM ≠ 生成器决策，记录 allowed / prohibited 行为。
 
-### 阶段 B：Profile 完整性前置检查
+### 阶段 B：Profile 完整性前置检查 ✅ 已实现
 
-在 LLM 返回 `generatePlan` action 之前，让 system prompt 明确要求 LLM 检查 `context.profile` 是否存在。如果 profile 缺失，返回 `answerOnly` 并引导用户完成 profile 设置。
+**状态：** 已在 `feature/generate-plan-context-completeness` 分支实现。
 
-**涉及文件：**
-- `agent_backend/prompts/coach_agent_system.md` — 在 generatePlan 部分添加 profile 检查指令
+在 LLM 返回 `generatePlan` action 之前，backend guard 检查 `context.profile` 是否包含必需字段（`goal`、`weeklyFrequency`、`experienceLevel`）。如果字段缺失，返回 `answerOnly` 并追问。
+
+**实现方式：**
+- `agent_backend/agents/generate_plan_policy.py` — 纯逻辑 helper，定义必需字段和缺失检测
+- `agent_backend/agents/llm_provider.py` — real provider 在 LLM 响应后、safety injection 前检查 context completeness
+- `agent_backend/agents/coach_agent.py` — mock provider 同样检查
+- `agent_backend/prompts/coach_agent_system.md` — system prompt 指示 LLM 在 context 不足时追问
 
 **不涉及：**
 - payload schema 变更
 - Flutter executor 变更
 - eval case 变更
+
+**eval 影响：** generatePlan expectedGap 暂不翻 active。后续单独 PR 根据 context completeness 拆分为 active clarification cases 和 remaining expectedGap。
 
 ### 阶段 C：Payload 可选参数扩展（未来）
 

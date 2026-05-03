@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Optional
+from typing import Any, Optional
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -25,19 +25,37 @@ from schemas.agent_response import AgentResponse
 # ── Helpers ──
 
 
+_COMPLETE_PROFILE = {
+    "goal": "buildMuscle",
+    "weeklyFrequency": 4,
+    "experienceLevel": "beginner",
+}
+
+_MISSING = object()  # sentinel: distinguish "not passed" from "explicitly None"
+
+
 def _make_request(
     message: str = "帮我压缩训练",
     plan_context_hash: Optional[str] = "abc123",
     today_workout: Optional[dict] = None,
+    profile: Any = _MISSING,
 ) -> AgentRequest:
-    return AgentRequest(
-        message=message,
-        context={
-            "planContextHash": plan_context_hash,
-            "todayWorkout": today_workout or {"dayOfWeek": 1, "dayType": "push"},
-            "profile": {"goal": "buildMuscle"},
-        },
-    )
+    """Build an AgentRequest for tests.
+
+    profile=_MISSING (default) → use a complete profile.
+    profile=None              → no profile in context (simulates missing onboarding).
+    profile={...}             → use the given profile dict.
+    """
+    ctx: dict = {
+        "planContextHash": plan_context_hash,
+        "todayWorkout": today_workout or {"dayOfWeek": 1, "dayType": "push"},
+    }
+    if profile is _MISSING:
+        ctx["profile"] = dict(_COMPLETE_PROFILE)
+    elif profile is not None:
+        ctx["profile"] = profile
+    # else: profile=None → omit from context entirely
+    return AgentRequest(message=message, context=ctx)
 
 
 def _valid_llm_response(
@@ -79,6 +97,31 @@ def _safety_llm_response() -> str:
         "safety": {
             "hasMedicalConcern": True,
             "shouldStopWorkout": True,
+        },
+    }
+    return json.dumps(resp, ensure_ascii=False)
+
+
+def _generate_plan_llm_response() -> str:
+    """Build a generatePlan LLM response JSON."""
+    resp = {
+        "message": "可以根据你当前的目标生成一份训练计划。",
+        "intent": "generatePlan",
+        "confidence": 0.85,
+        "actions": [
+            {
+                "id": "plan_123",
+                "type": "generatePlan",
+                "title": "生成训练计划",
+                "summary": "基于你的画像和训练频率生成新的训练计划。",
+                "requiresConfirmation": True,
+                "riskLevel": "low",
+                "payload": {"usePreviewPlan": True},
+            }
+        ],
+        "safety": {
+            "hasMedicalConcern": False,
+            "shouldStopWorkout": False,
         },
     }
     return json.dumps(resp, ensure_ascii=False)
@@ -833,3 +876,259 @@ def test_real_provider_short_circuits_on_zh_safety_keywords(
             "rescheduleWeek",
             "generatePlan",
         }
+
+
+# ── generatePlan context completeness guard ──
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_generate_plan_stripped_when_profile_missing_goal(
+    mock_call_llm: MagicMock,
+) -> None:
+    """LLM returns generatePlan but profile has no goal → clarify."""
+    mock_call_llm.return_value = _generate_plan_llm_response()
+    request = _make_request(
+        message="帮我生成一个计划",
+        profile={"weeklyFrequency": 4, "experienceLevel": "beginner"},
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "answerOnly"
+    assert resp.actions == []
+    assert "目标" in resp.message
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_generate_plan_stripped_when_profile_missing_frequency(
+    mock_call_llm: MagicMock,
+) -> None:
+    """LLM returns generatePlan but profile has no weeklyFrequency → clarify."""
+    mock_call_llm.return_value = _generate_plan_llm_response()
+    request = _make_request(
+        message="帮我生成一个计划",
+        profile={"goal": "buildMuscle", "experienceLevel": "beginner"},
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "answerOnly"
+    assert resp.actions == []
+    assert "每周" in resp.message or "练几次" in resp.message
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_generate_plan_stripped_when_profile_missing_experience(
+    mock_call_llm: MagicMock,
+) -> None:
+    """LLM returns generatePlan but profile has no experienceLevel → clarify."""
+    mock_call_llm.return_value = _generate_plan_llm_response()
+    request = _make_request(
+        message="帮我生成一个计划",
+        profile={"goal": "buildMuscle", "weeklyFrequency": 4},
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "answerOnly"
+    assert resp.actions == []
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_generate_plan_stripped_when_profile_is_none(
+    mock_call_llm: MagicMock,
+) -> None:
+    """LLM returns generatePlan but context has no profile at all → clarify."""
+    mock_call_llm.return_value = _generate_plan_llm_response()
+    request = _make_request(
+        message="帮我生成一个计划",
+        profile=None,
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "answerOnly"
+    assert resp.actions == []
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_generate_plan_allowed_when_profile_complete(
+    mock_call_llm: MagicMock,
+) -> None:
+    """LLM returns generatePlan and profile has all required fields → allowed."""
+    mock_call_llm.return_value = _generate_plan_llm_response()
+    request = _make_request(
+        message="帮我生成一个增肌计划",
+        profile={
+            "goal": "buildMuscle",
+            "weeklyFrequency": 4,
+            "experienceLevel": "beginner",
+        },
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "generatePlan"
+    assert len(resp.actions) == 1
+    assert resp.actions[0].type == "generatePlan"
+    assert resp.actions[0].requiresConfirmation is True
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_generate_plan_injects_source_context_hash(
+    mock_call_llm: MagicMock,
+) -> None:
+    """When generatePlan is allowed, sourceContextHash is still injected."""
+    mock_call_llm.return_value = _generate_plan_llm_response()
+    request = _make_request(
+        message="帮我生成一个增肌计划",
+        plan_context_hash="plan_hash_v1",
+        profile={
+            "goal": "buildMuscle",
+            "weeklyFrequency": 4,
+            "experienceLevel": "beginner",
+        },
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.actions[0].sourceContextHash == "plan_hash_v1"
+
+
+# ── Non-regression: other mutation types unaffected by generatePlan guard ──
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_compress_unaffected_by_generate_plan_guard(
+    mock_call_llm: MagicMock,
+) -> None:
+    """compressWorkout with incomplete profile still works (not gated)."""
+    mock_call_llm.return_value = _valid_llm_response(
+        intent="compressWorkout",
+        payload={"dayOfWeek": 1, "targetMinutes": 20},
+    )
+    request = _make_request(
+        message="帮我把今天压缩到20分钟",
+        profile=None,
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "compressWorkout"
+    assert len(resp.actions) == 1
+    assert resp.actions[0].type == "compressWorkout"
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_reschedule_unaffected_by_generate_plan_guard(
+    mock_call_llm: MagicMock,
+) -> None:
+    """rescheduleWeek with incomplete profile still works (not gated)."""
+    mock_call_llm.return_value = _valid_llm_response(
+        intent="rescheduleWeek",
+        payload={"availableWeekdays": [2, 4, 6]},
+    )
+    request = _make_request(
+        message="把训练挪到周二周四周六",
+        profile=None,
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "rescheduleWeek"
+    assert len(resp.actions) == 1
+    assert resp.actions[0].type == "rescheduleWeek"
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_replace_unaffected_by_generate_plan_guard(
+    mock_call_llm: MagicMock,
+) -> None:
+    """replaceExercise with incomplete profile still works (not gated)."""
+    mock_call_llm.return_value = _valid_llm_response(
+        intent="replaceExercise",
+        payload={"dayOfWeek": 1, "fromExerciseId": "a", "toExerciseId": "b"},
+    )
+    request = _make_request(
+        message="帮我替换动作",
+        profile=None,
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "replaceExercise"
+    assert len(resp.actions) == 1
+    assert resp.actions[0].type == "replaceExercise"
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_safety_still_short_circuits_before_generate_plan_guard(
+    mock_call_llm: MagicMock,
+) -> None:
+    """Safety short-circuit happens before the generatePlan guard."""
+    request = _make_request(
+        message="我胸口疼但想生成计划",
+        profile={
+            "goal": "buildMuscle",
+            "weeklyFrequency": 4,
+            "experienceLevel": "beginner",
+        },
+    )
+
+    resp = run_real_coach_agent(request)
+
+    # Safety short-circuit: LLM not called
+    mock_call_llm.assert_not_called()
+    assert resp.safety.shouldStopWorkout is True
+    for action in resp.actions:
+        assert action.type != "generatePlan"

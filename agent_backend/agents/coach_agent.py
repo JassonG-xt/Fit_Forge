@@ -16,6 +16,9 @@ import uuid
 from typing import Iterable
 
 from agents.action_safety import inject_action_safety
+from agents.generate_plan_policy import (
+    has_sufficient_generate_plan_context as _has_sufficient_generate_plan_context,
+)
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -380,6 +383,12 @@ def _has_any(text: str, keys: Iterable[str]) -> bool:
     return any(k in text for k in keys)
 
 
+_GENERATE_PLAN_CLARIFICATION_MESSAGE = (
+    "可以帮你生成训练计划。为了安排得更合适，我需要先确认你的目标、"
+    "每周能练几次、以及你的训练经验水平。"
+)
+
+
 def _run_mock_coach_agent(request: AgentRequest) -> AgentResponse:
     """Mock implementation: routes the user message to a fixed response.
 
@@ -389,6 +398,14 @@ def _run_mock_coach_agent(request: AgentRequest) -> AgentResponse:
     is forced true. Mock and real providers share this safety layer.
     """
     response = _route_mock_message(request)
+
+    # Guard: if mock returned generatePlan but profile is incomplete, clarify.
+    if any(a.type == "generatePlan" for a in response.actions):
+        if not _has_sufficient_generate_plan_context(request.context.profile):
+            response.actions = []
+            response.intent = "answerOnly"
+            response.message = _GENERATE_PLAN_CLARIFICATION_MESSAGE
+
     response.actions = inject_action_safety(
         response.actions,
         request.context.planContextHash,

@@ -47,7 +47,7 @@ _DEFAULT_CONTEXT: Dict[str, Any] = {
     "planContextHash": "eval_plan_hash_v1",
     "profile": {
         "goal": "buildMuscle",
-        "frequencyPerWeek": 3,
+        "weeklyFrequency": 3,
         "experienceLevel": "intermediate",
     },
     "activePlan": {"id": "plan_eval_001", "name": "Eval Plan"},
