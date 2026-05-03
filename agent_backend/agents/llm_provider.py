@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import uuid
 from pathlib import Path
@@ -31,6 +32,26 @@ from safety.fitness_guardrails import assess_message_safety
 logger = logging.getLogger(__name__)
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
+
+DEFAULT_LLM_TIMEOUT_SECONDS = 30.0
+
+
+def _get_llm_timeout_seconds() -> float:
+    """Read LLM_TIMEOUT_SECONDS from env, fall back to 30 on missing or invalid.
+
+    Accepts positive finite ints / floats. Rejects empty, zero, negative,
+    non-numeric, NaN, and inf — all fall back to the default rather than raising.
+    """
+    raw = os.environ.get("LLM_TIMEOUT_SECONDS")
+    if raw is None or raw == "":
+        return DEFAULT_LLM_TIMEOUT_SECONDS
+    try:
+        value = float(raw)
+    except (ValueError, TypeError):
+        return DEFAULT_LLM_TIMEOUT_SECONDS
+    if not math.isfinite(value) or value <= 0:
+        return DEFAULT_LLM_TIMEOUT_SECONDS
+    return value
 
 
 def _load_system_prompt() -> str:
@@ -77,12 +98,19 @@ def _call_llm(
     base_url: str,
     api_key: str,
     model: str,
-    timeout: int = 30,
+    timeout: Optional[float] = None,
 ) -> str:
     """Send a one-shot chat completion request to an OpenAI-compatible endpoint.
 
     Uses stdlib urllib to avoid adding httpx/aiohttp dependencies.
+
+    `timeout` defaults to the value resolved from `LLM_TIMEOUT_SECONDS` (or
+    30 seconds if unset / invalid). Pass an explicit value only when overriding
+    the env-driven default in tests.
     """
+    if timeout is None:
+        timeout = _get_llm_timeout_seconds()
+
     url = f"{base_url.rstrip('/')}/v1/chat/completions"
     body = json.dumps({
         "model": model,

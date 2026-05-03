@@ -22,6 +22,7 @@ FastAPI 服务，负责接收 Flutter 客户端的自然语言请求并返回结
 | `LLM_BASE_URL` | OpenAI-compatible endpoint base URL | （real 模式必填） |
 | `LLM_API_KEY` | API key（**只存在 backend 环境变量，绝不写入代码**） | （real 模式必填） |
 | `LLM_MODEL` | 模型名称 | `gpt-4o-mini` |
+| `LLM_TIMEOUT_SECONDS` | LLM HTTP request timeout（秒）。仅作用于 backend real provider；mock 模式、Flutter、CI 不受影响。非法值（空 / 0 / 负数 / 非数字 / NaN / inf）回退到默认值。 | `30` |
 
 支持任何 OpenAI-compatible `/v1/chat/completions` endpoint（OpenAI、Claude via proxy、MiMo、本地模型等）。
 
@@ -31,6 +32,8 @@ export FITFORGE_AGENT_MODE=real
 export LLM_BASE_URL=https://api.openai.com
 export LLM_API_KEY=sk-your-key-here
 export LLM_MODEL=gpt-4o-mini
+# 可选：慢启动 / 冷启动 endpoint 可调大 timeout（默认 30 秒）
+export LLM_TIMEOUT_SECONDS=60
 uvicorn main:app --reload --port 8000
 ```
 
