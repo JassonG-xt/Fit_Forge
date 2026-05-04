@@ -24,7 +24,7 @@ dependencies:
   shared_preferences: ^2.3.3
 
   # 图表
-  fl_chart: ^0.69.0
+  fl_chart: ^1.2.0
 
   # 音频播放
   # (reserved for future real audio implementation)
