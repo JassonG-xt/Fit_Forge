@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 AgentActionTypeLiteral = Literal[
@@ -26,6 +26,8 @@ class AgentAction(BaseModel):
     The client confirms before any action with `requiresConfirmation=True`
     is executed against local AppState.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     id: str
     type: AgentActionTypeLiteral

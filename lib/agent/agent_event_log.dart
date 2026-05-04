@@ -21,6 +21,8 @@ class AgentEventLog extends ChangeNotifier {
     : _persistDebounce = persistDebounce ?? const Duration(milliseconds: 50);
 
   static const String _prefsKey = 'fitforge.agent_event_log.v1';
+  static const int maxMessageChars = 500;
+  static const String _redacted = '[redacted]';
 
   final int maxEvents;
   final Duration _persistDebounce;
@@ -43,7 +45,10 @@ class AgentEventLog extends ChangeNotifier {
       _events
         ..clear()
         ..addAll(
-          list.map((e) => AgentEvent.fromJson(e as Map<String, dynamic>)),
+          list.map(
+            (e) =>
+                _sanitizeEvent(AgentEvent.fromJson(e as Map<String, dynamic>)),
+          ),
         );
       notifyListeners();
     } catch (_) {
@@ -62,8 +67,8 @@ class AgentEventLog extends ChangeNotifier {
   }) {
     final event = AgentEvent(
       id: id,
-      userMessage: userMessage,
-      agentMessage: agentMessage,
+      userMessage: _sanitizeMessage(userMessage),
+      agentMessage: _sanitizeMessage(agentMessage),
       actions: List.unmodifiable(actions),
       accepted: false,
       executed: false,
@@ -127,6 +132,42 @@ class AgentEventLog extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final raw = jsonEncode(_events.map((e) => e.toJson()).toList());
     await prefs.setString(_prefsKey, raw);
+  }
+
+  static AgentEvent _sanitizeEvent(AgentEvent event) => AgentEvent(
+    id: event.id,
+    userMessage: _sanitizeMessage(event.userMessage),
+    agentMessage: _sanitizeMessage(event.agentMessage),
+    actions: event.actions,
+    accepted: event.accepted,
+    executed: event.executed,
+    failureReason: event.failureReason == null
+        ? null
+        : _sanitizeMessage(event.failureReason!),
+    createdAt: event.createdAt,
+  );
+
+  static String _sanitizeMessage(String input) {
+    var text = input.trim();
+    text = text.replaceAll(
+      RegExp(
+        r'\b\d{1,3}(?:\.\d+)?\s*(?:kg|公斤|斤|cm|厘米|岁|%|bmi)\b',
+        caseSensitive: false,
+      ),
+      _redacted,
+    );
+    text = text.replaceAll(
+      RegExp(
+        r'(体重|身高|年龄|BMI|体脂率|胸痛|头晕|怀孕|厌食|暴食|饮食障碍|'
+        r'weight|height|age|chest pain|dizzy|pregnant|eating disorder)',
+        caseSensitive: false,
+      ),
+      _redacted,
+    );
+    if (text.length > maxMessageChars) {
+      text = '${text.substring(0, maxMessageChars)}…';
+    }
+    return text;
   }
 
   @override

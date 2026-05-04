@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fit_forge/agent/local_agent_action_executor.dart';
 import 'package:fit_forge/agent/models/agent_action.dart';
+import 'package:fit_forge/agent/plan_context_hash.dart';
 import 'package:fit_forge/models/models.dart';
 
 import '../helpers/app_state_fixtures.dart';
@@ -13,13 +14,16 @@ void main() {
     AgentActionType type,
     Map<String, dynamic> payload, {
     String id = 'test',
+    bool requiresConfirmation = true,
+    String? sourceContextHash,
   }) => AgentAction(
     id: id,
     type: type,
     title: 't',
     summary: 's',
-    requiresConfirmation: true,
+    requiresConfirmation: requiresConfirmation,
     payload: payload,
+    sourceContextHash: sourceContextHash,
   );
 
   group('LocalAgentActionExecutor', () {
@@ -61,11 +65,12 @@ void main() {
     test('rescheduleWeek validates weekday range', () async {
       final state = await primedAppStateWithProfile();
       state.adoptPlan(_seedPlan());
+      final hash = computePlanContextHash(state.activePlan!);
       final executor = LocalAgentActionExecutor(state);
       final result = await executor.execute(
         makeAction(AgentActionType.rescheduleWeek, const {
           'availableWeekdays': [0, 8],
-        }),
+        }, sourceContextHash: hash),
       );
       expect(result.success, false);
       expect(result.message, contains('1-7'));
@@ -74,11 +79,12 @@ void main() {
     test('rescheduleWeek empty list rejected', () async {
       final state = await primedAppStateWithProfile();
       state.adoptPlan(_seedPlan());
+      final hash = computePlanContextHash(state.activePlan!);
       final executor = LocalAgentActionExecutor(state);
       final result = await executor.execute(
         makeAction(AgentActionType.rescheduleWeek, const {
           'availableWeekdays': <int>[],
-        }),
+        }, sourceContextHash: hash),
       );
       expect(result.success, false);
     });
@@ -86,11 +92,12 @@ void main() {
     test('rescheduleWeek rejects duplicate weekdays', () async {
       final state = await primedAppStateWithProfile();
       state.adoptPlan(_seedPlan());
+      final hash = computePlanContextHash(state.activePlan!);
       final executor = LocalAgentActionExecutor(state);
       final result = await executor.execute(
         makeAction(AgentActionType.rescheduleWeek, const {
           'availableWeekdays': [2, 2, 4],
-        }),
+        }, sourceContextHash: hash),
       );
       expect(result.success, false);
       expect(result.message, contains('不能重复'));
@@ -99,11 +106,12 @@ void main() {
     test('rescheduleWeek mutates active plan when valid', () async {
       final state = await primedAppStateWithProfile();
       state.adoptPlan(_seedPlan());
+      final hash = computePlanContextHash(state.activePlan!);
       final executor = LocalAgentActionExecutor(state);
       final result = await executor.execute(
         makeAction(AgentActionType.rescheduleWeek, const {
           'availableWeekdays': [2, 5],
-        }),
+        }, sourceContextHash: hash),
       );
       expect(result.success, true);
       final plan = state.activePlan!;
@@ -121,13 +129,14 @@ void main() {
       final state = await primedAppStateWithProfile();
       await state.init();
       state.adoptPlan(_seedPlan());
+      final hash = computePlanContextHash(state.activePlan!);
       final executor = LocalAgentActionExecutor(state);
       final result = await executor.execute(
         makeAction(AgentActionType.replaceExercise, const {
           'dayOfWeek': 1,
           'fromExerciseId': 'bench_press',
           'toExerciseId': 'definitely_not_in_library',
-        }),
+        }, sourceContextHash: hash),
       );
       expect(result.success, false);
       expect(result.message, contains('不在动作库'));
@@ -137,13 +146,14 @@ void main() {
       final state = await primedAppStateWithProfile();
       await state.init();
       state.adoptPlan(_seedPlan());
+      final hash = computePlanContextHash(state.activePlan!);
       final executor = LocalAgentActionExecutor(state);
       final result = await executor.execute(
         makeAction(AgentActionType.replaceExercise, const {
           'dayOfWeek': 1,
           'fromExerciseId': 'bench_press',
           'toExerciseId': 'bench_press',
-        }),
+        }, sourceContextHash: hash),
       );
       expect(result.success, false);
       expect(result.message, contains('不能和原动作相同'));
@@ -181,13 +191,14 @@ void main() {
         ),
       );
       final replacement = state.exercises[1];
+      final hash = computePlanContextHash(state.activePlan!);
       final executor = LocalAgentActionExecutor(state);
       final result = await executor.execute(
         makeAction(AgentActionType.replaceExercise, {
           'dayOfWeek': 1,
           'fromExerciseId': realExerciseId,
           'toExerciseId': replacement.id,
-        }),
+        }, sourceContextHash: hash),
       );
       expect(result.success, true);
       final newEx = state.activePlan!.days
@@ -203,12 +214,13 @@ void main() {
     test('compressWorkout caps exercises and sets', () async {
       final state = await primedAppStateWithProfile();
       state.adoptPlan(_seedPlan());
+      final hash = computePlanContextHash(state.activePlan!);
       final executor = LocalAgentActionExecutor(state);
       final result = await executor.execute(
         makeAction(AgentActionType.compressWorkout, const {
           'dayOfWeek': 1,
           'targetMinutes': 15,
-        }),
+        }, sourceContextHash: hash),
       );
       expect(result.success, true);
       final day = state.activePlan!.days.firstWhere((d) => d.dayOfWeek == 1);
@@ -222,12 +234,13 @@ void main() {
     test('compressWorkout rejects negative targetMinutes', () async {
       final state = await primedAppStateWithProfile();
       state.adoptPlan(_seedPlan());
+      final hash = computePlanContextHash(state.activePlan!);
       final executor = LocalAgentActionExecutor(state);
       final result = await executor.execute(
         makeAction(AgentActionType.compressWorkout, const {
           'dayOfWeek': 1,
           'targetMinutes': -5,
-        }),
+        }, sourceContextHash: hash),
       );
       expect(result.success, false);
     });
@@ -250,6 +263,98 @@ void main() {
       }
 
       expect(state.activePlan!.toJson(), planSnapshot);
+    });
+
+    test('rejects mutation action without confirmation', () async {
+      final state = await primedAppStateWithProfile();
+      state.adoptPlan(_seedPlan());
+      final before = state.activePlan!.toJson();
+      final hash = computePlanContextHash(state.activePlan!);
+      final executor = LocalAgentActionExecutor(state);
+
+      final result = await executor.execute(
+        makeAction(
+          AgentActionType.compressWorkout,
+          const {'dayOfWeek': 1, 'targetMinutes': 15},
+          requiresConfirmation: false,
+          sourceContextHash: hash,
+        ),
+      );
+
+      expect(result.success, false);
+      expect(state.activePlan!.toJson(), before);
+    });
+
+    test(
+      'rejects mutation action missing source context hash when plan exists',
+      () async {
+        final state = await primedAppStateWithProfile();
+        state.adoptPlan(_seedPlan());
+        final before = state.activePlan!.toJson();
+        final executor = LocalAgentActionExecutor(state);
+
+        final result = await executor.execute(
+          makeAction(AgentActionType.compressWorkout, const {
+            'dayOfWeek': 1,
+            'targetMinutes': 15,
+          }),
+        );
+
+        expect(result.success, false);
+        expect(state.activePlan!.toJson(), before);
+      },
+    );
+
+    test('rejects mutation action with stale source context hash', () async {
+      final state = await primedAppStateWithProfile();
+      state.adoptPlan(_seedPlan());
+      final before = state.activePlan!.toJson();
+      final executor = LocalAgentActionExecutor(state);
+
+      final result = await executor.execute(
+        makeAction(AgentActionType.compressWorkout, const {
+          'dayOfWeek': 1,
+          'targetMinutes': 15,
+        }, sourceContextHash: 'hash-old'),
+      );
+
+      expect(result.success, false);
+      expect(state.activePlan!.toJson(), before);
+    });
+
+    test('allows mutation action with current source context hash', () async {
+      final state = await primedAppStateWithProfile();
+      state.adoptPlan(_seedPlan());
+      final hash = computePlanContextHash(state.activePlan!);
+      final executor = LocalAgentActionExecutor(state);
+
+      final result = await executor.execute(
+        makeAction(AgentActionType.compressWorkout, const {
+          'dayOfWeek': 1,
+          'targetMinutes': 15,
+        }, sourceContextHash: hash),
+      );
+
+      expect(result.success, true);
+    });
+
+    test('allows read-only action without confirmation', () async {
+      final state = await primedAppStateWithProfile();
+      state.adoptPlan(_seedPlan());
+      final before = state.activePlan!.toJson();
+      final executor = LocalAgentActionExecutor(state);
+
+      final result = await executor.execute(
+        makeAction(
+          AgentActionType.answerOnly,
+          const {},
+          requiresConfirmation: false,
+        ),
+      );
+
+      expect(result.success, true);
+      expect(result.title, '无需修改');
+      expect(state.activePlan!.toJson(), before);
     });
   });
 }

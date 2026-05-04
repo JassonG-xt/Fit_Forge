@@ -28,6 +28,7 @@ from agents.coach_agent import has_explicit_target_minutes as _has_explicit_targ
 from agents.generate_plan_policy import (
     has_sufficient_generate_plan_context as _has_sufficient_generate_plan_context,
 )
+from agents.output_validation import normalize_agent_response
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -140,7 +141,13 @@ def _call_llm(
     return data["choices"][0]["message"]["content"]
 
 
-def _parse_agent_response(raw: str) -> Optional[AgentResponse]:
+def _parse_agent_response(
+    raw: str,
+    *,
+    user_message: str = "",
+    context_hash: Optional[str] = "parse_test_hash",
+    context_profile: Optional[Dict[str, Any]] = None,
+) -> Optional[AgentResponse]:
     """Parse LLM output into AgentResponse. Returns None on failure."""
     # Strip markdown code fences if present
     text = raw.strip()
@@ -154,14 +161,15 @@ def _parse_agent_response(raw: str) -> Optional[AgentResponse]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("LLM returned non-JSON output: %s", raw[:200])
+        logger.warning("LLM returned non-JSON output length=%s", len(raw))
         return None
 
-    try:
-        return AgentResponse.model_validate(data)
-    except Exception as exc:
-        logger.warning("LLM output failed schema validation: %s", exc)
-        return None
+    return normalize_agent_response(
+        data,
+        user_message=user_message,
+        context_hash=context_hash,
+        context_profile=context_profile,
+    )
 
 
 def _safety_fallback_response(message: str) -> AgentResponse:
@@ -296,7 +304,12 @@ def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
         logger.error("Unexpected LLM error: %s", exc)
         return _safety_fallback_response(request.message)
 
-    response = _parse_agent_response(raw)
+    response = _parse_agent_response(
+        raw,
+        user_message=request.message,
+        context_hash=request.context.planContextHash,
+        context_profile=request.context.profile,
+    )
     if response is None:
         return _safety_fallback_response(request.message)
 

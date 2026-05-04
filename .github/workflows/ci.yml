@@ -13,11 +13,18 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Default to read-only at the workflow level. Individual jobs can request
+# more if needed (none of the jobs below need write).
+permissions:
+  contents: read
+
 jobs:
   analyze-and-test:
-    name: Analyze & Test
+    name: Analyze & Test (Flutter)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -100,3 +107,160 @@ jobs:
           files: coverage/lcov.info
           fail_ci_if_error: false
         continue-on-error: true
+
+  backend-test:
+    name: Backend pytest (agent_backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: agent_backend
+
+    # Backend tests use mocks/monkeypatch and never reach a real LLM provider.
+    # We deliberately set fake env values so any code path that still reads
+    # them gets harmless placeholders instead of accidentally hitting prod.
+    env:
+      LLM_BASE_URL: http://127.0.0.1:9/v1
+      LLM_API_KEY: sk-test-key
+      LLM_MODEL: test-model
+      FITFORGE_AGENT_AUTH_TOKEN: ""
+      FITFORGE_RATE_LIMIT_PER_MINUTE: "60"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            agent_backend/requirements.txt
+            agent_backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
+      - name: Run pytest
+        run: python -m pytest -q
+
+  secret-scan:
+    name: Secret scan (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Lightweight grep-based scan over tracked source/docs/config files.
+      # Intentionally narrow:
+      #   - tracked files only (no .git/, no build artifacts, no lockfiles)
+      #   - real-looking secrets (long alphanum/sk-* tokens) fail the build
+      #   - short placeholders (fake / test / sk-test-key / empty) pass
+      #   - we never echo the matched secret value, only path + pattern type
+      #
+      # If/when this becomes too noisy or too lax, swap in a dedicated tool
+      # such as gitleaks-action — but keep the same blocking semantics.
+      - name: Grep-based secret scan
+        run: |
+          set -euo pipefail
+
+          FILES="$(git ls-files \
+            '*.dart' '*.py' '*.md' '*.yml' '*.yaml' '*.json' '*.env.example' \
+            ':!:pubspec.lock' \
+            ':!:agent_backend/.venv/*' \
+            ':!:build/*' \
+            ':!:.dart_tool/*')"
+
+          fail=0
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            [ -f "$file" ] || continue
+
+            # Real OpenAI-style keys: sk- followed by 20+ key chars.
+            # Known placeholders are explicitly allowed.
+            if grep -nE 'sk-[A-Za-z0-9_-]{20,}' "$file" \
+              | grep -vE 'sk-your-key-here|sk-test-key' >/dev/null; then
+              echo "Potential secret pattern found in $file: sk-*"
+              fail=1
+            fi
+
+            # LLM_API_KEY assignments with a long-looking value.
+            # Short placeholders ("fake", "test", empty) pass through unflagged.
+            if grep -nE 'LLM_API_KEY=[A-Za-z0-9._~+/=-]{20,}' "$file" \
+              | grep -vE 'sk-your-key-here|sk-test-key' >/dev/null; then
+              echo "Potential LLM_API_KEY assignment found in $file"
+              fail=1
+            fi
+
+            # Bearer tokens that look real.
+            if grep -nE 'Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{20,}' "$file" >/dev/null; then
+              echo "Potential bearer token found in $file"
+              fail=1
+            fi
+          done <<< "$FILES"
+
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "Secret scan failed. Replace real values with placeholders"
+            echo "(e.g. sk-your-key-here, sk-test-key) or move them out of"
+            echo "the repo entirely."
+          fi
+          exit "$fail"
+
+  dependency-audit:
+    name: Dependency audit (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Initial roll-out: non-blocking. Advisory DBs / network can flake, and
+    # we want signal first, not red builds. Once the dependency baseline is
+    # stable, flip continue-on-error to false to make this a blocking gate.
+    continue-on-error: true
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit
+
+      - name: Audit Python runtime requirements
+        run: pip-audit -r agent_backend/requirements.txt
+
+      - name: Audit Python dev requirements
+        run: |
+          if [ -f agent_backend/requirements-dev.txt ]; then
+            pip-audit -r agent_backend/requirements-dev.txt
+          else
+            echo "No agent_backend/requirements-dev.txt — skipping."
+          fi
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter outdated report
+        run: |
+          flutter pub get
+          flutter pub outdated || true

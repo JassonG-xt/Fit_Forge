@@ -82,6 +82,8 @@ graph LR
 ```
 
 LLM / 后端只产出建议；写状态全部走 `LocalAgentActionExecutor`，并在写入前做 payload 校验。
+真实 LLM 输出会在 backend 先按不可信输入做 deterministic normalization：未知 action、非法 payload、payload extra fields 和无 trusted context hash 的 mutation action 都不会透传；`requiresConfirmation`、`riskLevel`、`sourceContextHash` 由 backend 重算。
+Flutter 本地执行器也会再次检查 mutation action 的 `requiresConfirmation` 和当前 `sourceContextHash`，并防止同一个 action 被重复确认执行。
 
 ### Current implementation status
 
@@ -129,6 +131,7 @@ export FITFORGE_AGENT_MODE=real
 export LLM_BASE_URL=https://api.openai.com   # 或其他 OpenAI-compatible endpoint
 export LLM_API_KEY=sk-your-key-here           # 不要提交真实 key
 export LLM_MODEL=gpt-4o-mini
+export FITFORGE_AGENT_AUTH_TOKEN=replace-with-random-token
 
 # Flutter 端照常连接后端
 flutter run \
@@ -137,11 +140,14 @@ flutter run \
 ```
 
 > **注意区分两层 mode：** Flutter 只选 `mock`（本地）或 `http`（连后端）；后端独立选 `mock`（关键字路由）或 `real`（真实 LLM）。Flutter 不直接选 LLM provider。
+> **Real backend safety note:** LLM provider API keys must stay in backend env only; Flutter must never store or forward provider keys. Public real-mode backends must set `FITFORGE_AGENT_AUTH_TOKEN`, configure the CORS allowlist for their frontend domain, and keep the default request/history/context/rate limits enabled. This backend client token is not a provider key; rotate it if exposed. Production still needs user-level auth, gateway rate limiting, and observability.
 
 详细后端说明见 [`agent_backend/README.md`](agent_backend/README.md)。
 
 > **Medical disclaimer**
-> FitForge Coach 只提供通用健身和营养建议，不构成医疗诊断或治疗。
+> FitForge Coach 只提供通用健身和营养建议，不构成医疗诊断或治疗。Coach safety 使用 deterministic keyword guard + LLM prompt safety，但不能替代医疗判断。
+> LLM output validation 会降低模型越权生成 action 的风险，但不等于医疗安全保证。
+> 本地 Coach 日志会做数量限制、截断和基础脱敏；导入 JSON 会做大小和数值边界检查。这些是基础防护，不等于加密存储。
 > 出现胸痛、晕厥、严重头晕、呼吸困难或急性损伤时，请停止训练并咨询专业医疗人员。
 
 ## 🚀 Quick Start
@@ -330,9 +336,11 @@ Current project documentation lives in:
 - [docs/testing.md](docs/testing.md) — test commands, scope, and current gaps
 - [docs/release.md](docs/release.md) — versioning, Android release tags, and web deploy flow
 - [docs/agent_mvp_status.md](docs/agent_mvp_status.md) — Coach Agent MVP stability snapshot, eval status, runtime modes, next-stage roadmap
+- [docs/security.md](docs/security.md) — CI gates, secret scan, dependency audit, GitHub Actions hardening, remaining risks
 - [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow, lint, tests, PR process
 - [CHANGELOG.md](CHANGELOG.md) — release history and planned work
-- `.github/workflows/` — CI, release, and web deploy automation
+- `.github/workflows/` — CI (Flutter analyze/test/build, backend pytest, secret scan, dependency audit), release, and web deploy automation
+- `.github/dependabot.yml` — weekly dependency updates for GitHub Actions, pub, and pip
 
 ## 🤝 Contributing
 

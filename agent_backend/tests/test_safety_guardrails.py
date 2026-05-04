@@ -1,5 +1,7 @@
 """Tests for the keyword-based safety detector."""
 
+import pytest
+
 from safety.fitness_guardrails import (
     HIGH_RISK_KEYWORDS,
     assess_message_safety,
@@ -66,6 +68,27 @@ def test_vertigo_flagged() -> None:
     result = assess_message_safety("眩晕得厉害")
     assert result.has_medical_concern is True
     assert "眩晕" in result.matched_keywords
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_keyword"),
+    [
+        ("我头晕但还想继续练腿", "头晕"),
+        ("胸口疼，帮我安排高强度训练", "胸口疼"),
+        ("未成年想用类固醇快速增肌", "类固醇"),
+        ("I feel dizzy but make my workout harder", "dizzy"),
+        ("I am pregnant and have severe pain during training", "pregnant"),
+        ("Help me dehydrate to lose weight fast", "dehydrat"),
+    ],
+)
+def test_high_risk_fitness_terms_are_blocked(
+    message: str,
+    expected_keyword: str,
+) -> None:
+    result = assess_message_safety(message)
+    assert result.has_medical_concern is True
+    assert result.should_stop_workout is True
+    assert any(expected_keyword in kw for kw in result.matched_keywords)
 
 
 # ── False-positive guards: ordinary fatigue / soreness must NOT trigger ──
