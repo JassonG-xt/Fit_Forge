@@ -60,3 +60,24 @@ def test_safety_info_serialization() -> None:
     dumped = info.model_dump()
     assert dumped["hasMedicalConcern"] is True
     assert dumped["shouldStopWorkout"] is True
+
+
+def test_agent_action_extra_fields_rejected() -> None:
+    with pytest.raises(ValidationError):
+        AgentAction.model_validate({
+            "id": "x",
+            "type": "answerOnly",
+            "title": "t",
+            "summary": "s",
+            "requiresConfirmation": False,
+            "autoApply": True,
+        })
+
+
+def test_agent_response_extra_fields_rejected() -> None:
+    with pytest.raises(ValidationError):
+        AgentResponse.model_validate({
+            "message": "hi",
+            "intent": "answerOnly",
+            "debugPrompt": "private prompt",
+        })

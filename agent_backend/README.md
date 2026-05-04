@@ -8,7 +8,7 @@ FastAPI 服务，负责接收 Flutter 客户端的自然语言请求并返回结
 |---|---|
 | Mock keyword-based routing | ✅ implemented |
 | Structured `AgentResponse` schema | ✅ implemented |
-| Safety guardrails (12 keywords) | ✅ implemented |
+| Safety guardrails (expanded deterministic keywords) | ✅ implemented |
 | Real LLM-backed Coach Agent | ✅ implemented (provider-agnostic) |
 | Multi-agent orchestration | 📋 planned |
 
@@ -23,6 +23,11 @@ FastAPI 服务，负责接收 Flutter 客户端的自然语言请求并返回结
 | `LLM_API_KEY` | API key（**只存在 backend 环境变量，绝不写入代码**） | （real 模式必填） |
 | `LLM_MODEL` | 模型名称 | `gpt-4o-mini` |
 | `LLM_TIMEOUT_SECONDS` | LLM HTTP request timeout（秒）。仅作用于 backend real provider；mock 模式、Flutter、CI 不受影响。非法值（空 / 0 / 负数 / 非数字 / NaN / inf）回退到默认值。 | `30` |
+| `FITFORGE_AGENT_AUTH_TOKEN` | backend client token；设置后 `/v1/coach/message` 需要 `X-FitForge-Agent-Token` 或 `Authorization: Bearer`。不要提交真实 token。 | 空（开发模式不校验） |
+| `FITFORGE_MAX_REQUEST_BYTES` | `/v1/coach/message` 请求体大小上限。 | `65536` |
+| `FITFORGE_MAX_CONTEXT_CHARS` | `context` 序列化 JSON 字符数上限。 | `12000` |
+| `FITFORGE_RATE_LIMIT_PER_MINUTE` | 基于 client IP 的简单内存限流。 | `60` |
+| `FITFORGE_CORS_ALLOW_ORIGINS` | 逗号分隔的允许跨域来源；生产环境改成自己的前端域名。 | localhost 常见开发端口 |
 
 支持任何 OpenAI-compatible `/v1/chat/completions` endpoint（OpenAI、Claude via proxy、MiMo、本地模型等）。
 
@@ -34,15 +39,24 @@ export LLM_API_KEY=sk-your-key-here
 export LLM_MODEL=gpt-4o-mini
 # 可选：慢启动 / 冷启动 endpoint 可调大 timeout（默认 30 秒）
 export LLM_TIMEOUT_SECONDS=60
+# 公开部署必须设置；这是 backend client token，不是 provider API key
+export FITFORGE_AGENT_AUTH_TOKEN=replace-with-random-token
 uvicorn main:app --reload --port 8000
 ```
 
 **安全设计：**
 - API key 只存在 backend 环境变量，Flutter 客户端完全不接触
+- 本地开发可复制 `.env.example` 为 `.env`；不要提交真实 `LLM_API_KEY`
+- real 模式 backend 对公网前必须设置 `FITFORGE_AGENT_AUTH_TOKEN`，并把 CORS allowlist 改成自己的前端域名
+- backend client token 不是 LLM provider key；泄露后应立即轮换。生产环境仍需要用户级鉴权、外部网关限流和监控
+- `/v1/coach/message` 默认有 64KB request body limit、message/history/context schema limit、以及 60/min/IP 的简单内存限流
 - Safety 关键词在 LLM 调用前短路（不浪费 token）
 - LLM 返回的 mutation action 会被注入 `sourceContextHash`（从 `context.planContextHash`，不从 LLM 生成）
 - LLM 返回的 mutation action 强制 `requiresConfirmation=true`（即使 LLM 返回 false）
-- LLM 返回 malformed JSON 时回退到安全的 `answerOnly` 响应
+- LLM 输出会先经过 deterministic normalization：未知 action、非法 payload、extra payload fields、无 trusted context hash 的 mutation action 都会被丢弃或安全降级
+- mutation action 的 `riskLevel` 由 backend 按 action 类型重算，不信任模型输出
+- LLM 输出后的 message / payload 会再次跑 deterministic safety guard；命中高风险医疗、伤病、饮食障碍、极端减重、未成年人或类固醇相关内容时，不返回 mutation action
+- LLM 返回 malformed JSON 时回退到安全的 `answerOnly` 响应，日志只记录非敏感元信息（例如长度），不记录 raw LLM 内容
 - Safety response 中的 mutation action 会被自动剥离
 
 ## 目录结构
@@ -138,10 +152,12 @@ curl http://localhost:8000/healthz
 ```bash
 curl -sX POST http://localhost:8000/v1/coach/message \
   -H "Content-Type: application/json" \
+  -H "X-FitForge-Agent-Token: $FITFORGE_AGENT_AUTH_TOKEN" \
   -d '{"message": "今天只有 25 分钟", "context": {}, "history": []}'
 
 curl -sX POST http://localhost:8000/v1/coach/message \
   -H "Content-Type: application/json" \
+  -H "X-FitForge-Agent-Token: $FITFORGE_AGENT_AUTH_TOKEN" \
   -d '{"message": "我胸口疼但想继续练", "context": {}, "history": []}'
 ```
 
@@ -167,7 +183,7 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=mock
 
 ## Safety policy
 
-`safety/fitness_guardrails.py` 包含 12 个高风险关键词（胸口疼 / 胸痛 / 晕倒 / 严重头晕 / 呼吸困难 / 怀孕 / 急性损伤 / 骨折 / 催吐 / 脱水减重 / 饮食障碍等）。
+`safety/fitness_guardrails.py` 包含扩展后的中英文高风险关键词（胸口疼 / 胸痛 / 晕倒 / 严重头晕 / 呼吸困难 / 怀孕 / 急性损伤 / 骨折 / 催吐 / 脱水减重 / 饮食障碍等）。
 
 匹配到任意一个，`coach_agent.py` 会短路返回 `safetyResponse`，建议停止训练并寻求专业帮助；不会返回 `compressWorkout / replaceExercise / rescheduleWeek / generatePlan` 等会修改训练的 action。
 
