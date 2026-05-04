@@ -154,7 +154,7 @@ def _parse_agent_response(raw: str) -> Optional[AgentResponse]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("LLM returned non-JSON output: %s", raw[:200])
+        logger.warning("LLM returned non-JSON output length=%s", len(raw))
         return None
 
     try:

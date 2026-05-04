@@ -1,6 +1,7 @@
 """Tests for the real LLM-backed coach agent provider."""
 
 import json
+import logging
 import os
 from typing import Any, Optional
 from unittest.mock import patch, MagicMock
@@ -339,6 +340,29 @@ def test_real_provider_malformed_json_returns_fallback(mock_call_llm) -> None:
 
     assert resp.intent == "answerOnly"
     assert resp.actions == []
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_non_json_llm_output_does_not_log_raw_private_text(
+    mock_call_llm,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    private_text = "PRIVATE_WEIGHT_72KG_INJURY_DETAIL"
+    mock_call_llm.return_value = private_text
+    request = _make_request()
+
+    with caplog.at_level(logging.WARNING, logger="agents.llm_provider"):
+        resp = run_real_coach_agent(request)
+
+    assert resp.intent == "answerOnly"
+    assert resp.actions == []
+    assert private_text not in caplog.text
+    assert "non-JSON output length=" in caplog.text
 
 
 @patch.dict(os.environ, {
