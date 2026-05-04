@@ -37,7 +37,7 @@ dependencies:
   google_fonts: ^6.2.1
 
   # 工具
-  intl: ^0.19.0
+  intl: ^0.20.2
   uuid: ^4.5.1
 
   # HTTP（用于 Coach Agent 后端通信）
