@@ -30,6 +30,49 @@ void main() {
       expect(response.actions.single.riskLevel, AgentActionRiskLevel.high);
     });
 
+    test('safety risk with compress keywords wins for dizziness', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '我头晕但只有20分钟，帮我压缩训练',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.safetyResponse);
+      expect(response.safety.shouldStopWorkout, true);
+      expect(
+        response.actions.map((a) => a.type),
+        isNot(contains(AgentActionType.compressWorkout)),
+      );
+    });
+
+    test('safety risk in English does not generate mutation action', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: 'I feel dizzy and have chest pain but make my workout harder',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.safetyResponse);
+      expect(response.safety.shouldStopWorkout, true);
+      expect(
+        response.actions.map((a) => a.type),
+        isNot(
+          contains(
+            isIn({
+              AgentActionType.compressWorkout,
+              AgentActionType.replaceExercise,
+              AgentActionType.rescheduleWeek,
+              AgentActionType.generatePlan,
+            }),
+          ),
+        ),
+      );
+    });
+
     test('compress detects target minutes', () async {
       final state = await primedAppStateWithProfile();
       final context = const AgentContextBuilder().build(state);
