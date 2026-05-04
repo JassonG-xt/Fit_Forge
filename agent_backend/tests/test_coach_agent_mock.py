@@ -601,3 +601,53 @@ def test_mock_safety_still_short_circuits_with_complete_profile() -> None:
     assert response.safety.shouldStopWorkout is True
     for action in response.actions:
         assert action.type != "generatePlan"
+
+
+# ── Promoted generatePlan paraphrases ──
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "我想开始减脂，给我一个训练计划",
+        "我是新手，一周练三次，帮我安排",
+        "我想提升耐力，帮我安排训练",
+        "我刚开始健身，给我一个简单计划",
+    ],
+    ids=["lose_fat", "beginner_3x", "endurance", "simple_beginner"],
+)
+def test_mock_generate_plan_promoted_paraphrases(message: str) -> None:
+    """These 4 paraphrases now route to generatePlan via mock router."""
+    response = _run_mock_coach_agent(_request(message))
+    assert response.actions, f"expected actions for: {message}"
+    action = response.actions[0]
+    assert action.type == "generatePlan", (
+        f"expected generatePlan for '{message}', got {action.type}"
+    )
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+    assert action.payload == {"usePreviewPlan": True}
+
+
+def test_mock_generate_plan_no_full_plan_body() -> None:
+    """Mock provider returns structured action, not a full plan body."""
+    response = _run_mock_coach_agent(
+        _request("我想开始减脂，给我一个训练计划")
+    )
+    # The response message should be a short routing message, not a full plan
+    assert len(response.message) < 200, (
+        f"mock response message too long ({len(response.message)} chars), "
+        f"possibly contains full plan body"
+    )
+
+
+def test_mock_arrange_does_not_false_trigger_generate_plan() -> None:
+    """'安排' alone without '新手' or '耐力' should not trigger generatePlan."""
+    response = _run_mock_coach_agent(
+        _request("我今天怎么安排？")
+    )
+    # This should NOT be generatePlan — it's a general question
+    for action in response.actions:
+        assert action.type != "generatePlan", (
+            f"'我今天怎么安排？' should not trigger generatePlan"
+        )

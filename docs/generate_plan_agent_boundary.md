@@ -62,18 +62,16 @@ LLM **不**负责：
 | caseId | userMessage | status | 说明 |
 |--------|-------------|--------|------|
 | `generate_muscle_zh_001` | 帮我生成一个增肌计划 | active | mock 关键词 `生成` 触发 |
-| `generate_lose_fat_zh_002` | 我想开始减脂，给我一个训练计划 | expectedGap | 无 mock 关键词 |
-| `generate_beginner_3x_zh_003` | 我是新手，一周练三次，帮我安排 | expectedGap | 与 rescheduleWeek 歧义 |
-| `generate_endurance_zh_004` | 我想提升耐力，帮我安排训练 | expectedGap | `帮我安排训练` 模糊 |
-| `generate_simple_for_beginner_zh_005` | 我刚开始健身，给我一个简单计划 | expectedGap | `简单计划` 不匹配 |
+| `generate_lose_fat_zh_002` | 我想开始减脂，给我一个训练计划 | active | MiMo 3/3 converted; mock compound rule `给` + `计划` |
+| `generate_beginner_3x_zh_003` | 我是新手，一周练三次，帮我安排 | active | MiMo 3/3 converted; mock compound rule `新手` + `安排` |
+| `generate_endurance_zh_004` | 我想提升耐力，帮我安排训练 | active | MiMo 3/3 converted; mock compound rule `耐力` + `安排` |
+| `generate_simple_for_beginner_zh_005` | 我刚开始健身，给我一个简单计划 | active | MiMo 3/3 converted; mock compound rule `给` + `计划` |
 
 ### expectedGap 的正确归属
 
-这 4 个 `expectedGap` **属于 LLM 侧的能力缺口**，不是 mock router 的缺陷：
+~~这 4 个 `expectedGap` **属于 LLM 侧的能力缺口**，不是 mock router 的缺陷：~~
 
-- mock router 的关键词集是刻意最小化的，只为覆盖最直接的表达
-- real LLM 应该能识别"减脂""新手""耐力""简单计划"等变体表达
-- 这些 case 作为 LLM 的回归信号保留，不应通过扩展 mock 关键词来"修复"
+这 4 个 case 已在 MiMo v2.5 Pro 3/3 clean converted 后提升为 active。之前的 expectedGap 状态是因为 eval harness context 不匹配（`frequencyPerWeek` bug + 固定 `goal: "buildMuscle"`），而非模型能力不足。修复 harness context（PR #15）后，MiMo 稳定返回 `generatePlan` action。
 
 ### 不应采取的措施
 

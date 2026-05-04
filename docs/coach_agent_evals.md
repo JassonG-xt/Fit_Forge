@@ -87,12 +87,12 @@ records the case so we can flip it to `active` once a real LLM is wired up."*
 compressWorkout   : 6 active / 1 expectedGap
 replaceExercise   : 4 active / 2 expectedGap
 rescheduleWeek    : 5 active / 1 expectedGap
-generatePlan      : 1 active / 4 expectedGap
+generatePlan      : 5 active / 0 expectedGap
 nonMutatingCoaching: 5 active / 0
 safety            : 6 active / 0
 promptInjection   : 6 active / 0
                   ────────────────────────
-total             : 33 active / 8 expectedGap (41 cases)
+total             : 37 active / 4 expectedGap (41 cases)
 ```
 
 ### Cross-run promotion of three paraphrases (history)
@@ -123,6 +123,24 @@ recognize these specific paraphrases that the real LLM already handles. It is
 **not** a long-term direction to keep extending the keyword router. Mixed
 cases and stable-gap cases stay as `expectedGap` and remain the responsibility
 of the real LLM in the production path.
+
+### Cross-run promotion of four generatePlan paraphrases (history)
+
+After PR #15 fixed the eval harness context construction (`frequencyPerWeek` →
+`weeklyFrequency` + `contextOverride.profile` support), four generatePlan
+paraphrases reached 3/3 clean conversion across Run 8 (mimo-v2.5-pro,
+`LLM_TIMEOUT_SECONDS=90`) and were promoted from `expectedGap` to `active`:
+
+| caseId | userMessage | mock router change |
+|--------|-------------|--------------------|
+| `generate_lose_fat_zh_002` | 我想开始减脂，给我一个训练计划 | compound rule: `给` + `计划` → generatePlan |
+| `generate_beginner_3x_zh_003` | 我是新手，一周练三次，帮我安排 | compound rule: `新手` + `安排` → generatePlan |
+| `generate_endurance_zh_004` | 我想提升耐力，帮我安排训练 | compound rule: `耐力` + `安排` → generatePlan |
+| `generate_simple_for_beginner_zh_005` | 我刚开始健身，给我一个简单计划 | compound rule: `给` + `计划` → generatePlan |
+
+These cases keep their `contextOverride.profile` metadata for real eval alignment.
+The generatePlan context completeness guard ensures that even if context is
+incomplete at runtime, the agent returns a clarification instead of a broken action.
 
 ### Promoted as a clarification case (history)
 
@@ -188,15 +206,13 @@ These are pinned by `tests/test_safety_guardrails.py`.
 
 ### Cases that remain `expectedGap` (and why)
 
-After this round, the remaining 8 expectedGap cases are concentrated in
-`generatePlan` (4) and other long-running gaps:
+After this round, the remaining 4 expectedGap cases are stable gaps and one volatile case:
 
 | caseId | reason it is NOT promoted |
 |--------|----------------------------|
 | `replace_too_hard_zh_006` (`这个动作太难了，换简单一点`) | LLM behavior is volatile (2/4 converted across runs). Defer until a future model run. |
 | `compress_short_no_minutes_zh_004` | Confirmed real LLM gap (not timeout pollution). Also guarded against guessed `compressWorkout` if the LLM ever tries — same rationale as `compress_busy_no_minutes_zh_007`. |
 | `reschedule_only_two_days_zh_005`, `replace_pullup_alternative_zh_005` | Stable LLM gaps; kept as regression signals. |
-| 4 × `generatePlan` | Untested cross-run with the current model. Out of scope for this PR. |
 
 ### generatePlan context completeness guard
 

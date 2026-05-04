@@ -383,6 +383,10 @@ def _has_any(text: str, keys: Iterable[str]) -> bool:
     return any(k in text for k in keys)
 
 
+def _has_all(text: str, keys: Iterable[str]) -> bool:
+    return all(k in text for k in keys)
+
+
 _GENERATE_PLAN_CLARIFICATION_MESSAGE = (
     "可以帮你生成训练计划。为了安排得更合适，我需要先确认你的目标、"
     "每周能练几次、以及你的训练经验水平。"
@@ -433,6 +437,12 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
             return rescheduled
 
     if _has_any(message, ("生成", "做个计划", "新计划", "新的训练计划", "帮我做计划")):
+        return _generate_plan_response()
+
+    # Compound generatePlan rules: require two tokens to avoid false positives.
+    if (_has_all(message, ("给", "计划"))
+            or _has_all(message, ("新手", "安排"))
+            or _has_all(message, ("耐力", "安排"))):
         return _generate_plan_response()
 
     if _has_any(message, ("总结", "复盘", "本周训练", "这周训练", "一周训练")):

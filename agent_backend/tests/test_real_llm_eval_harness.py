@@ -475,7 +475,6 @@ def _generate_plan_cases_with_override() -> List[Dict[str, Any]]:
     return [
         c for c in load_cases(_EVALS_FILE)
         if c["category"] == "generatePlan"
-        and c["status"] == "expectedGap"
         and c.get("contextOverride", {}).get("profile")
     ]
 
