@@ -20,6 +20,9 @@ class LocalAgentActionExecutor {
   final AppState appState;
 
   Future<AgentActionResult> execute(AgentAction action) async {
+    final mutationGuard = _validateMutationBoundary(action);
+    if (mutationGuard != null) return mutationGuard;
+
     switch (action.type) {
       case AgentActionType.generatePlan:
         return _generatePlan(action);
@@ -41,6 +44,42 @@ class LocalAgentActionExecutor {
   static AgentActionResult? _requireActivePlan(WorkoutPlan? plan) {
     if (plan == null) {
       return AgentActionResult.failure('当前没有可调整的训练计划。');
+    }
+    return null;
+  }
+
+  static bool _isMutation(AgentActionType type) {
+    switch (type) {
+      case AgentActionType.generatePlan:
+      case AgentActionType.rescheduleWeek:
+      case AgentActionType.replaceExercise:
+      case AgentActionType.compressWorkout:
+        return true;
+      case AgentActionType.answerOnly:
+      case AgentActionType.nutritionAdvice:
+      case AgentActionType.weeklyReview:
+      case AgentActionType.safetyResponse:
+        return false;
+    }
+  }
+
+  AgentActionResult? _validateMutationBoundary(AgentAction action) {
+    if (!_isMutation(action.type)) return null;
+    if (!action.requiresConfirmation) {
+      return AgentActionResult.failure('该修改建议缺少用户确认要求，已拒绝执行。');
+    }
+
+    final plan = appState.activePlan;
+    if (plan == null) return null;
+
+    final expected = action.sourceContextHash;
+    if (expected == null || expected.isEmpty) {
+      return AgentActionResult.failure('修改建议缺少训练计划校验信息，请重新让教练生成建议。');
+    }
+
+    final current = computePlanContextHash(plan);
+    if (current != expected) {
+      return AgentActionResult.failure('训练计划已经发生变化，请重新让教练生成建议。');
     }
     return null;
   }

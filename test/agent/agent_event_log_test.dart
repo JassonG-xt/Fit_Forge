@@ -107,6 +107,52 @@ void main() {
       expect(log.events.map((e) => e.id), ['e-2', 'e-3', 'e-4']);
     });
 
+    test('event_log_caps_retained_events', () async {
+      final log = AgentEventLog(maxEvents: 3);
+      await log.hydrate();
+
+      for (var i = 0; i < 6; i++) {
+        log.record(
+          id: 'event-$i',
+          userMessage: 'message $i',
+          agentMessage: 'ok',
+        );
+      }
+
+      expect(log.events, hasLength(3));
+      expect(log.events.first.id, 'event-3');
+      expect(log.events.last.id, 'event-5');
+    });
+
+    test('event_log_truncates_long_messages', () async {
+      final log = AgentEventLog();
+      await log.hydrate();
+
+      log.record(id: 'long', userMessage: 'x' * 1000, agentMessage: 'y' * 1000);
+
+      expect(log.events.single.userMessage.length, lessThanOrEqualTo(520));
+      expect(log.events.single.agentMessage.length, lessThanOrEqualTo(520));
+    });
+
+    test('event_log_redacts_sensitive_health_text', () async {
+      final log = AgentEventLog();
+      await log.hydrate();
+
+      log.record(
+        id: 'sensitive',
+        userMessage: '我的体重是72kg，胸痛但想继续训练',
+        agentMessage: 'Your weight is 72kg and chest pain needs care.',
+      );
+
+      final stored =
+          '${log.events.single.userMessage}\n'
+          '${log.events.single.agentMessage}';
+      expect(stored, contains('[redacted]'));
+      expect(stored, isNot(contains('72kg')));
+      expect(stored, isNot(contains('胸痛但想继续训练')));
+      expect(stored, isNot(contains('chest pain needs care')));
+    });
+
     test('persists events across instances', () async {
       final first = AgentEventLog();
       await first.hydrate();

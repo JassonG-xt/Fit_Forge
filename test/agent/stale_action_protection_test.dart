@@ -121,9 +121,10 @@ void main() {
       expect(result.message, contains('已经发生变化'));
     });
 
-    test('legacy action without hash executes normally', () async {
+    test('legacy mutation action without hash is rejected', () async {
       final state = await primedAppStateWithProfile();
       state.adoptPlan(_seedPlan());
+      final before = state.activePlan!.toJson();
       final executor = LocalAgentActionExecutor(state);
 
       final result = await executor.execute(
@@ -132,7 +133,9 @@ void main() {
           'targetMinutes': 15,
         }),
       );
-      expect(result.success, true);
+      expect(result.success, false);
+      expect(result.message, contains('校验信息'));
+      expect(state.activePlan!.toJson(), before);
     });
 
     test('failure message is in Chinese', () async {

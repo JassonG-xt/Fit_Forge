@@ -7,6 +7,7 @@ import 'package:fit_forge/agent/agent_service.dart';
 import 'package:fit_forge/agent/local_agent_action_executor.dart';
 import 'package:fit_forge/agent/mocks/mock_agent_client.dart';
 import 'package:fit_forge/agent/models/agent_action.dart';
+import 'package:fit_forge/agent/models/agent_action_result.dart';
 import 'package:fit_forge/agent/models/agent_context_snapshot.dart';
 import 'package:fit_forge/agent/models/agent_intent.dart';
 import 'package:fit_forge/agent/models/agent_message.dart';
@@ -22,6 +23,23 @@ class _ThrowingAgentClient implements AgentClient {
     required List<AgentMessage> history,
   }) async {
     throw Exception('connection refused');
+  }
+}
+
+class _CountingExecutor extends LocalAgentActionExecutor {
+  _CountingExecutor(super.appState, {this.failFirst = false});
+
+  final bool failFirst;
+  int calls = 0;
+
+  @override
+  Future<AgentActionResult> execute(AgentAction action) async {
+    calls++;
+    await Future<void>.delayed(Duration.zero);
+    if (failFirst && calls == 1) {
+      return AgentActionResult.failure('temporary failure');
+    }
+    return AgentActionResult.success(title: 'ok', message: 'done');
   }
 }
 
@@ -191,6 +209,58 @@ void main() {
       expect(eventLog.events.last.accepted, true);
       expect(eventLog.events.last.executed, false);
       expect(eventLog.events.last.failureReason, isNotNull);
+    });
+
+    test('confirmAction executes once when called concurrently', () async {
+      final state = await primedAppStateWithProfile();
+      final executor = _CountingExecutor(state);
+      final service = AgentService(
+        appState: state,
+        client: MockAgentClient(delay: Duration.zero),
+        executor: executor,
+      );
+      final action = AgentAction(
+        id: 'action-1',
+        type: AgentActionType.compressWorkout,
+        title: 'Compress',
+        summary: 'Compress',
+        requiresConfirmation: true,
+        payload: const {'dayOfWeek': 1, 'targetMinutes': 20},
+      );
+
+      final results = await Future.wait([
+        service.confirmAction(action),
+        service.confirmAction(action),
+      ]);
+
+      expect(executor.calls, 1);
+      expect(results.where((r) => r.success), hasLength(2));
+      expect(results.where((r) => r.title == '无需修改'), hasLength(1));
+    });
+
+    test('processing action is cleared after executor failure', () async {
+      final state = await primedAppStateWithProfile();
+      final executor = _CountingExecutor(state, failFirst: true);
+      final service = AgentService(
+        appState: state,
+        client: MockAgentClient(delay: Duration.zero),
+        executor: executor,
+      );
+      final action = AgentAction(
+        id: 'retry-action',
+        type: AgentActionType.compressWorkout,
+        title: 'Compress',
+        summary: 'Compress',
+        requiresConfirmation: true,
+        payload: const {'dayOfWeek': 1, 'targetMinutes': 20},
+      );
+
+      final first = await service.confirmAction(action);
+      final second = await service.confirmAction(action);
+
+      expect(first.success, false);
+      expect(second.success, true);
+      expect(executor.calls, 2);
     });
   });
 }

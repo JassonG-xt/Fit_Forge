@@ -38,6 +38,7 @@ class AgentService extends ChangeNotifier {
 
   final List<AgentMessage> _messages = <AgentMessage>[];
   final Set<String> _processedActionIds = <String>{};
+  final Set<String> _processingActionIds = <String>{};
   bool _isSending = false;
   String? _lastError;
 
@@ -47,7 +48,8 @@ class AgentService extends ChangeNotifier {
 
   /// 用户已经确认或取消过的 action id，UI 用来禁用按钮。
   bool isActionResolved(String actionId) =>
-      _processedActionIds.contains(actionId);
+      _processedActionIds.contains(actionId) ||
+      _processingActionIds.contains(actionId);
 
   Future<void> sendUserMessage(String text) async {
     final trimmed = text.trim();
@@ -100,16 +102,37 @@ class AgentService extends ChangeNotifier {
     if (_processedActionIds.contains(action.id)) {
       return AgentActionResult.noop('该建议已经处理过。');
     }
-    final result = await _executor.execute(action);
-    _processedActionIds.add(action.id);
-    _eventLog?.updateOutcome(
-      actionId: action.id,
-      accepted: true,
-      executed: result.success,
-      failureReason: result.success ? null : result.message,
-    );
+    if (_processingActionIds.contains(action.id)) {
+      return AgentActionResult.noop('该建议正在处理。');
+    }
+
+    _processingActionIds.add(action.id);
     notifyListeners();
-    return result;
+    try {
+      final result = await _executor.execute(action);
+      if (result.success) {
+        _processedActionIds.add(action.id);
+      }
+      _eventLog?.updateOutcome(
+        actionId: action.id,
+        accepted: true,
+        executed: result.success,
+        failureReason: result.success ? null : result.message,
+      );
+      return result;
+    } catch (e) {
+      final result = AgentActionResult.failure('执行建议失败：$e');
+      _eventLog?.updateOutcome(
+        actionId: action.id,
+        accepted: true,
+        executed: false,
+        failureReason: result.message,
+      );
+      return result;
+    } finally {
+      _processingActionIds.remove(action.id);
+      notifyListeners();
+    }
   }
 
   void cancelAction(AgentAction action) {
@@ -125,6 +148,7 @@ class AgentService extends ChangeNotifier {
   void clearMessages() {
     _messages.clear();
     _processedActionIds.clear();
+    _processingActionIds.clear();
     _lastError = null;
     notifyListeners();
   }
