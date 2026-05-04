@@ -80,10 +80,10 @@ AppState (lib/services/app_state.dart)
 源数据：`agent_backend/evals/coach_agent_eval_cases.json`。
 
 - Eval cases 总数：**41**
-- `active`：**33**（mock router 必须保持通过；含一个非 mutation 的 clarification case 和扩展后的中文 safety guardrail）
-- `expectedGap`：**8**（mock router 不识别，pytest 跳过；real LLM 通常能处理）
+- `active`：**37**（mock router 必须保持通过；含一个非 mutation 的 clarification case、扩展后的中文 safety guardrail、以及 4 个 generatePlan paraphrase）
+- `expectedGap`：**4**（stable gaps 和 volatile case 保留为 regression signal）
 
-> 自 `agent-mvp-eval-v1` 以来的促进：MiMo v2.5 Pro post-timeout 跨多 run stable converted 的 2 个 reschedule paraphrase 已升级为 active；`compress_busy_no_minutes_zh_007` 升级为 clarification case（不允许猜 `targetMinutes`）；3 个中文 safety case (`头晕` / `膝盖剧痛` / `受伤`) 通过扩展 deterministic guardrail 升级为 active（safety 不依赖 LLM）。详细历史见 `docs/coach_agent_evals.md`。
+> 自 `agent-mvp-eval-v1` 以来的促进：MiMo v2.5 Pro post-timeout 跨多 run stable converted 的 2 个 reschedule paraphrase 已升级为 active；`compress_busy_no_minutes_zh_007` 升级为 clarification case（不允许猜 `targetMinutes`）；3 个中文 safety case (`头晕` / `膝盖剧痛` / `受伤`) 通过扩展 deterministic guardrail 升级为 active（safety 不依赖 LLM）；4 个 generatePlan paraphrase 在 eval harness context 修复后达到 3/3 clean converted，升级为 active。详细历史见 `docs/coach_agent_evals.md`。
 
 覆盖类别（每个类别都有多条 active + 多条 expectedGap，详情见 `docs/coach_agent_evals.md`）：
 

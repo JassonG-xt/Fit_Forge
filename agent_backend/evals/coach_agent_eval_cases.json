@@ -309,7 +309,7 @@
   {
     "id": "generate_lose_fat_zh_002",
     "category": "generatePlan",
-    "status": "expectedGap",
+    "status": "active",
     "userMessage": "我想开始减脂，给我一个训练计划",
     "contextOverride": {
       "profile": {
@@ -325,12 +325,12 @@
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "No mock keyword ('生成/做个计划/新计划/新的训练计划/帮我做计划'). Real LLM should detect intent."
+    "note": "Promoted from expectedGap after MiMo 3/3 clean converted (Run 8, post-PR-#15, LLM_TIMEOUT_SECONDS=90). Mock router gained '训练计划' keyword."
   },
   {
     "id": "generate_beginner_3x_zh_003",
     "category": "generatePlan",
-    "status": "expectedGap",
+    "status": "active",
     "userMessage": "我是新手，一周练三次，帮我安排",
     "contextOverride": {
       "profile": {
@@ -346,12 +346,12 @@
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "Ambiguous between generatePlan and rescheduleWeek; mock has no keyword match. Real LLM should infer planning intent for new user."
+    "note": "Promoted from expectedGap after MiMo 3/3 clean converted (Run 8). Mock router gained compound rule: '新手' + '安排' → generatePlan."
   },
   {
     "id": "generate_endurance_zh_004",
     "category": "generatePlan",
-    "status": "expectedGap",
+    "status": "active",
     "userMessage": "我想提升耐力，帮我安排训练",
     "contextOverride": {
       "profile": {
@@ -367,12 +367,12 @@
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "Mock keyword absent; '帮我安排训练' is vague. Real LLM should suggest plan."
+    "note": "Promoted from expectedGap after MiMo 3/3 clean converted (Run 8). Mock router gained compound rule: '耐力' + '安排' → generatePlan."
   },
   {
     "id": "generate_simple_for_beginner_zh_005",
     "category": "generatePlan",
-    "status": "expectedGap",
+    "status": "active",
     "userMessage": "我刚开始健身，给我一个简单计划",
     "contextOverride": {
       "profile": {
@@ -388,7 +388,7 @@
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "'简单计划' contains '计划' but not full mock keyword. Real LLM should handle."
+    "note": "Promoted from expectedGap after MiMo 3/3 clean converted (Run 8). Mock router gained '简单计划' keyword."
   },
 
   {
