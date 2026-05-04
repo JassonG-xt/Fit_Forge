@@ -378,11 +378,9 @@ def test_real_provider_does_not_inject_when_trusted_hash_missing(mock_call_llm) 
     """If context.planContextHash is absent, the provider must NOT silently
     use the LLM-supplied sourceContextHash.
 
-    This documents the current behavior: when no trusted hash exists, the
-    LLM-supplied hash is preserved on the action (since `_inject_action_safety`
-    only overwrites when plan_context_hash is truthy). Downstream stale-action
-    checks treat any non-null hash as a constraint, so a hash that does not
-    match the actual plan will simply fail the stale check on execute.
+    PR3 hardening treats mutation actions without a trusted context hash as
+    unsafe, so the mutation is dropped instead of preserving any LLM-supplied
+    hash.
     """
     mock_call_llm.return_value = _canonical_llm_response(
         "rescheduleWeek",
@@ -393,9 +391,5 @@ def test_real_provider_does_not_inject_when_trusted_hash_missing(mock_call_llm) 
         context={"planContextHash": None, "todayWorkout": {"dayOfWeek": 1}},
     )
     response = run_real_coach_agent(request)
-    # When trusted hash is missing, the provider does not overwrite — but the
-    # LLM-supplied value will fail the Flutter-side stale check anyway because
-    # the actual plan hash won't match.
-    action = response.actions[0]
-    # Documenting current behavior:
-    assert action.sourceContextHash == "some_hash_from_llm"
+    assert response.intent == "answerOnly"
+    assert response.actions == []

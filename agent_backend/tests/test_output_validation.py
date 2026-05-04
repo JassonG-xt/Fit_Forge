@@ -1,0 +1,341 @@
+"""Deterministic validation for untrusted LLM output."""
+
+from typing import Optional
+
+from agents.output_validation import normalize_agent_response
+
+
+def _base_response(action: Optional[dict] = None, **overrides) -> dict:
+    data = {
+        "message": "好的。",
+        "intent": "answerOnly",
+        "confidence": 0.8,
+        "actions": [] if action is None else [action],
+        "safety": {"hasMedicalConcern": False, "shouldStopWorkout": False},
+    }
+    data.update(overrides)
+    return data
+
+
+def _mutation_action(action_type: str, payload: dict) -> dict:
+    return {
+        "id": "llm_action",
+        "type": action_type,
+        "title": "LLM title",
+        "summary": "LLM summary",
+        "requiresConfirmation": False,
+        "riskLevel": "low",
+        "sourceContextHash": "attacker_hash",
+        "payload": payload,
+    }
+
+
+def test_unknown_action_type_is_dropped() -> None:
+    raw = _base_response(
+        {
+            "id": "bad",
+            "type": "deleteAllData",
+            "title": "Delete",
+            "summary": "Delete everything",
+            "requiresConfirmation": False,
+            "payload": {},
+        },
+        intent="deleteAllData",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="hello",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+
+
+def test_mutation_requires_confirmation_is_recomputed() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "compressWorkout",
+            {"dayOfWeek": 1, "targetMinutes": 20},
+        ),
+        intent="compressWorkout",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="今天只有20分钟，帮我压缩训练",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+
+    assert response.actions[0].requiresConfirmation is True
+
+
+def test_mutation_risk_level_is_recomputed() -> None:
+    raw = _base_response(
+        _mutation_action("generatePlan", {"usePreviewPlan": True}),
+        intent="generatePlan",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="帮我生成训练计划",
+        context_hash="trusted_hash",
+        context_profile={
+            "goal": "buildMuscle",
+            "weeklyFrequency": 4,
+            "experienceLevel": "beginner",
+        },
+    )
+
+    assert response.actions[0].riskLevel == "high"
+
+
+def test_source_context_hash_is_recomputed_or_missing_hash_rejected() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "rescheduleWeek",
+            {"availableWeekdays": [2, 4]},
+        ),
+        intent="rescheduleWeek",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="把训练安排到周二周四",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+    assert response.actions[0].sourceContextHash == "trusted_hash"
+
+    missing_hash_response = normalize_agent_response(
+        raw,
+        user_message="把训练安排到周二周四",
+        context_hash=None,
+        context_profile={},
+    )
+    assert missing_hash_response.actions == []
+    assert missing_hash_response.intent == "answerOnly"
+
+
+def test_action_extra_fields_are_not_preserved() -> None:
+    action = _mutation_action(
+        "compressWorkout",
+        {"dayOfWeek": 1, "targetMinutes": 20},
+    )
+    action["autoApply"] = True
+
+    response = normalize_agent_response(
+        _base_response(action, intent="compressWorkout"),
+        user_message="今天只有20分钟",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+
+    dumped = response.model_dump()
+    assert "autoApply" not in dumped["actions"][0]
+
+
+def test_payload_extra_fields_are_rejected() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "replaceExercise",
+            {
+                "dayOfWeek": 1,
+                "fromExerciseId": "bench_press",
+                "toExerciseId": "incline_db_press",
+                "deleteAllData": True,
+            },
+        ),
+        intent="replaceExercise",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="帮我替换动作",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+
+    assert response.actions == []
+    assert "deleteAllData" not in response.model_dump_json()
+
+
+def test_payload_wrong_type_is_rejected() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "compressWorkout",
+            {"dayOfWeek": 1, "targetMinutes": "20"},
+        ),
+        intent="compressWorkout",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="今天只有20分钟",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+
+    assert response.actions == []
+
+
+def test_post_llm_safety_filter_strips_mutations() -> None:
+    raw = _base_response(
+        _mutation_action("generatePlan", {"usePreviewPlan": True}),
+        intent="generatePlan",
+        message="Use steroids to bulk faster.",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="帮我生成训练计划",
+        context_hash="trusted_hash",
+        context_profile={
+            "goal": "buildMuscle",
+            "weeklyFrequency": 4,
+            "experienceLevel": "beginner",
+        },
+    )
+
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    assert all(a.type != "generatePlan" for a in response.actions)
+
+
+def test_generate_plan_cannot_bypass_context_completeness_guard() -> None:
+    action = _mutation_action("generatePlan", {"usePreviewPlan": True})
+    action["payload"]["contextComplete"] = True
+
+    response = normalize_agent_response(
+        _base_response(action, intent="generatePlan"),
+        user_message="帮我生成训练计划",
+        context_hash="trusted_hash",
+        context_profile={"goal": "buildMuscle"},
+    )
+
+    assert response.actions == []
+    assert response.intent == "answerOnly"
+
+
+def test_malformed_outputs_fall_back_without_mutations() -> None:
+    for raw in [
+        [],
+        {},
+        {"message": "hi", "intent": "answerOnly", "actions": "bad"},
+        _base_response({"id": "missing_type"}, intent="compressWorkout"),
+        _base_response(_mutation_action("compressWorkout", []), intent="compressWorkout"),
+    ]:
+        response = normalize_agent_response(
+            raw,
+            user_message="hello",
+            context_hash="trusted_hash",
+            context_profile={},
+        )
+
+        assert response.intent == "answerOnly"
+        assert response.actions == []
+
+
+def test_valid_replace_exercise_action_survives_normalization() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "replaceExercise",
+            {
+                "dayOfWeek": 1,
+                "fromExerciseId": "bench_press",
+                "toExerciseId": "incline_db_press",
+                "reason": "no barbell",
+            },
+        ),
+        intent="replaceExercise",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="帮我替换动作",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+
+    assert response.actions[0].type == "replaceExercise"
+    assert response.actions[0].payload == {
+        "dayOfWeek": 1,
+        "fromExerciseId": "bench_press",
+        "toExerciseId": "incline_db_press",
+        "reason": "no barbell",
+    }
+
+
+def test_valid_compress_workout_action_survives_normalization() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "compressWorkout",
+            {"dayOfWeek": 1, "targetMinutes": 20, "reason": "short session"},
+        ),
+        intent="compressWorkout",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="今天只有20分钟",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+
+    assert response.actions[0].type == "compressWorkout"
+    assert response.actions[0].payload["targetMinutes"] == 20
+
+
+def test_valid_reschedule_week_action_survives_normalization() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "rescheduleWeek",
+            {"availableWeekdays": [2, 4], "preserveWorkoutOrder": True},
+        ),
+        intent="rescheduleWeek",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="安排到周二周四",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+
+    assert response.actions[0].type == "rescheduleWeek"
+    assert response.actions[0].payload["availableWeekdays"] == [2, 4]
+
+
+def test_valid_answer_only_survives_normalization() -> None:
+    response = normalize_agent_response(
+        _base_response(message="可以先保持当前计划。"),
+        user_message="hello",
+        context_hash=None,
+        context_profile={},
+    )
+
+    assert response.intent == "answerOnly"
+    assert response.message == "可以先保持当前计划。"
+    assert response.actions == []
+
+
+def test_too_many_actions_are_capped_or_rejected() -> None:
+    actions = [
+        _mutation_action("compressWorkout", {"dayOfWeek": 1, "targetMinutes": 20}),
+        _mutation_action("compressWorkout", {"dayOfWeek": 1, "targetMinutes": 25}),
+        _mutation_action("compressWorkout", {"dayOfWeek": 1, "targetMinutes": 30}),
+        _mutation_action("compressWorkout", {"dayOfWeek": 1, "targetMinutes": 35}),
+    ]
+    raw = _base_response(intent="compressWorkout", actions=actions)
+
+    response = normalize_agent_response(
+        raw,
+        user_message="今天只有20分钟",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+
+    assert len(response.actions) <= 3

@@ -190,7 +190,10 @@ def test_parse_invalid_json_returns_none() -> None:
 
 
 def test_parse_invalid_schema_returns_none() -> None:
-    assert _parse_agent_response('{"totally": "wrong"}') is None
+    resp = _parse_agent_response('{"totally": "wrong"}')
+    assert resp is not None
+    assert resp.intent == "answerOnly"
+    assert resp.actions == []
 
 
 # ── sourceContextHash injection ──
