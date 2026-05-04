@@ -1,0 +1,39 @@
+# Dependabot configuration.
+#
+# Covers the three ecosystems used by this repo:
+#   - GitHub Actions (workflow files under .github/workflows/)
+#   - Flutter / pub (root pubspec.yaml + pubspec.lock)
+#   - Python / pip (agent_backend/requirements*.txt)
+#
+# Scope:
+#   - Weekly cadence keeps PR noise low.
+#   - open-pull-requests-limit caps queue depth per ecosystem.
+#   - Labels make these PRs easy to filter and triage.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+
+  - package-ecosystem: "pub"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "flutter"
+
+  - package-ecosystem: "pip"
+    directory: "/agent_backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"

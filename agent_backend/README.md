@@ -100,6 +100,24 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
+## CI
+
+`.github/workflows/ci.yml` 中的 `backend-test` job 在每次 PR / push 都会跑
+`python -m pytest`，作为 blocking gate。CI 用 fake placeholder env（
+`LLM_BASE_URL=http://127.0.0.1:9/v1`、`LLM_API_KEY=sk-test-key`、
+`LLM_MODEL=test-model`），不会调用任何真实 LLM provider。
+
+同一 workflow 还跑：
+
+- `secret-scan`（blocking）— grep tracked source/docs/config，长得像真实
+  `sk-…` / `LLM_API_KEY=…` / bearer token 的字符串会让 build 红；
+  placeholder（`sk-your-key-here`、`sk-test-key`、空赋值、短字面量）会放过。
+- `dependency-audit`（informational / non-blocking）— `pip-audit -r`
+  `requirements.txt` 和 `requirements-dev.txt`，再加 `flutter pub outdated`。
+  初期不阻塞 PR，后续依赖基线稳定后会切换为 blocking。
+
+详见 `docs/security.md`。
+
 ## Endpoints
 
 ### `GET /healthz`
