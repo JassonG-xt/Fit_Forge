@@ -86,3 +86,6 @@ agent_backend/.pytest_cache/
 agent_backend/evals/results/*.json
 agent_backend/evals/results/*.md
 !agent_backend/evals/results/.gitkeep
+
+# Local agent instruction files
+AGENTS.md
