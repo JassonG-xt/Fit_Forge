@@ -99,6 +99,10 @@ Flutter 本地执行器也会再次检查 mutation action 的 `requiresConfirmat
 
 默认 **mock / 离线模式**，不需要联网，不需要后端。可选启动 FastAPI 后端 + real provider 模式接入真实 LLM（OpenAI / Claude / MiMo / 其他 OpenAI-compatible endpoint）。详见 [`agent_backend/README.md`](agent_backend/README.md)。
 
+> **Showcase 入口**：
+> - [`docs/agent_capabilities.md`](docs/agent_capabilities.md) — 完整能力地图（mode / action / safety / privacy / 当前限制 / out-of-scope）
+> - [`docs/coach_agent_demo_script.md`](docs/coach_agent_demo_script.md) — 5 分钟 demo 脚本（reschedule / replace / compress / safety 四个核心场景）
+
 ### Running Coach Agent
 
 默认即 mock 模式，无需后端：
@@ -335,9 +339,11 @@ Current project documentation lives in:
 - [docs/architecture.md](docs/architecture.md) — runtime architecture and module boundaries
 - [docs/testing.md](docs/testing.md) — test commands, scope, and current gaps
 - [docs/release.md](docs/release.md) — versioning, Android release tags, and web deploy flow
+- [docs/agent_capabilities.md](docs/agent_capabilities.md) — Coach Agent capabilities map: supported modes, action table (mutation vs read-only), safety model, current limitations, out-of-scope list
 - [docs/agent_mvp_status.md](docs/agent_mvp_status.md) — Coach Agent MVP stability snapshot, eval status, runtime modes, next-stage roadmap
 - [docs/agent_architecture_diagram.md](docs/agent_architecture_diagram.md) — Mermaid diagrams: data flow, mutation safety boundary, safety short-circuit, generatePlan boundary, eval/CI boundary
-- [docs/agent_demo_script.md](docs/agent_demo_script.md) — Coach Agent demo script (5–8 min walkthrough at tag `agent-mvp-eval-v2`)
+- [docs/coach_agent_demo_script.md](docs/coach_agent_demo_script.md) — short showcase demo script (4 core scenarios: reschedule / replace / compress / safety)
+- [docs/agent_demo_script.md](docs/agent_demo_script.md) — longer Coach Agent eval walkthrough (5–8 min, covers clarification + generatePlan boundary)
 - [docs/agent_demo_recording_checklist.md](docs/agent_demo_recording_checklist.md) — Coach Agent demo recording checklist (privacy checks, environment, ordered flow, things to say / not say)
 - [docs/release_notes_agent_mvp_eval_v2.md](docs/release_notes_agent_mvp_eval_v2.md) — `agent-mvp-eval-v2` release notes: included capabilities, non-goals, eval baseline
 - [docs/security.md](docs/security.md) — CI gates, secret scan, dependency audit, GitHub Actions hardening, remaining risks
