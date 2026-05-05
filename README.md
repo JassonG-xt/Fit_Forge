@@ -336,6 +336,8 @@ Current project documentation lives in:
 - [docs/testing.md](docs/testing.md) — test commands, scope, and current gaps
 - [docs/release.md](docs/release.md) — versioning, Android release tags, and web deploy flow
 - [docs/agent_mvp_status.md](docs/agent_mvp_status.md) — Coach Agent MVP stability snapshot, eval status, runtime modes, next-stage roadmap
+- [docs/agent_demo_script.md](docs/agent_demo_script.md) — Coach Agent demo script (5–8 min walkthrough at tag `agent-mvp-eval-v2`)
+- [docs/release_notes_agent_mvp_eval_v2.md](docs/release_notes_agent_mvp_eval_v2.md) — `agent-mvp-eval-v2` release notes: included capabilities, non-goals, eval baseline
 - [docs/security.md](docs/security.md) — CI gates, secret scan, dependency audit, GitHub Actions hardening, remaining risks
 - [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow, lint, tests, PR process
 - [CHANGELOG.md](CHANGELOG.md) — release history and planned work
