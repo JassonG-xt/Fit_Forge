@@ -10,6 +10,7 @@ This directory holds repository-grounded documentation for the current Flutter a
 - [coach_agent_evals.md](coach_agent_evals.md) — eval suite contract, case categories, status meanings, and how to add a case
 - [agent_architecture_diagram.md](agent_architecture_diagram.md) — Mermaid diagrams for high-level data flow, mutation safety boundary (backend / Flutter swimlanes), safety short-circuit, generatePlan boundary, and eval/CI boundary
 - [agent_demo_script.md](agent_demo_script.md) — Coach Agent demo script (5–8 minute walkthrough covering reschedule / compress / clarification / replace / safety / generatePlan)
+- [agent_demo_recording_checklist.md](agent_demo_recording_checklist.md) — recording-time execution checklist for the demo script: privacy checks, environment options, ordered flow, things to say / not say, post-recording review
 - [release_notes_agent_mvp_eval_v2.md](release_notes_agent_mvp_eval_v2.md) — `agent-mvp-eval-v2` release notes: included capabilities, intentional non-goals, eval status, safety model, and known limitations
 - [generate_plan_agent_boundary.md](generate_plan_agent_boundary.md) — generatePlan product boundary: LLM is a router, not a plan generator
 

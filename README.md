@@ -338,6 +338,7 @@ Current project documentation lives in:
 - [docs/agent_mvp_status.md](docs/agent_mvp_status.md) — Coach Agent MVP stability snapshot, eval status, runtime modes, next-stage roadmap
 - [docs/agent_architecture_diagram.md](docs/agent_architecture_diagram.md) — Mermaid diagrams: data flow, mutation safety boundary, safety short-circuit, generatePlan boundary, eval/CI boundary
 - [docs/agent_demo_script.md](docs/agent_demo_script.md) — Coach Agent demo script (5–8 min walkthrough at tag `agent-mvp-eval-v2`)
+- [docs/agent_demo_recording_checklist.md](docs/agent_demo_recording_checklist.md) — Coach Agent demo recording checklist (privacy checks, environment, ordered flow, things to say / not say)
 - [docs/release_notes_agent_mvp_eval_v2.md](docs/release_notes_agent_mvp_eval_v2.md) — `agent-mvp-eval-v2` release notes: included capabilities, non-goals, eval baseline
 - [docs/security.md](docs/security.md) — CI gates, secret scan, dependency audit, GitHub Actions hardening, remaining risks
 - [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow, lint, tests, PR process
