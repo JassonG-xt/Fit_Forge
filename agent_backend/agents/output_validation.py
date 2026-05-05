@@ -82,6 +82,13 @@ class _RescheduleWeekPayload(_StrictPayload):
 
 class _GeneratePlanPayload(_StrictPayload):
     usePreviewPlan: bool = True
+    # Optional preference fields (added in B-stage). Both are post-processing
+    # hints applied to PlanEngine output by Flutter executor; they do NOT let
+    # the LLM author the workout itself. Bounds match Flutter parser.
+    availableWeekdays: Optional[List[int]] = Field(
+        default=None, min_length=1, max_length=7
+    )
+    targetMinutes: Optional[int] = Field(default=None, ge=5, le=180)
     reason: Optional[str] = Field(default=None, max_length=500)
 
 
@@ -196,6 +203,15 @@ def _sanitize_payload(action_type: str, payload: Any) -> Optional[Dict[str, Any]
             return None
         if len(set(weekdays)) != len(weekdays):
             return None
+    if action_type == GENERATE_PLAN:
+        weekdays = sanitized.get("availableWeekdays")
+        if weekdays is not None:
+            if any(
+                not isinstance(day, int) or day < 1 or day > 7 for day in weekdays
+            ):
+                return None
+            if len(set(weekdays)) != len(weekdays):
+                return None
     if action_type == REPLACE_EXERCISE:
         if sanitized["fromExerciseId"] == sanitized["toExerciseId"]:
             return None

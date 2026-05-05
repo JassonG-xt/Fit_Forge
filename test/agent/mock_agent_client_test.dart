@@ -124,5 +124,51 @@ void main() {
       expect(response.intent, AgentIntent.answerOnly);
       expect(response.actions, isEmpty);
     });
+
+    test('generatePlan with weekday + minutes preferences', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '我只有周一周三周五能练，每次 45 分钟，帮我生成一个计划',
+        context: context,
+        history: const [],
+      );
+      expect(response.intent, AgentIntent.generatePlan);
+      expect(response.actions, hasLength(1));
+      final action = response.actions.single;
+      expect(action.type, AgentActionType.generatePlan);
+      expect(action.requiresConfirmation, true);
+      expect(action.payload['availableWeekdays'], [1, 3, 5]);
+      expect(action.payload['targetMinutes'], 45);
+    });
+
+    test('generatePlan keeps payload minimal when no preferences', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '帮我生成一个新计划',
+        context: context,
+        history: const [],
+      );
+      expect(response.intent, AgentIntent.generatePlan);
+      final payload = response.actions.single.payload;
+      expect(payload.containsKey('availableWeekdays'), false);
+      expect(payload.containsKey('targetMinutes'), false);
+    });
+
+    test(
+      'compress without generate keyword still routes to compress',
+      () async {
+        final state = await primedAppStateWithProfile();
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '今天只有 25 分钟，帮我压缩训练',
+          context: context,
+          history: const [],
+        );
+        expect(response.intent, AgentIntent.compressWorkout);
+        expect(response.actions.single.payload['targetMinutes'], 25);
+      },
+    );
   });
 }

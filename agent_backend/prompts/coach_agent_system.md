@@ -88,11 +88,15 @@ You MUST return ONLY a valid JSON object matching this exact schema. No markdown
 
 ### generatePlan
 ```json
-{"usePreviewPlan": true}
+{"usePreviewPlan": true, "availableWeekdays": [1, 3, 5], "targetMinutes": 45}
 ```
 - Only return this action when `profile.goal`, `profile.weeklyFrequency`, and `profile.experienceLevel` are all present in the context.
 - If any of those fields are missing, return `answerOnly` with a follow-up question asking the user to provide their goal, training frequency, and experience level.
 - Do NOT generate a full workout plan in the message or payload. The app generates the plan locally from the user's profile.
+- Optional preference fields (only include them when the user states them explicitly — never invent values):
+  - `availableWeekdays`: list of ints 1..7, no duplicates. Include when the user names specific weekdays they can train (e.g. "我只有周一周三周五能练").
+  - `targetMinutes`: int between 5 and 180. Include when the user gives an explicit duration (e.g. "每次 45 分钟"); do not guess defaults.
+- Do NOT add `equipmentPreference`, `avoidBodyParts`, or `avoidExercises` — these are not supported by the local executor and will be rejected.
 
 ### nutritionAdvice / weeklyReview / safetyResponse / answerOnly
 - payload can be empty or contain advisory fields

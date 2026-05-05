@@ -339,3 +339,159 @@ def test_too_many_actions_are_capped_or_rejected() -> None:
     )
 
     assert len(response.actions) <= 3
+
+
+# ── generatePlan preference-aware payload validation ──
+
+
+def _complete_profile() -> dict:
+    return {
+        "goal": "buildMuscle",
+        "weeklyFrequency": 4,
+        "experienceLevel": "beginner",
+    }
+
+
+def test_generate_plan_payload_accepts_optional_preferences() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "generatePlan",
+            {
+                "usePreviewPlan": True,
+                "availableWeekdays": [1, 3, 5],
+                "targetMinutes": 45,
+            },
+        ),
+        intent="generatePlan",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="我只有周一周三周五能练，每次 45 分钟，帮我生成一个计划",
+        context_hash="trusted_hash",
+        context_profile=_complete_profile(),
+    )
+
+    assert len(response.actions) == 1
+    payload = response.actions[0].payload
+    assert payload["availableWeekdays"] == [1, 3, 5]
+    assert payload["targetMinutes"] == 45
+
+
+def test_generate_plan_payload_rejects_duplicate_weekdays() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "generatePlan",
+            {"usePreviewPlan": True, "availableWeekdays": [1, 1, 5]},
+        ),
+        intent="generatePlan",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="…",
+        context_hash="trusted_hash",
+        context_profile=_complete_profile(),
+    )
+
+    assert response.actions == []
+
+
+def test_generate_plan_payload_rejects_out_of_range_weekday() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "generatePlan",
+            {"usePreviewPlan": True, "availableWeekdays": [0, 8]},
+        ),
+        intent="generatePlan",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="…",
+        context_hash="trusted_hash",
+        context_profile=_complete_profile(),
+    )
+
+    assert response.actions == []
+
+
+def test_generate_plan_payload_rejects_out_of_range_minutes() -> None:
+    raw = _base_response(
+        _mutation_action(
+            "generatePlan",
+            {"usePreviewPlan": True, "targetMinutes": 4},
+        ),
+        intent="generatePlan",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="…",
+        context_hash="trusted_hash",
+        context_profile=_complete_profile(),
+    )
+
+    assert response.actions == []
+
+    raw_high = _base_response(
+        _mutation_action(
+            "generatePlan",
+            {"usePreviewPlan": True, "targetMinutes": 200},
+        ),
+        intent="generatePlan",
+    )
+    response_high = normalize_agent_response(
+        raw_high,
+        user_message="…",
+        context_hash="trusted_hash",
+        context_profile=_complete_profile(),
+    )
+    assert response_high.actions == []
+
+
+def test_generate_plan_payload_rejects_unsupported_preference_fields() -> None:
+    """Unsupported preferences (avoidBodyParts, equipmentPreference, etc.) must be rejected.
+
+    The Flutter executor cannot honor them; allowing them through would make
+    the action a fake mutation field. extra='forbid' enforces this.
+    """
+    for bad_field in (
+        "equipmentPreference",
+        "avoidBodyParts",
+        "avoidExercises",
+    ):
+        raw = _base_response(
+            _mutation_action(
+                "generatePlan",
+                {"usePreviewPlan": True, bad_field: "value"},
+            ),
+            intent="generatePlan",
+        )
+        response = normalize_agent_response(
+            raw,
+            user_message="…",
+            context_hash="trusted_hash",
+            context_profile=_complete_profile(),
+        )
+        assert response.actions == [], f"{bad_field} should be rejected"
+
+
+def test_generate_plan_payload_without_preferences_still_works() -> None:
+    """Backward compatibility: existing generatePlan with just usePreviewPlan."""
+    raw = _base_response(
+        _mutation_action("generatePlan", {"usePreviewPlan": True}),
+        intent="generatePlan",
+    )
+
+    response = normalize_agent_response(
+        raw,
+        user_message="帮我生成一个计划",
+        context_hash="trusted_hash",
+        context_profile=_complete_profile(),
+    )
+
+    assert len(response.actions) == 1
+    assert response.actions[0].type == "generatePlan"
+    assert "availableWeekdays" not in response.actions[0].payload
+    assert "targetMinutes" not in response.actions[0].payload

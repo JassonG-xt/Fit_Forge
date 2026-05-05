@@ -651,3 +651,62 @@ def test_mock_arrange_does_not_false_trigger_generate_plan() -> None:
         assert action.type != "generatePlan", (
             f"'我今天怎么安排？' should not trigger generatePlan"
         )
+
+
+# ── Preference-aware generatePlan (B-stage) ──
+
+
+def test_mock_generate_plan_extracts_weekday_and_minutes_preferences() -> None:
+    """User asks to generate a plan with preferences; both should be in payload."""
+    response = _run_mock_coach_agent(
+        _request("我只有周一周三周五能练，每次 45 分钟，帮我生成一个计划")
+    )
+    assert response.actions, "expected at least one action"
+    action = response.actions[0]
+    assert action.type == "generatePlan", (
+        f"generate keyword + preferences must route to generatePlan, "
+        f"not {action.type} (preferences ≠ compress request)"
+    )
+    assert action.requiresConfirmation is True
+    assert action.payload["availableWeekdays"] == [1, 3, 5]
+    assert action.payload["targetMinutes"] == 45
+
+
+def test_mock_generate_plan_without_preferences_keeps_payload_minimal() -> None:
+    """Generate without preferences must not invent values."""
+    response = _run_mock_coach_agent(_request("帮我生成一个新计划"))
+    assert response.actions, "expected at least one action"
+    action = response.actions[0]
+    assert action.type == "generatePlan"
+    assert "availableWeekdays" not in action.payload
+    assert "targetMinutes" not in action.payload
+
+
+def test_mock_generate_priority_does_not_break_compress_route() -> None:
+    """Compress without generate keyword still routes to compress."""
+    response = _run_mock_coach_agent(_request("今天只有 25 分钟，帮我压缩训练"))
+    assert response.actions, "expected at least one action"
+    assert response.actions[0].type == "compressWorkout"
+    assert response.actions[0].payload["targetMinutes"] == 25
+
+
+def test_mock_generate_plan_safety_short_circuits_over_preferences() -> None:
+    """Safety guardrail must override preference extraction."""
+    response = _run_mock_coach_agent(
+        _request("我胸口疼，但帮我生成一个计划，每次 45 分钟")
+    )
+    # Should route to safetyResponse, not generatePlan
+    assert all(a.type != "generatePlan" for a in response.actions)
+    assert response.safety.shouldStopWorkout is True
+
+
+def test_mock_generate_plan_minutes_out_of_range_dropped_silently() -> None:
+    """Minutes outside 5..180 must not appear in payload (no fake validation)."""
+    response = _run_mock_coach_agent(
+        _request("帮我生成一个计划，每次 1000 分钟")
+    )
+    assert response.actions, "expected at least one action"
+    action = response.actions[0]
+    assert action.type == "generatePlan"
+    # Out-of-range minutes are silently dropped; preference is omitted, not faked.
+    assert "targetMinutes" not in action.payload

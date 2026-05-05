@@ -244,4 +244,115 @@ void main() {
       expect(result.message, contains('正数'));
     });
   });
+
+  group('parseGeneratePlanPayload', () {
+    test('accepts empty payload (no preferences)', () {
+      final result = parseGeneratePlanPayload(const {});
+      expect(result, isA<PayloadParseSuccess<GeneratePlanPayload>>());
+      final value = (result as PayloadParseSuccess<GeneratePlanPayload>).value;
+      expect(value.availableWeekdays, isNull);
+      expect(value.targetMinutes, isNull);
+    });
+
+    test('accepts payload with usePreviewPlan only', () {
+      final result = parseGeneratePlanPayload(const {'usePreviewPlan': true});
+      expect(result, isA<PayloadParseSuccess<GeneratePlanPayload>>());
+    });
+
+    test('accepts both preferences', () {
+      final result = parseGeneratePlanPayload(const {
+        'availableWeekdays': [1, 3, 5],
+        'targetMinutes': 45,
+      });
+      expect(result, isA<PayloadParseSuccess<GeneratePlanPayload>>());
+      final value = (result as PayloadParseSuccess<GeneratePlanPayload>).value;
+      expect(value.availableWeekdays, [1, 3, 5]);
+      expect(value.targetMinutes, 45);
+    });
+
+    test('accepts only availableWeekdays', () {
+      final result = parseGeneratePlanPayload(const {
+        'availableWeekdays': [2, 4],
+      });
+      expect(result, isA<PayloadParseSuccess<GeneratePlanPayload>>());
+      final value = (result as PayloadParseSuccess<GeneratePlanPayload>).value;
+      expect(value.availableWeekdays, [2, 4]);
+      expect(value.targetMinutes, isNull);
+    });
+
+    test('accepts only targetMinutes', () {
+      final result = parseGeneratePlanPayload(const {'targetMinutes': 30});
+      expect(result, isA<PayloadParseSuccess<GeneratePlanPayload>>());
+      final value = (result as PayloadParseSuccess<GeneratePlanPayload>).value;
+      expect(value.availableWeekdays, isNull);
+      expect(value.targetMinutes, 30);
+    });
+
+    test('rejects availableWeekdays with String element', () {
+      final result = parseGeneratePlanPayload(const {
+        'availableWeekdays': [1, 'bad', 5],
+      });
+      expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
+      expect(result.message, contains('不是整数'));
+    });
+
+    test('rejects availableWeekdays out of range', () {
+      final result = parseGeneratePlanPayload(const {
+        'availableWeekdays': [0, 8],
+      });
+      expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
+      expect(result.message, contains('1-7'));
+    });
+
+    test('rejects duplicate availableWeekdays', () {
+      final result = parseGeneratePlanPayload(const {
+        'availableWeekdays': [1, 1, 5],
+      });
+      expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
+      expect(result.message, contains('重复'));
+    });
+
+    test('rejects empty availableWeekdays list', () {
+      final result = parseGeneratePlanPayload(const {
+        'availableWeekdays': <int>[],
+      });
+      expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
+      expect(result.message, contains('不能为空'));
+    });
+
+    test('rejects double targetMinutes', () {
+      final result = parseGeneratePlanPayload(const {'targetMinutes': 45.5});
+      expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
+      expect(result.message, contains('正整数'));
+    });
+
+    test('rejects String targetMinutes', () {
+      final result = parseGeneratePlanPayload(const {'targetMinutes': '45'});
+      expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
+      expect(result.message, contains('正整数'));
+    });
+
+    test('rejects targetMinutes below lower bound', () {
+      final result = parseGeneratePlanPayload(const {'targetMinutes': 4});
+      expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
+      expect(result.message, contains('5-180'));
+    });
+
+    test('rejects targetMinutes above upper bound', () {
+      final result = parseGeneratePlanPayload(const {'targetMinutes': 200});
+      expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
+      expect(result.message, contains('5-180'));
+    });
+
+    test('treats null preference fields as absent', () {
+      final result = parseGeneratePlanPayload(const {
+        'availableWeekdays': null,
+        'targetMinutes': null,
+      });
+      expect(result, isA<PayloadParseSuccess<GeneratePlanPayload>>());
+      final value = (result as PayloadParseSuccess<GeneratePlanPayload>).value;
+      expect(value.availableWeekdays, isNull);
+      expect(value.targetMinutes, isNull);
+    });
+  });
 }

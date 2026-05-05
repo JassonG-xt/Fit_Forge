@@ -356,6 +356,117 @@ void main() {
       expect(result.title, '无需修改');
       expect(state.activePlan!.toJson(), before);
     });
+
+    // ─── generatePlan with preference fields ───
+    test('generatePlan with availableWeekdays applies reschedule', () async {
+      final state = await primedAppStateWithProfile();
+      await state.init();
+      final executor = LocalAgentActionExecutor(state);
+      final result = await executor.execute(
+        makeAction(AgentActionType.generatePlan, const {
+          'availableWeekdays': [1, 3, 5],
+        }),
+      );
+      expect(result.success, true);
+      final plan = state.activePlan!;
+      // Workout days appear only on the requested weekdays.
+      final workoutWeekdays = plan.days
+          .where((d) => d.dayType != WorkoutDayType.rest)
+          .map((d) => d.dayOfWeek)
+          .toList();
+      expect(workoutWeekdays.toSet().difference({1, 3, 5}), isEmpty);
+      // All other days are rest.
+      for (final day in plan.days) {
+        if (![1, 3, 5].contains(day.dayOfWeek)) {
+          expect(day.dayType, WorkoutDayType.rest);
+        }
+      }
+    });
+
+    test('generatePlan with targetMinutes caps each workout day', () async {
+      final state = await primedAppStateWithProfile();
+      await state.init();
+      final executor = LocalAgentActionExecutor(state);
+      final result = await executor.execute(
+        makeAction(AgentActionType.generatePlan, const {'targetMinutes': 20}),
+      );
+      expect(result.success, true);
+      final plan = state.activePlan!;
+      // 20-minute target → ultra policy: max 3 exercises, max 2 sets per exercise.
+      for (final day in plan.days) {
+        if (day.dayType == WorkoutDayType.rest) continue;
+        expect(day.exercises.length, lessThanOrEqualTo(3));
+        for (final ex in day.exercises) {
+          expect(ex.targetSets, lessThanOrEqualTo(2));
+        }
+      }
+    });
+
+    test('generatePlan with both preferences applies both', () async {
+      final state = await primedAppStateWithProfile();
+      await state.init();
+      final executor = LocalAgentActionExecutor(state);
+      final result = await executor.execute(
+        makeAction(AgentActionType.generatePlan, const {
+          'availableWeekdays': [2, 4],
+          'targetMinutes': 30,
+        }),
+      );
+      expect(result.success, true);
+      final plan = state.activePlan!;
+      final workoutWeekdays = plan.days
+          .where((d) => d.dayType != WorkoutDayType.rest)
+          .map((d) => d.dayOfWeek)
+          .toSet();
+      expect(workoutWeekdays.difference({2, 4}), isEmpty);
+      // 30-minute target → fast policy: max 4 exercises, max 3 sets.
+      for (final day in plan.days) {
+        if (day.dayType == WorkoutDayType.rest) continue;
+        expect(day.exercises.length, lessThanOrEqualTo(4));
+        for (final ex in day.exercises) {
+          expect(ex.targetSets, lessThanOrEqualTo(3));
+        }
+      }
+    });
+
+    test('generatePlan rejects invalid availableWeekdays payload', () async {
+      final state = await primedAppStateWithProfile();
+      await state.init();
+      final executor = LocalAgentActionExecutor(state);
+      final result = await executor.execute(
+        makeAction(AgentActionType.generatePlan, const {
+          'availableWeekdays': [0, 8],
+        }),
+      );
+      expect(result.success, false);
+      expect(result.message, contains('1-7'));
+      expect(state.activePlan, isNull);
+    });
+
+    test('generatePlan rejects out-of-range targetMinutes', () async {
+      final state = await primedAppStateWithProfile();
+      await state.init();
+      final executor = LocalAgentActionExecutor(state);
+      final result = await executor.execute(
+        makeAction(AgentActionType.generatePlan, const {'targetMinutes': 4}),
+      );
+      expect(result.success, false);
+      expect(result.message, contains('5-180'));
+      expect(state.activePlan, isNull);
+    });
+
+    test('generatePlan still requires confirmation', () async {
+      final state = await primedAppStateWithProfile();
+      await state.init();
+      final executor = LocalAgentActionExecutor(state);
+      final result = await executor.execute(
+        makeAction(AgentActionType.generatePlan, const {
+          'availableWeekdays': [1, 3, 5],
+        }, requiresConfirmation: false),
+      );
+      expect(result.success, false);
+      expect(state.activePlan, isNull);
+    });
   });
 }
 

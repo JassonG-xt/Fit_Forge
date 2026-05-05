@@ -36,6 +36,13 @@ class MockAgentClient implements AgentClient {
       return _safetyResponse(message);
     }
 
+    // generatePlan 优先于 compress：当用户在「生成计划」请求里同时给出
+    // 偏好（可训练日 / 时长），我们要把偏好打进 generatePlan 的 payload，
+    // 而不是被 compress 关键字（如 `只有`）短路到压缩流程。
+    if (_isGenerateIntent(lower)) {
+      return _generatePlanResponse(message, context);
+    }
+
     if (_isCompressIntent(message)) {
       return _compressResponse(message, context);
     }
@@ -46,10 +53,6 @@ class MockAgentClient implements AgentClient {
 
     if (_isRescheduleIntent(message)) {
       return _rescheduleResponse(message, context);
-    }
-
-    if (_isGenerateIntent(lower)) {
-      return _generatePlanResponse(context);
     }
 
     if (_isWeeklyReviewIntent(lower)) {
@@ -364,7 +367,24 @@ class MockAgentClient implements AgentClient {
     );
   }
 
-  AgentResponse _generatePlanResponse(AgentContextSnapshot context) {
+  AgentResponse _generatePlanResponse(
+    String message,
+    AgentContextSnapshot context,
+  ) {
+    final weekdays = _extractWeekdaysFromMessage(message);
+    final targetMinutes = _extractTargetMinutesFromMessage(message);
+
+    final payload = <String, dynamic>{'usePreviewPlan': true};
+    final summaryParts = <String>['基于你的画像和训练频率生成新的训练计划'];
+    if (weekdays.isNotEmpty) {
+      payload['availableWeekdays'] = weekdays;
+      summaryParts.add('安排在 ${weekdays.map(_weekdayName).join('、')}');
+    }
+    if (targetMinutes != null) {
+      payload['targetMinutes'] = targetMinutes;
+      summaryParts.add('每次约 $targetMinutes 分钟');
+    }
+
     return AgentResponse(
       message: '可以根据你当前的目标和器械生成一份训练计划。点击下方应用即可写入。',
       intent: AgentIntent.generatePlan,
@@ -374,12 +394,53 @@ class MockAgentClient implements AgentClient {
           id: _newId('plan'),
           type: AgentActionType.generatePlan,
           title: '生成训练计划',
-          summary: '基于你的画像和训练频率生成新的训练计划。',
+          summary: '${summaryParts.join('，')}。',
           requiresConfirmation: true,
-          payload: const {'usePreviewPlan': true},
+          sourceContextHash: context.planContextHash,
+          payload: payload,
         ),
       ],
     );
+  }
+
+  // 从中文消息里提取 weekday tokens（周一/周三/周五 等）。
+  // 与 _rescheduleResponse 共享同一份映射，避免歧义。
+  List<int> _extractWeekdaysFromMessage(String message) {
+    const dayMap = {
+      '周一': 1,
+      '周二': 2,
+      '周三': 3,
+      '周四': 4,
+      '周五': 5,
+      '周六': 6,
+      '周日': 7,
+      '周天': 7,
+      '星期一': 1,
+      '星期二': 2,
+      '星期三': 3,
+      '星期四': 4,
+      '星期五': 5,
+      '星期六': 6,
+      '星期日': 7,
+      '星期天': 7,
+    };
+    final selected = <int>{};
+    for (final entry in dayMap.entries) {
+      if (message.contains(entry.key)) selected.add(entry.value);
+    }
+    return selected.toList()..sort();
+  }
+
+  // 从消息提取明确分钟数（仅 `\d+ 分钟` 或 `半小时`）。
+  // 不猜默认值：未明示则返回 null，executor 退化为不带 targetMinutes 的纯 profile 计划。
+  int? _extractTargetMinutesFromMessage(String message) {
+    final match = RegExp(r'(\d+)\s*分钟').firstMatch(message);
+    if (match != null) {
+      final parsed = int.tryParse(match.group(1) ?? '');
+      if (parsed != null && parsed >= 5 && parsed <= 180) return parsed;
+    }
+    if (message.contains('半小时')) return 30;
+    return null;
   }
 
   AgentResponse _weeklyReviewResponse(AgentContextSnapshot context) {

@@ -298,7 +298,33 @@ def _replace_response(message: str, request: AgentRequest) -> AgentResponse | No
     )
 
 
-def _generate_plan_response() -> AgentResponse:
+def _generate_plan_response(message: str = "") -> AgentResponse:
+    """Build a generatePlan response, optionally extracting preferences.
+
+    Preferences (both optional, deterministic regex extraction — no NLU):
+      - availableWeekdays: weekday tokens like 周一/周三/周五 → sorted ints 1..7
+      - targetMinutes: explicit `<digits> 分钟` or `半小时` (=30)
+
+    Missing or out-of-range values are dropped silently rather than guessed,
+    so the action degrades to a profile-only generatePlan. The Flutter executor
+    re-validates every field on apply.
+    """
+    payload: dict = {"usePreviewPlan": True}
+    summary_parts = ["基于你的画像和训练频率生成新的训练计划"]
+
+    weekdays = _extract_weekdays(message) if message else []
+    if weekdays:
+        payload["availableWeekdays"] = weekdays
+        label = "、".join(_WEEKDAY_NAMES[d] for d in weekdays)
+        summary_parts.append(f"安排在{label}")
+
+    target_minutes = _extract_target_minutes_for_generate(message) if message else None
+    if target_minutes is not None:
+        payload["targetMinutes"] = target_minutes
+        summary_parts.append(f"每次约 {target_minutes} 分钟")
+
+    summary = "，".join(summary_parts) + "。"
+
     return AgentResponse(
         message="可以根据你当前的目标和器械生成一份训练计划。点击下方应用即可写入。",
         intent="generatePlan",
@@ -308,12 +334,32 @@ def _generate_plan_response() -> AgentResponse:
                 id=_action_id("plan"),
                 type="generatePlan",
                 title="生成训练计划",
-                summary="基于你的画像和训练频率生成新的训练计划。",
+                summary=summary,
                 requiresConfirmation=True,
-                payload={"usePreviewPlan": True},
+                payload=payload,
             )
         ],
     )
+
+
+def _extract_target_minutes_for_generate(message: str) -> int | None:
+    """Extract explicit duration for generatePlan preference.
+
+    Mirrors `has_explicit_target_minutes` semantics but returns the value.
+    Bounds 5..180 align with output_validation `_GeneratePlanPayload`.
+    """
+    match = re.search(r"(\d+)\s*分钟", message)
+    if match:
+        try:
+            value = int(match.group(1))
+        except ValueError:
+            return None
+        if 5 <= value <= 180:
+            return value
+        return None
+    if "半小时" in message:
+        return 30
+    return None
 
 
 def _weekly_review_response(request: AgentRequest) -> AgentResponse:
@@ -424,6 +470,18 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
     if assess_message_safety(message).has_medical_concern:
         return _safety_response(message)
 
+    # generatePlan must win over compress when the user asks to generate a plan
+    # AND happens to mention preferences like `每次 45 分钟` — the minutes are
+    # a generatePlan preference, not a request to compress today's workout.
+    if _has_any(message, ("生成", "做个计划", "新计划", "新的训练计划", "帮我做计划")):
+        return _generate_plan_response(message)
+
+    # Compound generatePlan rules: require two tokens to avoid false positives.
+    if (_has_all(message, ("给", "计划"))
+            or _has_all(message, ("新手", "安排"))
+            or _has_all(message, ("耐力", "安排"))):
+        return _generate_plan_response(message)
+
     if _is_compress(message) is not None:
         return _compress_response(message, request)
 
@@ -435,15 +493,6 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
         rescheduled = _reschedule_response(message)
         if rescheduled is not None:
             return rescheduled
-
-    if _has_any(message, ("生成", "做个计划", "新计划", "新的训练计划", "帮我做计划")):
-        return _generate_plan_response()
-
-    # Compound generatePlan rules: require two tokens to avoid false positives.
-    if (_has_all(message, ("给", "计划"))
-            or _has_all(message, ("新手", "安排"))
-            or _has_all(message, ("耐力", "安排"))):
-        return _generate_plan_response()
 
     if _has_any(message, ("总结", "复盘", "本周训练", "这周训练", "一周训练")):
         return _weekly_review_response(request)

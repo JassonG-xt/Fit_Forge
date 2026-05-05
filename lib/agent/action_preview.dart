@@ -211,8 +211,37 @@ class AgentActionPreviewer {
     if (appState.profile == null) {
       return const PreviewFailure('需要先完成个人信息设置才能预览计划。');
     }
+    final parsed = parseGeneratePlanPayload(action.payload);
+    if (parsed is PayloadParseFailure<GeneratePlanPayload>) {
+      return PreviewFailure(parsed.message);
+    }
+    final preferences =
+        (parsed as PayloadParseSuccess<GeneratePlanPayload>).value;
     try {
-      final preview = appState.previewPlan();
+      var preview = appState.previewPlan();
+      final weekdays = preferences.availableWeekdays;
+      if (weekdays != null) {
+        preview = reschedulePlanToWeekdays(
+          plan: preview,
+          availableWeekdays: weekdays,
+        ).plan;
+      }
+      final minutes = preferences.targetMinutes;
+      if (minutes != null) {
+        for (final day in preview.days) {
+          if (day.dayType == WorkoutDayType.rest || day.exercises.isEmpty) {
+            continue;
+          }
+          final compressed = compressDayInPlan(
+            plan: preview,
+            dayOfWeek: day.dayOfWeek,
+            targetMinutes: minutes,
+          );
+          if (compressed != null) {
+            preview = compressed;
+          }
+        }
+      }
       return GeneratePlanPreview(
         originalPlan: appState.activePlan,
         previewPlan: preview,
