@@ -100,20 +100,88 @@ class LocalAgentActionExecutor {
   // ─── generatePlan ───
   // 不做 stale guard：generatePlan 基于 profile 生成全新计划，
   // 不依赖当前 activePlan 内容（situation A）。
+  //
+  // 可选偏好（payload 字段，均可缺省）：
+  // - availableWeekdays: 生成基础计划后用 reschedulePlanToWeekdays 应用
+  // - targetMinutes: 生成基础计划后对每个训练日用 compressDayInPlan 应用
+  //
+  // 偏好仅作为 PlanEngine 输出的确定性后处理，不进入 PlanEngine 内部
+  // 选动作 / 划分 split 的逻辑；这样无需扩 PlanEngine 接口即可支持基础偏好。
   Future<AgentActionResult> _generatePlan(AgentAction action) async {
     if (appState.profile == null) {
       return AgentActionResult.failure('需要先完成个人信息设置才能生成训练计划。');
     }
+
+    final parsed = parseGeneratePlanPayload(action.payload);
+    if (parsed is PayloadParseFailure<GeneratePlanPayload>) {
+      return AgentActionResult.failure(parsed.message);
+    }
+    final preferences =
+        (parsed as PayloadParseSuccess<GeneratePlanPayload>).value;
+
     try {
-      final plan = appState.previewPlan();
+      var plan = appState.previewPlan();
+      plan = _applyPreferences(plan, preferences);
       appState.adoptPlan(plan);
       return AgentActionResult.success(
         title: '已生成训练计划',
-        message: '新计划包含 ${_workoutDayCount(plan.days)} 个训练日。',
+        message: _generatePlanSuccessMessage(plan, preferences),
       );
     } catch (e) {
       return AgentActionResult.failure('生成计划失败：$e');
     }
+  }
+
+  // 把可选偏好作用到 PlanEngine 输出上。
+  // 仅使用现有的 reschedulePlanToWeekdays / compressDayInPlan 助手，
+  // 不引入新 helper、不修改 PlanEngine 行为。
+  WorkoutPlan _applyPreferences(
+    WorkoutPlan plan,
+    GeneratePlanPayload preferences,
+  ) {
+    var current = plan;
+    final weekdays = preferences.availableWeekdays;
+    if (weekdays != null) {
+      current = reschedulePlanToWeekdays(
+        plan: current,
+        availableWeekdays: weekdays,
+      ).plan;
+    }
+    final minutes = preferences.targetMinutes;
+    if (minutes != null) {
+      for (final day in current.days) {
+        if (day.dayType == WorkoutDayType.rest || day.exercises.isEmpty) {
+          continue;
+        }
+        final compressed = compressDayInPlan(
+          plan: current,
+          dayOfWeek: day.dayOfWeek,
+          targetMinutes: minutes,
+        );
+        if (compressed != null) {
+          current = compressed;
+        }
+      }
+    }
+    return current;
+  }
+
+  String _generatePlanSuccessMessage(
+    WorkoutPlan plan,
+    GeneratePlanPayload preferences,
+  ) {
+    final dayCount = _workoutDayCount(plan.days);
+    final parts = <String>['新计划包含 $dayCount 个训练日'];
+    final weekdays = preferences.availableWeekdays;
+    if (weekdays != null && weekdays.isNotEmpty) {
+      final sorted = (weekdays.toSet().toList()..sort());
+      parts.add('安排在 ${sorted.map(_weekdayName).join('、')}');
+    }
+    final minutes = preferences.targetMinutes;
+    if (minutes != null) {
+      parts.add('每次约 $minutes 分钟');
+    }
+    return '${parts.join('，')}。';
   }
 
   // ─── rescheduleWeek ───

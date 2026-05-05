@@ -47,6 +47,54 @@ void main() {
         expect(result, isA<PreviewFailure>());
         expect((result as PreviewFailure).message, contains('个人信息'));
       });
+
+      test('preview applies availableWeekdays preference', () async {
+        final state = await primedAppStateWithProfile();
+        await state.init();
+        final result = previewer.preview(
+          action: makeAction(AgentActionType.generatePlan, const {
+            'availableWeekdays': [1, 3, 5],
+          }),
+          appState: state,
+        );
+        expect(result, isA<GeneratePlanPreview>());
+        final preview = result as GeneratePlanPreview;
+        final workoutDays = preview.previewPlan.days
+            .where((d) => d.dayType != WorkoutDayType.rest)
+            .map((d) => d.dayOfWeek)
+            .toSet();
+        expect(workoutDays.difference({1, 3, 5}), isEmpty);
+      });
+
+      test('preview applies targetMinutes preference', () async {
+        final state = await primedAppStateWithProfile();
+        await state.init();
+        final result = previewer.preview(
+          action: makeAction(AgentActionType.generatePlan, const {
+            'targetMinutes': 20,
+          }),
+          appState: state,
+        );
+        expect(result, isA<GeneratePlanPreview>());
+        final preview = result as GeneratePlanPreview;
+        for (final day in preview.previewPlan.days) {
+          if (day.dayType == WorkoutDayType.rest) continue;
+          expect(day.exercises.length, lessThanOrEqualTo(3));
+        }
+      });
+
+      test('preview returns failure on invalid preferences', () async {
+        final state = await primedAppStateWithProfile();
+        await state.init();
+        final result = previewer.preview(
+          action: makeAction(AgentActionType.generatePlan, const {
+            'availableWeekdays': [0, 8],
+          }),
+          appState: state,
+        );
+        expect(result, isA<PreviewFailure>());
+        expect((result as PreviewFailure).message, contains('1-7'));
+      });
     });
 
     group('rescheduleWeek', () {

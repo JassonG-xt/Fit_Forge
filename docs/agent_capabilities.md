@@ -48,7 +48,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 
 | Action | Mutates local state | Requires user confirmation | Description |
 |---|---:|---:|---|
-| `generatePlan` | Yes | Yes | LLM 仅作意图识别；profile 缺关键字段时 backend 拦截并改返 `answerOnly` 追问。Flutter 端 preview 由本地 `PlanEngine` 确定性生成，确认后写入 `AppState`。 |
+| `generatePlan` | Yes | Yes | LLM 仅作意图识别；profile 缺关键字段时 backend 拦截并改返 `answerOnly` 追问。Flutter 端 preview 由本地 `PlanEngine` 确定性生成，确认后写入 `AppState`。可选偏好字段：`availableWeekdays`（List[int] 1-7、不重复）、`targetMinutes`（int 5-180）；偏好作为 `PlanEngine` 输出的确定性后处理（reschedule + compress）应用，**不**进入 `PlanEngine` 内部选动作 / split 决策。 |
 | `rescheduleWeek` | Yes | Yes | 用 `availableWeekdays` 重排本周训练日。preview 显示 before/after 周表。 |
 | `replaceExercise` | Yes | Yes | 替换某天的某个动作；payload 含 `dayOfWeek` / `fromExerciseId` / `toExerciseId`。preview 显示替换前后动作。 |
 | `compressWorkout` | Yes | Yes | 用 `targetMinutes` 压缩今日训练时长。**不**猜默认值——若用户没说分钟数，Coach 改返 `answerOnly` 追问，不强行 compress。 |
@@ -91,6 +91,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 - **eval suite 不是分数表**：`coach_agent_eval_cases.json` 是行为契约，37 active / 4 expectedGap；保留 expectedGap 作为 regression signal，不为「全绿」放宽守护。
 - **真实模式只做手动 eval**：real LLM 不进 per-PR CI；多 provider 比较只在本地手动跑，结果不提交。
 - **safety 关键字是中文语料为主**：英文输入下的 deterministic guard 覆盖率有限；不能替代医疗判断。
+- **generatePlan 偏好是后处理，不是 PlanEngine 内部决策**：`availableWeekdays` 通过 `reschedulePlanToWeekdays` 应用，`targetMinutes` 通过 `compressDayInPlan` 应用。这意味着如果偏好里的训练日数量超过 `PlanEngine` 给出的 workout 日数量，多余的 weekdays 会保持休息，不会自动加塞训练。
 
 ## Out of scope for the MVP
 
@@ -104,6 +105,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 - 自动执行 mutation action（不经用户确认就改 `AppState`）。
 - 把真实 LLM 调用塞进 per-PR CI。
 - 医疗诊断、伤后康复处方、儿童 / 孕期 / 疾病专项训练。
+- **更复杂的 generatePlan 偏好字段**：`equipmentPreference` / `avoidBodyParts` / `avoidExercises` 暂不支持——honoring 它们需要修改 `PlanEngine.selectExercises` / `buildWeeklySchedule` 内部决策，破坏 split 完整性，超出当前 MVP 边界。LLM 若返回这些字段，backend `extra="forbid"` 直接拒绝，避免「假装支持」。
 
 ## 相关文档
 

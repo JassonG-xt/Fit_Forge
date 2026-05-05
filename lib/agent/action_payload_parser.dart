@@ -26,7 +26,15 @@ class PayloadParseFailure<T> extends PayloadParseResult<T> {
 // ─── typed payload data ──────────────────────────────────────────────
 
 class GeneratePlanPayload {
-  const GeneratePlanPayload();
+  const GeneratePlanPayload({this.availableWeekdays, this.targetMinutes});
+
+  /// 可选偏好：用户希望本周训练哪些天。
+  /// 若提供，executor 会在生成基础计划后调用 [reschedulePlanToWeekdays] 应用。
+  final List<int>? availableWeekdays;
+
+  /// 可选偏好：用户希望每次训练时长（分钟）。
+  /// 若提供，executor 会在生成基础计划后对每个训练日调用 [compressDayInPlan] 应用。
+  final int? targetMinutes;
 }
 
 class RescheduleWeekPayload {
@@ -163,9 +171,41 @@ PayloadParseResult<CompressWorkoutPayload> parseCompressWorkoutPayload(
   );
 }
 
-/// 校验 generatePlan payload（当前无额外字段需要校验）。
+/// 校验 generatePlan payload。
+///
+/// generatePlan 历史上无 payload 字段。本 PR 引入可选偏好：
+/// - `availableWeekdays`: 整数列表 1-7、不重复（语义同 [parseAvailableWeekdays]）
+/// - `targetMinutes`: 正整数，建议在 [5, 180] 之间（与 backend strict 校验对齐）
+///
+/// 两个字段都可缺省；缺省时退化为不带偏好的纯 profile 计划生成。
+/// 若字段存在但格式非法，必须返回 [PayloadParseFailure] —— 不允许静默丢弃。
 PayloadParseResult<GeneratePlanPayload> parseGeneratePlanPayload(
   Map<String, dynamic> payload,
 ) {
-  return const PayloadParseSuccess(GeneratePlanPayload());
+  List<int>? weekdays;
+  if (payload.containsKey('availableWeekdays') &&
+      payload['availableWeekdays'] != null) {
+    final parsed = parseAvailableWeekdays(payload['availableWeekdays']);
+    if (parsed is PayloadParseFailure<List<int>>) {
+      return PayloadParseFailure(parsed.message);
+    }
+    weekdays = (parsed as PayloadParseSuccess<List<int>>).value;
+  }
+
+  int? minutes;
+  if (payload.containsKey('targetMinutes') &&
+      payload['targetMinutes'] != null) {
+    final raw = payload['targetMinutes'];
+    if (raw is! int) {
+      return const PayloadParseFailure('targetMinutes 必须是正整数，不接受小数或文本。');
+    }
+    if (raw < 5 || raw > 180) {
+      return PayloadParseFailure('targetMinutes 必须在 5-180 之间，当前值为 $raw。');
+    }
+    minutes = raw;
+  }
+
+  return PayloadParseSuccess(
+    GeneratePlanPayload(availableWeekdays: weekdays, targetMinutes: minutes),
+  );
 }
