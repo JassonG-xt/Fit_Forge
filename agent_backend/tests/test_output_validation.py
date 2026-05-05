@@ -495,3 +495,147 @@ def test_generate_plan_payload_without_preferences_still_works() -> None:
     assert response.actions[0].type == "generatePlan"
     assert "availableWeekdays" not in response.actions[0].payload
     assert "targetMinutes" not in response.actions[0].payload
+
+
+# ── B-2: weeklyReview payload schema ──
+
+
+def test_weekly_review_payload_accepts_full_structure() -> None:
+    raw = _base_response(
+        {
+            "id": "review_1",
+            "type": "weeklyReview",
+            "title": "本周训练复盘",
+            "summary": "近期 3 次训练。",
+            "requiresConfirmation": False,
+            "riskLevel": "low",
+            "payload": {
+                "summary": "近期 3 次训练。",
+                "completedSessions": 3,
+                "focusAreas": ["推（胸 / 肩 / 三头）", "腿"],
+                "observations": ["近期已记录 3 次训练。", "训练间隔均匀。"],
+                "nextWeekSuggestions": ["保持每周 3 次训练。"],
+                "riskNotes": [],
+            },
+        },
+        intent="weeklyReview",
+    )
+    response = normalize_agent_response(
+        raw,
+        user_message="帮我总结这周训练",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+    assert len(response.actions) == 1
+    action = response.actions[0]
+    assert action.type == "weeklyReview"
+    assert action.requiresConfirmation is False
+    assert action.payload["completedSessions"] == 3
+    assert action.payload["focusAreas"] == ["推（胸 / 肩 / 三头）", "腿"]
+
+
+def test_weekly_review_payload_rejects_legacy_unsupported_field() -> None:
+    """Old keys like `completedWorkouts` are no longer in the schema."""
+    raw = _base_response(
+        {
+            "id": "review_1",
+            "type": "weeklyReview",
+            "title": "x",
+            "summary": "x",
+            "requiresConfirmation": False,
+            "payload": {"completedWorkouts": 3},
+        },
+        intent="weeklyReview",
+    )
+    response = normalize_agent_response(
+        raw,
+        user_message="hello",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+    # extra="forbid" rejects unknown fields → action dropped
+    assert response.actions == []
+
+
+def test_weekly_review_payload_rejects_overlong_list_item() -> None:
+    raw = _base_response(
+        {
+            "id": "review_1",
+            "type": "weeklyReview",
+            "title": "x",
+            "summary": "x",
+            "requiresConfirmation": False,
+            "payload": {"observations": ["x" * 201]},
+        },
+        intent="weeklyReview",
+    )
+    response = normalize_agent_response(
+        raw,
+        user_message="hello",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+    assert response.actions == []
+
+
+def test_weekly_review_payload_rejects_too_many_items() -> None:
+    raw = _base_response(
+        {
+            "id": "review_1",
+            "type": "weeklyReview",
+            "title": "x",
+            "summary": "x",
+            "requiresConfirmation": False,
+            "payload": {"focusAreas": [f"area_{i}" for i in range(9)]},
+        },
+        intent="weeklyReview",
+    )
+    response = normalize_agent_response(
+        raw,
+        user_message="hello",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+    assert response.actions == []
+
+
+def test_weekly_review_payload_rejects_non_string_list_item() -> None:
+    raw = _base_response(
+        {
+            "id": "review_1",
+            "type": "weeklyReview",
+            "title": "x",
+            "summary": "x",
+            "requiresConfirmation": False,
+            "payload": {"observations": ["ok", 42]},
+        },
+        intent="weeklyReview",
+    )
+    response = normalize_agent_response(
+        raw,
+        user_message="hello",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+    assert response.actions == []
+
+
+def test_weekly_review_payload_rejects_negative_completed_sessions() -> None:
+    raw = _base_response(
+        {
+            "id": "review_1",
+            "type": "weeklyReview",
+            "title": "x",
+            "summary": "x",
+            "requiresConfirmation": False,
+            "payload": {"completedSessions": -1},
+        },
+        intent="weeklyReview",
+    )
+    response = normalize_agent_response(
+        raw,
+        user_message="hello",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+    assert response.actions == []

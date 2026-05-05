@@ -7,7 +7,7 @@ import logging
 import uuid
 from typing import Any, Dict, Iterable, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from agents.action_safety import MUTATION_ACTION_TYPES
 from agents.generate_plan_policy import has_sufficient_generate_plan_context
@@ -99,10 +99,24 @@ class _NutritionAdvicePayload(_StrictPayload):
 
 
 class _WeeklyReviewPayload(_StrictPayload):
-    completedWorkouts: Optional[int] = Field(default=None, ge=0, le=10000)
-    streakDays: Optional[int] = Field(default=None, ge=0, le=10000)
-    recentSessionCount: Optional[int] = Field(default=None, ge=0, le=10000)
-    suggestion: Optional[str] = Field(default=None, max_length=500)
+    summary: Optional[str] = Field(default=None, max_length=500)
+    completedSessions: Optional[int] = Field(default=None, ge=0, le=10000)
+    focusAreas: List[str] = Field(default_factory=list, max_length=8)
+    observations: List[str] = Field(default_factory=list, max_length=8)
+    nextWeekSuggestions: List[str] = Field(default_factory=list, max_length=8)
+    riskNotes: List[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator(
+        "focusAreas", "observations", "nextWeekSuggestions", "riskNotes"
+    )
+    @classmethod
+    def _validate_string_items(cls, value: List[str]) -> List[str]:
+        for item in value:
+            if not isinstance(item, str) or not item or len(item) > 200:
+                raise ValueError(
+                    "items must be non-empty strings of <= 200 chars"
+                )
+        return value
 
 
 class _SafetyResponsePayload(_StrictPayload):
