@@ -83,6 +83,8 @@ records the case so we can flip it to `active` once a real LLM is wired up."*
 
 ## Active vs. gap distribution (current)
 
+This is the pinned baseline for `agent-mvp-eval-v2` (main `1fc443e`):
+
 ```
 compressWorkout   : 6 active / 1 expectedGap
 replaceExercise   : 4 active / 2 expectedGap
@@ -94,6 +96,10 @@ promptInjection   : 6 active / 0
                   ────────────────────────
 total             : 37 active / 4 expectedGap (41 cases)
 ```
+
+The remaining 4 `expectedGap` cases are kept as regression signals and are not
+candidates for promotion at this stability point. See "Cases that remain
+`expectedGap` (and why)" below.
 
 ### Cross-run promotion of three paraphrases (history)
 
