@@ -355,4 +355,103 @@ void main() {
       expect(value.targetMinutes, isNull);
     });
   });
+
+  group('parseWeeklyReviewPayload', () {
+    test('accepts empty payload', () {
+      final result = parseWeeklyReviewPayload(const {});
+      expect(result, isA<PayloadParseSuccess<WeeklyReviewPayload>>());
+      final value = (result as PayloadParseSuccess<WeeklyReviewPayload>).value;
+      expect(value.summary, isNull);
+      expect(value.completedSessions, isNull);
+      expect(value.focusAreas, isEmpty);
+      expect(value.observations, isEmpty);
+      expect(value.nextWeekSuggestions, isEmpty);
+      expect(value.riskNotes, isEmpty);
+    });
+
+    test('accepts full payload', () {
+      final result = parseWeeklyReviewPayload(const {
+        'summary': '近期 3 次训练。',
+        'completedSessions': 3,
+        'focusAreas': ['推', '腿'],
+        'observations': ['训练间隔均匀。'],
+        'nextWeekSuggestions': ['保持每周 3 次。'],
+        'riskNotes': <String>[],
+      });
+      expect(result, isA<PayloadParseSuccess<WeeklyReviewPayload>>());
+      final value = (result as PayloadParseSuccess<WeeklyReviewPayload>).value;
+      expect(value.summary, '近期 3 次训练。');
+      expect(value.completedSessions, 3);
+      expect(value.focusAreas, ['推', '腿']);
+      expect(value.observations, ['训练间隔均匀。']);
+      expect(value.nextWeekSuggestions, ['保持每周 3 次。']);
+      expect(value.riskNotes, isEmpty);
+    });
+
+    test('rejects non-string summary', () {
+      final result = parseWeeklyReviewPayload(const {'summary': 123});
+      expect(result, isA<PayloadParseFailure<WeeklyReviewPayload>>());
+      expect(result.message, contains('summary'));
+    });
+
+    test('rejects negative completedSessions', () {
+      final result = parseWeeklyReviewPayload(const {'completedSessions': -1});
+      expect(result, isA<PayloadParseFailure<WeeklyReviewPayload>>());
+    });
+
+    test('rejects non-int completedSessions', () {
+      final result = parseWeeklyReviewPayload(const {'completedSessions': '3'});
+      expect(result, isA<PayloadParseFailure<WeeklyReviewPayload>>());
+    });
+
+    test('rejects list element that is not a string', () {
+      final result = parseWeeklyReviewPayload(const {
+        'observations': ['ok', 42],
+      });
+      expect(result, isA<PayloadParseFailure<WeeklyReviewPayload>>());
+      expect(result.message, contains('observations 第 2 项'));
+    });
+
+    test('rejects empty list element', () {
+      final result = parseWeeklyReviewPayload(const {
+        'focusAreas': [''],
+      });
+      expect(result, isA<PayloadParseFailure<WeeklyReviewPayload>>());
+      expect(result.message, contains('为空字符串'));
+    });
+
+    test('rejects list with too many items', () {
+      final result = parseWeeklyReviewPayload(const {
+        'nextWeekSuggestions': [
+          'a',
+          'b',
+          'c',
+          'd',
+          'e',
+          'f',
+          'g',
+          'h',
+          'i', // 9 items, exceeds 8
+        ],
+      });
+      expect(result, isA<PayloadParseFailure<WeeklyReviewPayload>>());
+      expect(result.message, contains('不能超过 8 项'));
+    });
+
+    test('rejects list element exceeding 200 chars', () {
+      final result = parseWeeklyReviewPayload({
+        'observations': ['x' * 201],
+      });
+      expect(result, isA<PayloadParseFailure<WeeklyReviewPayload>>());
+      expect(result.message, contains('200'));
+    });
+
+    test('rejects non-list array fields', () {
+      final result = parseWeeklyReviewPayload(const {
+        'observations': 'not a list',
+      });
+      expect(result, isA<PayloadParseFailure<WeeklyReviewPayload>>());
+      expect(result.message, contains('数组'));
+    });
+  });
 }

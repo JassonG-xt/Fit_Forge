@@ -710,3 +710,101 @@ def test_mock_generate_plan_minutes_out_of_range_dropped_silently() -> None:
     assert action.type == "generatePlan"
     # Out-of-range minutes are silently dropped; preference is omitted, not faked.
     assert "targetMinutes" not in action.payload
+
+
+# ── B-2: weeklyReview structured insights ──
+
+
+def _request_with_sessions(
+    message: str,
+    *,
+    sessions: list[dict] | None = None,
+    completed_this_week: int = 0,
+    streak: int = 0,
+    weekly_frequency: int | None = 3,
+) -> AgentRequest:
+    """Helper for weekly-review tests that need recentSessions seeded."""
+    progress: dict = {
+        "totalWorkoutsThisWeek": completed_this_week,
+        "streakDays": streak,
+    }
+    if weekly_frequency is not None:
+        progress["weeklyFrequency"] = weekly_frequency
+    context: dict = {
+        "locale": "zh-CN",
+        "recentSessions": sessions or [],
+        "progressSummary": progress,
+        "todayWorkout": None,
+        "availableExerciseSummary": [],
+        "profile": _COMPLETE_PROFILE,
+    }
+    return AgentRequest(message=message, context=context)
+
+
+def test_mock_weekly_review_no_sessions_returns_limited_review() -> None:
+    response = _run_mock_coach_agent(_request_with_sessions("帮我复盘这周训练"))
+    assert response.actions, "expected at least one action"
+    action = response.actions[0]
+    assert action.type == "weeklyReview"
+    assert action.requiresConfirmation is False
+    payload = action.payload
+    assert payload["completedSessions"] == 0
+    assert "没有" in payload["observations"][0]
+    # No fabricated focus areas / risk notes when there is no data.
+    assert "focusAreas" not in payload
+    assert "riskNotes" not in payload
+
+
+def test_mock_weekly_review_with_sessions_extracts_focus_areas() -> None:
+    sessions = [
+        {"id": f"push_{i}", "dayType": "push"} for i in range(3)
+    ] + [{"id": "legs_0", "dayType": "legs"}]
+    response = _run_mock_coach_agent(
+        _request_with_sessions(
+            "帮我复盘一下这周训练",
+            sessions=sessions,
+            completed_this_week=4,
+            streak=4,
+            weekly_frequency=3,
+        )
+    )
+    action = response.actions[0]
+    assert action.type == "weeklyReview"
+    payload = action.payload
+    assert payload["completedSessions"] == 4
+    # push appears 3x, legs 1x → push must come first.
+    assert "推" in payload["focusAreas"][0]
+    # Streak >= 3 → observation should mention streak count.
+    assert any("连续" in obs for obs in payload["observations"])
+
+
+def test_mock_weekly_review_emits_risk_note_when_overtraining() -> None:
+    """4 sessions/week vs frequency=2 should produce a risk note."""
+    sessions = [{"id": f"s{i}", "dayType": "push"} for i in range(4)]
+    response = _run_mock_coach_agent(
+        _request_with_sessions(
+            "本周训练复盘",
+            sessions=sessions,
+            completed_this_week=4,
+            streak=4,
+            weekly_frequency=2,
+        )
+    )
+    payload = response.actions[0].payload
+    assert "riskNotes" in payload
+    assert any("超过目标频率" in note for note in payload["riskNotes"])
+
+
+def test_mock_weekly_review_chest_pain_routes_to_safety() -> None:
+    """High-risk safety check must override weekly review intent."""
+    response = _run_mock_coach_agent(
+        _request_with_sessions("我胸口疼，但帮我复盘一下这周训练")
+    )
+    assert all(a.type != "weeklyReview" for a in response.actions)
+    assert response.safety.shouldStopWorkout is True
+
+
+def test_mock_weekly_review_alt_phrasing_practice_status() -> None:
+    """'练得怎么样' should also route to weeklyReview."""
+    response = _run_mock_coach_agent(_request_with_sessions("这周练得怎么样"))
+    assert response.actions[0].type == "weeklyReview"

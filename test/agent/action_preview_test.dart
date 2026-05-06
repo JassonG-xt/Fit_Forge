@@ -279,6 +279,57 @@ void main() {
         expect(result, isA<PreviewFailure>());
       });
     });
+
+    group('weeklyReview', () {
+      test('returns WeeklyReviewPreview with full payload', () {
+        final result = previewer.previewWeeklyReview(
+          makeAction(AgentActionType.weeklyReview, const {
+            'summary': '近期 3 次训练。',
+            'completedSessions': 3,
+            'focusAreas': ['推', '腿'],
+            'observations': ['训练间隔均匀。'],
+            'nextWeekSuggestions': ['保持每周 3 次。'],
+            'riskNotes': ['连续训练超过 7 天，建议休息一天。'],
+          }),
+        );
+        expect(result, isA<WeeklyReviewPreview>());
+        final preview = result as WeeklyReviewPreview;
+        expect(preview.completedSessions, 3);
+        expect(preview.focusAreas, ['推', '腿']);
+        expect(preview.observations, ['训练间隔均匀。']);
+        expect(preview.nextWeekSuggestions, ['保持每周 3 次。']);
+        expect(preview.riskNotes, hasLength(1));
+        expect(preview.hasContent, true);
+      });
+
+      test('hasContent is false for empty payload', () {
+        final result = previewer.previewWeeklyReview(
+          makeAction(AgentActionType.weeklyReview, const {}),
+        );
+        expect(result, isA<WeeklyReviewPreview>());
+        expect((result as WeeklyReviewPreview).hasContent, false);
+      });
+
+      test('returns PreviewFailure for malformed payload', () {
+        final result = previewer.previewWeeklyReview(
+          makeAction(AgentActionType.weeklyReview, const {
+            'observations': ['ok', 42],
+          }),
+        );
+        expect(result, isA<PreviewFailure>());
+      });
+
+      test('preview() switch routes weeklyReview correctly', () async {
+        final state = await primedAppStateWithProfile();
+        final result = previewer.preview(
+          action: makeAction(AgentActionType.weeklyReview, const {
+            'completedSessions': 2,
+          }),
+          appState: state,
+        );
+        expect(result, isA<WeeklyReviewPreview>());
+      });
+    });
   });
 }
 

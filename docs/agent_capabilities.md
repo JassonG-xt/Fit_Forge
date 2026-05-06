@@ -52,7 +52,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 | `rescheduleWeek` | Yes | Yes | 用 `availableWeekdays` 重排本周训练日。preview 显示 before/after 周表。 |
 | `replaceExercise` | Yes | Yes | 替换某天的某个动作；payload 含 `dayOfWeek` / `fromExerciseId` / `toExerciseId`。preview 显示替换前后动作。 |
 | `compressWorkout` | Yes | Yes | 用 `targetMinutes` 压缩今日训练时长。**不**猜默认值——若用户没说分钟数，Coach 改返 `answerOnly` 追问，不强行 compress。 |
-| `weeklyReview` | No | No | 总结本周训练表现的纯文本回复。`LocalAgentActionExecutor` 视为 noop。 |
+| `weeklyReview` | No | No | 总结本周训练表现的纯文本回复。`LocalAgentActionExecutor` 视为 noop。Payload 含 `summary` / `completedSessions` / `focusAreas` / `observations` / `nextWeekSuggestions` / `riskNotes` 结构化字段（均可选，列表上限 8 项、每项 ≤200 字符）；mock router 从 `recentSessions.dayType` 分布 + `progressSummary` 中确定性派生，无 session 数据时退回到「数据不足」回复，不编造数字。 |
 | `nutritionAdvice` | No | No | 营养相关回复；不修改训练计划，不修改食物数据库。 |
 | `safetyResponse` | No | No | 命中高风险关键字时由 deterministic guardrail 直接短路返回；带 `shouldStopWorkout` 标志。**不**调用 LLM。 |
 | `answerOnly` | No | No | 上下文不足以触发 mutation 时的兜底回复（含 clarification questions）。 |
@@ -92,6 +92,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 - **真实模式只做手动 eval**：real LLM 不进 per-PR CI；多 provider 比较只在本地手动跑，结果不提交。
 - **safety 关键字是中文语料为主**：英文输入下的 deterministic guard 覆盖率有限；不能替代医疗判断。
 - **generatePlan 偏好是后处理，不是 PlanEngine 内部决策**：`availableWeekdays` 通过 `reschedulePlanToWeekdays` 应用，`targetMinutes` 通过 `compressDayInPlan` 应用。这意味着如果偏好里的训练日数量超过 `PlanEngine` 给出的 workout 日数量，多余的 weekdays 会保持休息，不会自动加塞训练。
+- **weeklyReview 不是长期记忆教练**：复盘只用最近 10 条 session 摘要 + 当周进度计数，没有跨会话 memory；不分析 PR / 1RM / 体重趋势；不诊断伤病；不自动改下周计划。`riskNotes` 仅做训练量 / 恢复量级别的提示，不是医疗建议。
 
 ## Out of scope for the MVP
 

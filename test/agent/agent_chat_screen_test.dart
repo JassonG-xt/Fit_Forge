@@ -173,6 +173,27 @@ void main() {
 
     expect(find.byIcon(Icons.arrow_forward), findsNothing);
     expect(find.text('周一'), findsNothing);
+    // No mutation buttons for non-confirming weeklyReview action.
+    expect(find.text('应用修改'), findsNothing);
+  });
+
+  testWidgets('weeklyReview card shows insights panel sections', (
+    tester,
+  ) async {
+    await pumpChat(tester);
+    await tester.tap(find.text('帮我总结这周训练'));
+    await tester.pumpAndSettle();
+
+    // primedAppStateWithProfile has no sessions → mock returns the
+    // limited-data branch which still includes structured fields the panel
+    // can render (completedSessions=0, observations, nextWeekSuggestions).
+    expect(find.text('完成训练'), findsOneWidget);
+    expect(find.text('0 次'), findsOneWidget);
+    expect(find.text('观察'), findsOneWidget);
+    expect(find.text('下周建议'), findsOneWidget);
+    // No fabricated focus areas / risk notes in the limited-data branch.
+    expect(find.text('重点部位'), findsNothing);
+    expect(find.text('风险提示'), findsNothing);
   });
 
   testWidgets('diff hides after the action is resolved', (tester) async {

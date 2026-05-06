@@ -363,15 +363,112 @@ def _extract_target_minutes_for_generate(message: str) -> int | None:
 
 
 def _weekly_review_response(request: AgentRequest) -> AgentResponse:
+    """Deterministic weekly review.
+
+    Counts come from `progressSummary` and `recentSessions`. Focus areas and
+    risk notes are derived from the session-summary `dayType` distribution and
+    streak/frequency heuristics. No fabrication: when there are no completed
+    sessions in `recentSessions`, we say so explicitly and return a limited
+    review rather than inventing numbers.
+    """
     progress = request.context.progressSummary or {}
     completed = progress.get("totalWorkoutsThisWeek", 0)
     streak = progress.get("streakDays", 0)
-    recent = len(request.context.recentSessions or [])
+    weekly_frequency = progress.get("weeklyFrequency")
+    recent_sessions = request.context.recentSessions or []
+    recent = len(recent_sessions)
+
+    if recent == 0:
+        message = "最近还没有完成的训练记录，先完成几次训练后我可以给出更具体的复盘和建议。"
+        summary = "暂无近期训练数据，无法做有意义的复盘。"
+        payload = {
+            "summary": "暂无近期训练数据。",
+            "completedSessions": 0,
+            "observations": ["最近没有已完成的训练记录。"],
+            "nextWeekSuggestions": ["先完成几次训练，让 Coach 有数据可以复盘。"],
+        }
+        return AgentResponse(
+            message=message,
+            intent="weeklyReview",
+            confidence=0.85,
+            actions=[
+                AgentAction(
+                    id=_action_id("review"),
+                    type="weeklyReview",
+                    title="本周训练复盘",
+                    summary=summary,
+                    requiresConfirmation=False,
+                    payload=payload,
+                )
+            ],
+        )
+
+    # Focus areas: dayType distribution from recentSessions, top 3 non-rest.
+    day_type_counts: dict[str, int] = {}
+    for session in recent_sessions:
+        day_type = session.get("dayType")
+        if not day_type or day_type == "rest":
+            continue
+        day_type_counts[day_type] = day_type_counts.get(day_type, 0) + 1
+    focus_areas = [
+        _day_type_label(key)
+        for key, _ in sorted(
+            day_type_counts.items(), key=lambda kv: -kv[1]
+        )[:3]
+    ]
+
+    observations: list[str] = [f"近期已记录 {recent} 次训练。"]
+    if focus_areas:
+        observations.append(f"训练集中在：{'、'.join(focus_areas)}。")
+    if streak >= 3:
+        observations.append(f"已经连续训练 {streak} 天。")
+
+    risk_notes: list[str] = []
+    if weekly_frequency is not None and completed > weekly_frequency + 1:
+        risk_notes.append(
+            f"本周训练 {completed} 次，超过目标频率 {weekly_frequency} 次，注意恢复。"
+        )
+    if streak >= 7:
+        risk_notes.append("连续训练已超过 7 天，建议安排一天完整休息。")
+
+    next_week: list[str] = []
+    if weekly_frequency is not None:
+        if completed < weekly_frequency:
+            next_week.append(f"下周尽量补足到每周 {weekly_frequency} 次训练。")
+        else:
+            next_week.append(f"保持每周 {weekly_frequency} 次的训练节奏。")
+    else:
+        next_week.append("维持当前训练频率。")
+    if focus_areas:
+        next_week.append(f"继续保证 {focus_areas[0]} 训练日的复合动作质量。")
+    if not risk_notes:
+        next_week.append("感觉疲劳时优先降低训练量，不要硬加重量。")
+
+    focus_clause = (
+        f"训练集中在 {'、'.join(focus_areas)}。" if focus_areas else ""
+    )
+    summary = f"近期 {recent} 次训练，本周完成 {completed} 次。{focus_clause}"
+    message = (
+        f"近期 {recent} 次训练，本周完成 {completed} 次，连续 {streak} 天。"
+        f"{focus_clause}"
+        f"{('下周建议：' + next_week[0]) if next_week else ''}"
+    )
+
+    payload: dict[str, object] = {
+        "summary": summary,
+        "completedSessions": completed,
+    }
+    if focus_areas:
+        payload["focusAreas"] = focus_areas
+    if observations:
+        payload["observations"] = observations
+    if next_week:
+        payload["nextWeekSuggestions"] = next_week
+    if risk_notes:
+        payload["riskNotes"] = risk_notes
+
     return AgentResponse(
-        message=(
-            f"本周训练 {completed} 次，连续训练 {streak} 天，"
-            f"近期共记录 {recent} 次。继续保持节奏，下周可以补足薄弱部位。"
-        ),
+        message=message,
         intent="weeklyReview",
         confidence=0.85,
         actions=[
@@ -379,17 +476,24 @@ def _weekly_review_response(request: AgentRequest) -> AgentResponse:
                 id=_action_id("review"),
                 type="weeklyReview",
                 title="本周训练复盘",
-                summary=f"完成 {completed} 次，连续 {streak} 天。建议下周保持频率并补充薄弱部位。",
+                summary=summary,
                 requiresConfirmation=False,
-                payload={
-                    "completedWorkouts": completed,
-                    "streakDays": streak,
-                    "recentSessionCount": recent,
-                    "suggestion": "keep_frequency_focus_weak_parts",
-                },
+                payload=payload,
             )
         ],
     )
+
+
+def _day_type_label(key: str) -> str:
+    return {
+        "push": "推（胸 / 肩 / 三头）",
+        "pull": "拉（背 / 二头）",
+        "legs": "腿",
+        "upper": "上肢",
+        "lower": "下肢",
+        "fullBody": "全身",
+        "cardio": "有氧",
+    }.get(key, key)
 
 
 def _nutrition_response() -> AgentResponse:
@@ -494,7 +598,7 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
         if rescheduled is not None:
             return rescheduled
 
-    if _has_any(message, ("总结", "复盘", "本周训练", "这周训练", "一周训练")):
+    if _has_any(message, ("总结", "复盘", "本周训练", "这周训练", "一周训练", "最近训练", "下周应该注意", "练得怎么样")):
         return _weekly_review_response(request)
 
     if _has_any(message, ("吃多了", "晚餐", "午餐", "饮食", "热量", "碳水")):

@@ -98,8 +98,26 @@ You MUST return ONLY a valid JSON object matching this exact schema. No markdown
   - `targetMinutes`: int between 5 and 180. Include when the user gives an explicit duration (e.g. "每次 45 分钟"); do not guess defaults.
 - Do NOT add `equipmentPreference`, `avoidBodyParts`, or `avoidExercises` — these are not supported by the local executor and will be rejected.
 
-### nutritionAdvice / weeklyReview / safetyResponse / answerOnly
+### nutritionAdvice / safetyResponse / answerOnly
 - payload can be empty or contain advisory fields
+
+### weeklyReview
+```json
+{
+  "summary": "短句概括本周完成情况",
+  "completedSessions": 3,
+  "focusAreas": ["推（胸 / 肩 / 三头）", "腿"],
+  "observations": ["近期已记录 5 次训练。", "训练间隔比较均匀。"],
+  "nextWeekSuggestions": ["保持每周 3 次训练。", "下周继续保证深蹲质量。"],
+  "riskNotes": []
+}
+```
+- `weeklyReview` is **non-mutating**. `requiresConfirmation` must be `false`. Never claim it changes the plan.
+- Build the review **only from provided context** (`progressSummary`, `recentSessions`, `activePlan`). Do NOT invent session counts, PRs, body metrics, or injuries.
+- If `recentSessions` is empty, say so explicitly. Return a limited review rather than fabricating data.
+- Keep each list item short (≤ 200 chars), at most 8 items per list.
+- `riskNotes` is for general training-load / recovery cautions only — do NOT diagnose injuries, prescribe medical care, or extrapolate beyond what the data supports.
+- High-risk symptoms (chest pain, dizziness, acute injury, etc.) MUST short-circuit to `safetyResponse`, even if the user asked for a weekly review.
 
 ## Safety Fallback Rules
 

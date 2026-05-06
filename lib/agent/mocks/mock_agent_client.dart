@@ -160,7 +160,16 @@ class MockAgentClient implements AgentClient {
   }
 
   bool _isWeeklyReviewIntent(String text) {
-    final keywords = ['总结', '复盘', '本周训练', '这周训练', '一周训练'];
+    final keywords = [
+      '总结',
+      '复盘',
+      '本周训练',
+      '这周训练',
+      '一周训练',
+      '最近训练',
+      '下周应该注意',
+      '练得怎么样',
+    ];
     return keywords.any(text.contains);
   }
 
@@ -444,14 +453,9 @@ class MockAgentClient implements AgentClient {
   }
 
   AgentResponse _weeklyReviewResponse(AgentContextSnapshot context) {
-    final progress = context.progressSummary;
-    final completedThisWeek = progress['totalWorkoutsThisWeek'] ?? 0;
-    final streak = progress['streakDays'] ?? 0;
-    final recent = context.recentSessions.length;
+    final insights = _buildWeeklyReviewInsights(context);
     return AgentResponse(
-      message:
-          '本周训练 $completedThisWeek 次，连续训练 $streak 天，'
-          '近期共记录 $recent 次。继续保持节奏，下周可以补足薄弱部位。',
+      message: insights.message,
       intent: AgentIntent.weeklyReview,
       confidence: 0.85,
       actions: [
@@ -459,18 +463,124 @@ class MockAgentClient implements AgentClient {
           id: _newId('review'),
           type: AgentActionType.weeklyReview,
           title: '本周训练复盘',
-          summary: '完成 $completedThisWeek 次，连续 $streak 天。建议下周保持频率并补充薄弱部位。',
+          summary: insights.summary,
           requiresConfirmation: false,
-          payload: {
-            'completedWorkouts': completedThisWeek,
-            'streakDays': streak,
-            'recentSessionCount': recent,
-            'suggestion': 'keep_frequency_focus_weak_parts',
-          },
+          payload: insights.payload,
         ),
       ],
     );
   }
+
+  /// Deterministic weekly review builder. Counts come from `recentSessions` and
+  /// `progressSummary`; focus areas come from `dayType` distribution; risk
+  /// notes from training-density / streak heuristics. No fabrication: when the
+  /// context has no completed sessions we say so explicitly.
+  _WeeklyReviewInsights _buildWeeklyReviewInsights(
+    AgentContextSnapshot context,
+  ) {
+    final progress = context.progressSummary;
+    final completedThisWeek = (progress['totalWorkoutsThisWeek'] as int?) ?? 0;
+    final streak = (progress['streakDays'] as int?) ?? 0;
+    final recentSessions = context.recentSessions;
+    final recent = recentSessions.length;
+    final weeklyFrequency = progress['weeklyFrequency'] as int?;
+
+    if (recent == 0) {
+      return const _WeeklyReviewInsights(
+        message: '最近还没有完成的训练记录，先完成几次训练后我可以给出更具体的复盘和建议。',
+        summary: '暂无近期训练数据，无法做有意义的复盘。',
+        payload: {
+          'summary': '暂无近期训练数据。',
+          'completedSessions': 0,
+          'observations': ['最近没有已完成的训练记录。'],
+          'nextWeekSuggestions': ['先完成几次训练，让 Coach 有数据可以复盘。'],
+        },
+      );
+    }
+
+    // Focus areas: workout-day-type distribution from recentSessions.
+    final dayTypeCounts = <String, int>{};
+    for (final s in recentSessions) {
+      final type = s['dayType'] as String?;
+      if (type == null || type == 'rest') continue;
+      dayTypeCounts[type] = (dayTypeCounts[type] ?? 0) + 1;
+    }
+    final focusAreas =
+        (dayTypeCounts.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value)))
+            .take(3)
+            .map((e) => _dayTypeLabel(e.key))
+            .toList();
+
+    final observations = <String>[];
+    observations.add('近期已记录 $recent 次训练。');
+    if (focusAreas.isNotEmpty) {
+      observations.add('训练集中在：${focusAreas.join('、')}。');
+    }
+    if (streak >= 3) {
+      observations.add('已经连续训练 $streak 天。');
+    }
+
+    // Risk: training density vs profile target frequency.
+    final riskNotes = <String>[];
+    if (weeklyFrequency != null && completedThisWeek > weeklyFrequency + 1) {
+      riskNotes.add(
+        '本周训练 $completedThisWeek 次，超过目标频率 $weeklyFrequency 次，注意恢复。',
+      );
+    }
+    if (streak >= 7) {
+      riskNotes.add('连续训练已超过 7 天，建议安排一天完整休息。');
+    }
+
+    final nextWeekSuggestions = <String>[];
+    if (weeklyFrequency != null) {
+      if (completedThisWeek < weeklyFrequency) {
+        nextWeekSuggestions.add('下周尽量补足到每周 $weeklyFrequency 次训练。');
+      } else {
+        nextWeekSuggestions.add('保持每周 $weeklyFrequency 次的训练节奏。');
+      }
+    } else {
+      nextWeekSuggestions.add('维持当前训练频率。');
+    }
+    if (focusAreas.isNotEmpty) {
+      nextWeekSuggestions.add('继续保证 ${focusAreas.first} 训练日的复合动作质量。');
+    }
+    if (riskNotes.isEmpty) {
+      nextWeekSuggestions.add('感觉疲劳时优先降低训练量，不要硬加重量。');
+    }
+
+    final summary =
+        '近期 $recent 次训练，本周完成 $completedThisWeek 次。'
+        '${focusAreas.isEmpty ? '' : '训练集中在 ${focusAreas.join('、')}。'}';
+
+    return _WeeklyReviewInsights(
+      message:
+          '近期 $recent 次训练，本周完成 $completedThisWeek 次，连续 $streak 天。'
+          '${focusAreas.isEmpty ? '' : '训练集中在 ${focusAreas.join('、')}。'}'
+          '${nextWeekSuggestions.isNotEmpty ? '下周建议：${nextWeekSuggestions.first}' : ''}',
+      summary: summary,
+      payload: {
+        'summary': summary,
+        'completedSessions': completedThisWeek,
+        if (focusAreas.isNotEmpty) 'focusAreas': focusAreas,
+        if (observations.isNotEmpty) 'observations': observations,
+        if (nextWeekSuggestions.isNotEmpty)
+          'nextWeekSuggestions': nextWeekSuggestions,
+        if (riskNotes.isNotEmpty) 'riskNotes': riskNotes,
+      },
+    );
+  }
+
+  String _dayTypeLabel(String key) => switch (key) {
+    'push' => '推（胸 / 肩 / 三头）',
+    'pull' => '拉（背 / 二头）',
+    'legs' => '腿',
+    'upper' => '上肢',
+    'lower' => '下肢',
+    'fullBody' => '全身',
+    'cardio' => '有氧',
+    _ => key,
+  };
 
   AgentResponse _nutritionResponse() {
     return AgentResponse(
@@ -518,4 +628,18 @@ class MockAgentClient implements AgentClient {
     };
     return names[weekday] ?? '周$weekday';
   }
+}
+
+/// Internal carrier for [MockAgentClient._buildWeeklyReviewInsights] output.
+/// Keeps the response builder signature small.
+class _WeeklyReviewInsights {
+  const _WeeklyReviewInsights({
+    required this.message,
+    required this.summary,
+    required this.payload,
+  });
+
+  final String message;
+  final String summary;
+  final Map<String, dynamic> payload;
 }

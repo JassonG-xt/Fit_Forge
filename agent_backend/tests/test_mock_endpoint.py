@@ -57,17 +57,24 @@ def test_weekly_review_uses_progress_summary() -> None:
                 "progressSummary": {
                     "streakDays": 5,
                     "totalWorkoutsThisWeek": 3,
+                    "weeklyFrequency": 3,
                 },
-                "recentSessions": [{"id": f"s{i}"} for i in range(4)],
+                "recentSessions": [
+                    {"id": f"s{i}", "dayType": "push"} for i in range(4)
+                ],
             },
         },
     )
     body = response.json()
     assert body["intent"] == "weeklyReview"
     payload = body["actions"][0]["payload"]
-    assert payload["completedWorkouts"] == 3
-    assert payload["streakDays"] == 5
-    assert payload["recentSessionCount"] == 4
+    # New B-2 schema: structured insights, no fabrication.
+    assert payload["completedSessions"] == 3
+    assert isinstance(payload["summary"], str)
+    assert isinstance(payload["observations"], list)
+    assert any("4" in obs or "次训练" in obs for obs in payload["observations"])
+    # 4 push sessions → push should be the primary focus area.
+    assert any("推" in area for area in payload["focusAreas"])
 
 
 def test_unknown_falls_back_to_answer_only() -> None:

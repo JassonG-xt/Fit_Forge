@@ -62,6 +62,31 @@ class CompressWorkoutPayload {
   final int targetMinutes;
 }
 
+/// `weeklyReview` 是非 mutating 的结构化复盘。所有字段都可选；
+/// parser 用于校验后端 / mock 给出的复盘内容形状是否合规，
+/// 不参与任何 AppState 写入。
+///
+/// 字段约束（与 backend `_WeeklyReviewPayload` 对齐）：
+/// - 字符串类字段最大 500 字符，列表最多 8 项。
+/// - 列表元素必须是非空字符串。
+/// - 数值字段非负。
+class WeeklyReviewPayload {
+  const WeeklyReviewPayload({
+    this.summary,
+    this.completedSessions,
+    this.focusAreas = const [],
+    this.observations = const [],
+    this.nextWeekSuggestions = const [],
+    this.riskNotes = const [],
+  });
+  final String? summary;
+  final int? completedSessions;
+  final List<String> focusAreas;
+  final List<String> observations;
+  final List<String> nextWeekSuggestions;
+  final List<String> riskNotes;
+}
+
 // ─── parser functions ───────────────────────────────────────────────
 
 /// 校验 dayOfWeek：必须是 int，值在 1-7。
@@ -208,4 +233,102 @@ PayloadParseResult<GeneratePlanPayload> parseGeneratePlanPayload(
   return PayloadParseSuccess(
     GeneratePlanPayload(availableWeekdays: weekdays, targetMinutes: minutes),
   );
+}
+
+/// 校验 `weeklyReview` payload。所有字段都可选；缺省字段返回默认空值。
+///
+/// 不允许静默丢弃非法元素：列表中遇到非 String 或空 String 直接整体拒绝，
+/// 让上游知道 payload 不合规，而不是悄悄把列表截断/忽略。
+PayloadParseResult<WeeklyReviewPayload> parseWeeklyReviewPayload(
+  Map<String, dynamic> payload,
+) {
+  String? summary;
+  if (payload.containsKey('summary') && payload['summary'] != null) {
+    final raw = payload['summary'];
+    if (raw is! String) {
+      return const PayloadParseFailure('summary 必须是字符串。');
+    }
+    if (raw.length > 500) {
+      return const PayloadParseFailure('summary 长度超过 500 字符。');
+    }
+    summary = raw;
+  }
+
+  int? completedSessions;
+  if (payload.containsKey('completedSessions') &&
+      payload['completedSessions'] != null) {
+    final raw = payload['completedSessions'];
+    if (raw is! int) {
+      return const PayloadParseFailure('completedSessions 必须是非负整数。');
+    }
+    if (raw < 0 || raw > 10000) {
+      return PayloadParseFailure('completedSessions 越界（应在 0-10000），当前值为 $raw。');
+    }
+    completedSessions = raw;
+  }
+
+  final focusAreas = _parseStringList(payload, 'focusAreas');
+  if (focusAreas is PayloadParseFailure<List<String>>) {
+    return PayloadParseFailure(focusAreas.message);
+  }
+
+  final observations = _parseStringList(payload, 'observations');
+  if (observations is PayloadParseFailure<List<String>>) {
+    return PayloadParseFailure(observations.message);
+  }
+
+  final nextWeekSuggestions = _parseStringList(payload, 'nextWeekSuggestions');
+  if (nextWeekSuggestions is PayloadParseFailure<List<String>>) {
+    return PayloadParseFailure(nextWeekSuggestions.message);
+  }
+
+  final riskNotes = _parseStringList(payload, 'riskNotes');
+  if (riskNotes is PayloadParseFailure<List<String>>) {
+    return PayloadParseFailure(riskNotes.message);
+  }
+
+  return PayloadParseSuccess(
+    WeeklyReviewPayload(
+      summary: summary,
+      completedSessions: completedSessions,
+      focusAreas: (focusAreas as PayloadParseSuccess<List<String>>).value,
+      observations: (observations as PayloadParseSuccess<List<String>>).value,
+      nextWeekSuggestions:
+          (nextWeekSuggestions as PayloadParseSuccess<List<String>>).value,
+      riskNotes: (riskNotes as PayloadParseSuccess<List<String>>).value,
+    ),
+  );
+}
+
+/// 共享的小帮手：解析 weeklyReview 中的字符串列表字段。
+/// 限制：最多 8 项，每项必须是非空 String 且长度 <= 200。
+PayloadParseResult<List<String>> _parseStringList(
+  Map<String, dynamic> payload,
+  String key,
+) {
+  if (!payload.containsKey(key) || payload[key] == null) {
+    return const PayloadParseSuccess(<String>[]);
+  }
+  final raw = payload[key];
+  if (raw is! List) {
+    return PayloadParseFailure('$key 必须是数组。');
+  }
+  if (raw.length > 8) {
+    return PayloadParseFailure('$key 不能超过 8 项。');
+  }
+  final result = <String>[];
+  for (var i = 0; i < raw.length; i++) {
+    final element = raw[i];
+    if (element is! String) {
+      return PayloadParseFailure('$key 第 ${i + 1} 项不是字符串。');
+    }
+    if (element.isEmpty) {
+      return PayloadParseFailure('$key 第 ${i + 1} 项为空字符串。');
+    }
+    if (element.length > 200) {
+      return PayloadParseFailure('$key 第 ${i + 1} 项超过 200 字符。');
+    }
+    result.add(element);
+  }
+  return PayloadParseSuccess(result);
 }
