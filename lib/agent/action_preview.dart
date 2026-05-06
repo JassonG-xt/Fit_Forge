@@ -60,6 +60,34 @@ class GeneratePlanPreview extends ActionPreview {
   final WorkoutPlan previewPlan;
 }
 
+/// 只读复盘视图。weeklyReview 不修改 AppState；这个 preview 类型只承载
+/// 结构化文案，由 UI 渲染成 insight 面板。
+class WeeklyReviewPreview extends ActionPreview {
+  const WeeklyReviewPreview({
+    this.summary,
+    this.completedSessions,
+    this.focusAreas = const [],
+    this.observations = const [],
+    this.nextWeekSuggestions = const [],
+    this.riskNotes = const [],
+  });
+  final String? summary;
+  final int? completedSessions;
+  final List<String> focusAreas;
+  final List<String> observations;
+  final List<String> nextWeekSuggestions;
+  final List<String> riskNotes;
+
+  /// 至少有一个结构化字段时返回 true。`summary` 不计入：card 顶部已经
+  /// 显示 `action.summary`，重复显示就只是噪音。
+  bool get hasContent =>
+      completedSessions != null ||
+      focusAreas.isNotEmpty ||
+      observations.isNotEmpty ||
+      nextWeekSuggestions.isNotEmpty ||
+      riskNotes.isNotEmpty;
+}
+
 /// 校验失败时返回此类型，附带用户可理解的中文消息。
 class PreviewFailure extends ActionPreview {
   const PreviewFailure(this.message);
@@ -86,9 +114,10 @@ class AgentActionPreviewer {
         return _previewReschedule(action, appState);
       case AgentActionType.generatePlan:
         return _previewGeneratePlan(action, appState);
+      case AgentActionType.weeklyReview:
+        return previewWeeklyReview(action);
       case AgentActionType.answerOnly:
       case AgentActionType.nutritionAdvice:
-      case AgentActionType.weeklyReview:
       case AgentActionType.safetyResponse:
         return const PreviewFailure('此类型不需要预览。');
     }
@@ -249,5 +278,26 @@ class AgentActionPreviewer {
     } catch (_) {
       return const PreviewFailure('预览计划生成失败。');
     }
+  }
+
+  /// 解析 weeklyReview payload。校验失败时返回 [PreviewFailure]，UI
+  /// 会安全 fallback 到 `action.summary`，不会显示空 panel。
+  ///
+  /// 故意不需要 AppState：weeklyReview 是只读、non-mutating 的复盘卡片，
+  /// 只读 payload 即可生成 preview，UI 层不必引入 Provider 依赖。
+  ActionPreview previewWeeklyReview(AgentAction action) {
+    final parsed = parseWeeklyReviewPayload(action.payload);
+    if (parsed is PayloadParseFailure<WeeklyReviewPayload>) {
+      return PreviewFailure(parsed.message);
+    }
+    final value = (parsed as PayloadParseSuccess<WeeklyReviewPayload>).value;
+    return WeeklyReviewPreview(
+      summary: value.summary,
+      completedSessions: value.completedSessions,
+      focusAreas: value.focusAreas,
+      observations: value.observations,
+      nextWeekSuggestions: value.nextWeekSuggestions,
+      riskNotes: value.riskNotes,
+    );
   }
 }

@@ -9,6 +9,7 @@ import '../../theme/app_spacing.dart';
 import '../../widgets/brand/glow_button.dart';
 import '../../widgets/cards/section_card.dart';
 import 'agent_diff_view.dart';
+import 'agent_weekly_review_panel.dart';
 
 /// Coach Agent 建议的结构化动作卡片。
 ///
@@ -63,6 +64,8 @@ class AgentActionCard extends StatelessWidget {
                   action: action,
                   appState: Provider.of<AppState>(context, listen: false),
                 ),
+              if (action.type == AgentActionType.weeklyReview)
+                AgentWeeklyReviewPanel(action: action),
               if (action.requiresConfirmation) ...[
                 const SizedBox(height: AppSpacing.md),
                 Row(
