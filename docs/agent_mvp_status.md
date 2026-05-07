@@ -257,7 +257,19 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
    - mock router 从 `recentSessions.dayType` 分布 + `progressSummary` 中确定性派生；无 session 数据时退回到「数据不足」回复，**不**编造数字
    - **不**做长期记忆 / PR / 1RM / 体重趋势 / 伤病诊断 / 自动改下周计划
 
-10. **再考虑 streaming 或 multi-agent**
+10. ~~**C-1 B-stage eval contract coverage**~~ ✅ 已完成（PR #39）
+    - 在 `coach_agent_eval_cases.json` 加 4 条 active case：preference-aware generatePlan、structured weeklyReview、weeklyReview no-data fallback、safety-over-weeklyReview
+    - 扩展 mock eval harness：`contextOverride.recentSessions` / `progressSummary` 支持，`mustHavePayloadFields` 不再仅限 mutation action
+    - 三层不重不漏：eval JSON 锁结构、`test_coach_agent_mock.py` 锁值、`test_output_validation.py` + `extra="forbid"` 锁 schema
+    - eval suite 总计：45 cases / 41 active / 4 expectedGap
+
+11. **C-2 real LLM eval scorecard template** ✅ 已完成（本次 PR）
+    - 新增 `docs/real_llm_provider_scorecard_template.md`：run metadata / 计数 / category breakdown / B-stage capability 检查 / safety boundary 检查 / 错误统计 / 决策 / 非目标
+    - 模板字段对齐 harness `report.summary` JSON shape，operator 可直接抄数
+    - 强制 ≥3 cross-run 才能翻 active；不接受单次 run 提名 provider
+    - 不跑 real LLM、不比较 provider，**只**铺 reporting 基建
+
+12. **再考虑 streaming 或 multi-agent**
    前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。streaming / multi-agent / 长期记忆 / 自动执行 mutation 都不是当前 MVP 的目标。
 
 ## 操作守则（合并任何 agent 相关 PR 前 self-check）

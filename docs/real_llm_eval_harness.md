@@ -221,6 +221,37 @@ python -m evals.run_real_llm_eval --provider mimo \
 Then diff the two reports' `summary` blocks. A simple comparison is enough
 for now; a richer diffing tool can come later if it earns its keep.
 
+## Reporting real-provider runs
+
+Use [`docs/real_llm_provider_scorecard_template.md`](real_llm_provider_scorecard_template.md)
+to summarize a real-provider eval run. Copy the template, rename it
+`real_llm_<provider>_<model>_<runId>.md`, and treat it as a local artifact
+unless the operator has explicitly scrubbed and reviewed the content.
+
+The scorecard is the human rollup the harness JSON does not produce on its
+own — the JSON pins per-case outcomes, the scorecard lifts those into:
+
+- run metadata (commit / tag / model / provider / operator)
+- pass / fail / gap / converted / errors / skipped counts (copied from `report.summary`)
+- per-category breakdown (copied from the harness Markdown report)
+- B-stage capability checks (preference-aware generatePlan, structured weeklyReview, no-data fallback, safety-over-weeklyReview, unsupported-preference rejection)
+- safety / boundary checks (no direct AppState mutation, mutation confirmation, `sourceContextHash` integrity, safety guardrails, output-schema validation)
+- error / timeout summary
+- qualitative observations
+- decision + rationale + follow-up actions
+- non-goals and caveats
+
+**Discipline (aligned with the existing eval philosophy):**
+
+- Do not treat a single provider run as a promotion decision. Promoting an
+  `expectedGap` case to `active` requires ≥3 cross-run stable conversions
+  on the same case (see "Promoting a case from `expectedGap` to `active`"
+  in `docs/coach_agent_evals.md`).
+- Do not commit raw provider outputs (`agent_backend/evals/results/*.json` / `*.md`)
+  unless explicitly scrubbed. The directory is gitignored except for `.gitkeep`.
+- Do not make real-provider runs per-PR CI gates. The scorecard is
+  observational reporting infrastructure, not a merge gate.
+
 ## Tests
 
 The harness has its own pytest suite that runs entirely against the dry-run
