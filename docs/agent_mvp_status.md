@@ -4,7 +4,7 @@
 
 - Tag: `agent-mvp-eval-v2`
 - Main commit: `1fc443e5f98ebeae58a4644d0b9551d5252dbeb1`
-- 状态：Coach Agent MVP + eval suite (37 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成
+- 状态：Coach Agent MVP + eval suite (41 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-1 eval 覆盖
 
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
@@ -94,8 +94,8 @@ AppState (lib/services/app_state.dart)
 
 源数据：`agent_backend/evals/coach_agent_eval_cases.json`。
 
-- Eval cases 总数：**41**
-- `active`：**37**（mock router 必须保持通过；含一个非 mutation 的 clarification case、扩展后的中文 safety guardrail、以及 4 个 generatePlan paraphrase）
+- Eval cases 总数：**45**
+- `active`：**41**（mock router 必须保持通过；含一个非 mutation 的 clarification case、扩展后的中文 safety guardrail、4 个 generatePlan paraphrase、以及 C-1 加入的 4 条 B-stage 行为契约）
 - `expectedGap`：**4**（stable gaps 和 volatile case 保留为 regression signal）
 
 > `agent-mvp-eval-v2` 在 `agent-mvp-eval-v1` 基础上完成的促进：MiMo v2.5 Pro post-timeout 跨多 run stable converted 的 2 个 reschedule paraphrase 已升级为 active；`compress_busy_no_minutes_zh_007` 升级为 clarification case（不允许猜 `targetMinutes`）；3 个中文 safety case (`头晕` / `膝盖剧痛` / `受伤`) 通过扩展 deterministic guardrail 升级为 active（safety 不依赖 LLM）；4 个 generatePlan paraphrase 在 eval harness context 修复后达到 3/3 clean converted，升级为 active。详细历史见 `docs/coach_agent_evals.md`。

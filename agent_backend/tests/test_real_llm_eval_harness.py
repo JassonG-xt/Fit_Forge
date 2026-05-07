@@ -485,7 +485,7 @@ def test_generate_plan_cases_with_override_satisfy_policy() -> None:
     from agents.generate_plan_policy import has_sufficient_generate_plan_context
 
     cases = _generate_plan_cases_with_override()
-    assert len(cases) == 4, f"expected 4 generatePlan cases with override, got {len(cases)}"
+    assert len(cases) == 5, f"expected 5 generatePlan cases with override, got {len(cases)}"
     for case in cases:
         ctx = _build_request_context(case, "hash")
         assert has_sufficient_generate_plan_context(ctx["profile"]), (

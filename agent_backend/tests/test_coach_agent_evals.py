@@ -93,6 +93,21 @@ def _build_context(case: Dict[str, Any]) -> Dict[str, Any]:
             {"exerciseId": "bench_press", "exerciseName": "Bench Press"},
         ]
 
+    # B-2 weeklyReview cases need a populated `recentSessions` array so the
+    # mock router can derive `completedSessions` / `focusAreas` / streak
+    # observations. Replaces the default empty list verbatim.
+    if "recentSessions" in override:
+        ctx["recentSessions"] = override["recentSessions"]
+
+    # B-2 cases also need to override `progressSummary` (totalWorkoutsThisWeek
+    # / streakDays / weeklyFrequency) so streak / overtraining observations
+    # are deterministic. Shallow-merge keeps any default keys not overridden.
+    if "progressSummary" in override:
+        ctx["progressSummary"] = {
+            **ctx.get("progressSummary", {}),
+            **override["progressSummary"],
+        }
+
     return ctx
 
 
@@ -154,15 +169,17 @@ def test_active_case_against_mock_provider(case: Dict[str, Any]) -> None:
                 )
 
     # ── payload required fields ──
+    # Applies to whatever the actual first action is — mutation OR non-mutation
+    # (e.g. weeklyReview structured insights from B-2). Cases that don't want
+    # this check simply omit `mustHavePayloadFields`.
     must_have_fields = expected.get("mustHavePayloadFields") or []
     if must_have_fields and response.actions:
         first = response.actions[0]
-        if first.type in _MUTATION_ACTION_TYPES:
-            for field in must_have_fields:
-                assert field in first.payload, (
-                    f"[{case['id']}] payload missing required field '{field}'. "
-                    f"Got payload keys: {list(first.payload.keys())}"
-                )
+        for field in must_have_fields:
+            assert field in first.payload, (
+                f"[{case['id']}] payload missing required field '{field}'. "
+                f"Got payload keys: {list(first.payload.keys())}"
+            )
 
     # ── expected weekdays (rescheduleWeek) ──
     expected_weekdays = expected.get("expectedWeekdays")
@@ -241,9 +258,9 @@ def test_eval_suite_covers_required_categories() -> None:
         "compressWorkout": 6,
         "replaceExercise": 6,
         "rescheduleWeek": 6,
-        "generatePlan": 5,
-        "nonMutatingCoaching": 5,
-        "safety": 6,
+        "generatePlan": 6,
+        "nonMutatingCoaching": 7,
+        "safety": 7,
         "promptInjection": 6,
     }
     for category, minimum in required.items():
