@@ -79,7 +79,16 @@ _PAYLOAD_BY_TYPE: Dict[str, Dict[str, Any]] = {
         "toExerciseId": "leg_press",
     },
     "rescheduleWeek": {"availableWeekdays": [2, 5]},
-    "generatePlan": {"usePreviewPlan": True},
+    # B-1: optional preference fields are part of every canonical generatePlan
+    # response so the new `generate_preference_weekdays_minutes_zh_006`
+    # eval case (which asserts mustHavePayloadFields=[availableWeekdays,
+    # targetMinutes]) survives normalization. They're harmless for the other
+    # generatePlan cases that don't assert these keys.
+    "generatePlan": {
+        "usePreviewPlan": True,
+        "availableWeekdays": [1, 3, 5],
+        "targetMinutes": 45,
+    },
 }
 
 
