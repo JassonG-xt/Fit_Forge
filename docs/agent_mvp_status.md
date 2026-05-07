@@ -245,7 +245,19 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
 
 7. ~~**Backend / secret / dependency / Dependabot CI gates、不可信 LLM output validation、log 脱敏、API exposure controls、local execution / import 校验硬化**~~ ✅ 已完成（PR #17）
 
-8. **再考虑 streaming 或 multi-agent**
+8. ~~**B-1 preference-aware generatePlan**~~ ✅ 已完成（PR #36）
+   - `generatePlan` 支持可选偏好字段 `availableWeekdays`（List[int] 1-7、不重复）和 `targetMinutes`（int 5-180）
+   - 偏好作为 `PlanEngine` 输出的确定性后处理（reschedule + compress）应用，**不**进入 `PlanEngine` 内部选动作 / split 决策
+   - 仍要求用户确认；写入仍只走 `LocalAgentActionExecutor`
+   - `equipmentPreference` / `avoidBodyParts` / `avoidExercises` **不在范围**：backend `extra="forbid"` 直接拒绝，避免「假装支持」
+
+9. ~~**B-2 weeklyReview structured insights**~~ ✅ 已完成（PR #37）
+   - `weeklyReview` payload 增加结构化字段：`summary` / `completedSessions` / `focusAreas` / `observations` / `nextWeekSuggestions` / `riskNotes`（均可选，列表上限 8 项、每项 ≤200 字符）
+   - 仍是 read-only：不需要确认、不调用 executor、不修改 `AppState`
+   - mock router 从 `recentSessions.dayType` 分布 + `progressSummary` 中确定性派生；无 session 数据时退回到「数据不足」回复，**不**编造数字
+   - **不**做长期记忆 / PR / 1RM / 体重趋势 / 伤病诊断 / 自动改下周计划
+
+10. **再考虑 streaming 或 multi-agent**
    前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。streaming / multi-agent / 长期记忆 / 自动执行 mutation 都不是当前 MVP 的目标。
 
 ## 操作守则（合并任何 agent 相关 PR 前 self-check）

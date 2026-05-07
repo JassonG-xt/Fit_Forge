@@ -12,6 +12,7 @@
 2. LLM 不直接写 `AppState`，所有写入走 `LocalAgentActionExecutor`。
 3. Mock mode 离线就能跑，不需要 API key。
 4. 高风险请求会触发 `safetyResponse`，不会变成训练修改。
+5. 复盘类请求是 read-only 的：返回结构化 insight panel，不会偷偷改下周计划。
 
 ## Setup
 
@@ -30,28 +31,31 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=mock
 
 > 想跑 backend / real LLM 路径，参考 `docs/agent_demo_script.md` 的「Demo 前准备」段；showcase 录屏建议**只用 mock mode**避免暴露 real provider 响应。
 
-## Scenario 1: Reschedule this week's workouts
+## Scenario 1: Preference-aware plan generation
 
 **User message：**
 
 ```
-我这周三没时间训练，帮我把训练重新安排到周五
+我只有周一周三周五能练，每次 45 分钟，帮我生成一个计划
 ```
 
 **Expected result：**
 
-- Coach 返回 `rescheduleWeek` action，`requiresConfirmation=true`，`riskLevel=low/medium`。
-- payload 含调整后的 `availableWeekdays`（不再包含周三，包含周五）。
+- Coach 返回 `generatePlan` action，`requiresConfirmation=true`。
+- payload 偏好字段捕获 `availableWeekdays=[1, 3, 5]` 和 `targetMinutes=45`。
+- preview 由本地 `PlanEngine` 确定性生成；偏好作为后处理（reschedule + compress）应用，**不**进入 PlanEngine 内部选动作 / split 决策。
 - `AgentActionCard` 显示 action title + summary。
-- `AgentDiffView` 显示 before/after 周表对比。
+- `AgentDiffView` 显示生成的周表（仅周一/周三/周五，每天压到 45 分钟）。
 
 **What to show：**
 
 1. 用户消息冒泡出现。
-2. `AgentActionCard` + `AgentDiffView` 渲染（强调："这是建议，不是修改"）。
-3. **不**点「应用修改」，先打开 `lib/agent/local_agent_action_executor.dart` 一闪而过强调「写入只走这里」。
+2. `AgentActionCard` + `AgentDiffView` 渲染（强调："Coach 听懂了 weekday 和 minutes 两个偏好，但计划仍由本地 PlanEngine 生成，不是 LLM 编出来的"）。
+3. 切到 plan 页面前**不**点「应用修改」，先打开 `lib/agent/local_agent_action_executor.dart` 一闪而过强调「写入只走这里」。
 4. 回到 app，点「应用修改」。
-5. 切到训练计划页验证：周三空闲、周五有训练。
+5. 切到训练计划页验证：周一 / 周三 / 周五 安排训练，时长接近 45 分钟。
+
+> 边界提示：`equipmentPreference` / `avoidBodyParts` / `avoidExercises` 暂不支持。LLM 若返回这些字段，backend `extra="forbid"` 会直接拒绝，避免「假装支持」。
 
 ## Scenario 2: Replace an exercise
 
@@ -96,7 +100,37 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=mock
 4. 点「应用修改」。
 5. 进入今日训练验证训练时长 / 内容缩短。
 
-## Scenario 4: High-risk safety request
+## Scenario 4: Weekly review insights
+
+**User message：**
+
+```
+帮我复盘一下这周训练，下周应该注意什么？
+```
+
+**Expected result：**
+
+- Coach 返回 `weeklyReview`，**不需要**用户确认（read-only）。
+- `LocalAgentActionExecutor` 视为 noop，**不**修改 `AppState`、**不**自动改下周计划。
+- UI 渲染 read-only insight panel，**没有**「应用修改」按钮。
+- 当数据支持时，panel 可显示：
+  - completed sessions（本周完成训练数）
+  - focus areas（重点训练部位）
+  - observations（观察项）
+  - next-week suggestions（下周建议）
+  - risk notes（恢复 / 训练量级别的提示）
+- 当 `recentSessions` 为空或非常稀疏时：退回到「数据不足」回复，**不**编造数字、**不**虚构 PR / 1RM / 体重趋势。
+
+**What to show：**
+
+1. 用户消息冒泡。
+2. Insight panel 渲染：强调「这是只读面板，没有 apply 按钮」。
+3. 切到 plan 页面验证：**下周计划完全没变**——复盘不会偷偷写状态。
+4. （可选）切到 `lib/agent/mocks/mock_agent_client.dart` / backend mock router 一闪而过：weeklyReview 字段从 `recentSessions.dayType` 分布 + `progressSummary` 中**确定性**派生，无 session 数据时退回到「数据不足」回复。
+
+> 边界提示：weeklyReview **不**做长期记忆、**不**做 PR / 1RM 趋势、**不**做体重趋势、**不**诊断伤病、**不**自动改下周计划。`riskNotes` 仅做训练量 / 恢复量级别的提示，不是医疗建议。
+
+## Scenario 5: High-risk safety response
 
 **User message：**
 
@@ -120,12 +154,13 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=mock
 
 ## Closing summary
 
-录屏结尾留 30 秒讲下面 4 句话：
+录屏结尾留 30 秒讲下面 5 句话：
 
 1. **Coach Agent 是 user-confirmed agent，不是 auto-executing bot。** 每次 mutation 都必须用户在 UI 上点「应用修改」。
-2. **LLM 是 router，不是 state writer。** 它产出结构化 `AgentAction`，写入全部走 `LocalAgentActionExecutor`。
-3. **Mock mode 是默认 demo 路径。** 不需要 API key，不联网，CI 也跑这条路径。
-4. **Safety 是 deterministic guard + LLM prompt 的组合。** 高风险关键字在 LLM 调用前短路，不可能变成训练修改。
+2. **LLM 是 router，不是 state writer。** 它产出结构化 `AgentAction`，写入全部走 `LocalAgentActionExecutor`；偏好字段（weekdays / minutes）也只是后处理，不是 LLM 自己拼计划。
+3. **复盘是 read-only 的。** weeklyReview 渲染 insight panel，**不会**改下周计划，也不会编造没有的数据。
+4. **Mock mode 是默认 demo 路径。** 不需要 API key，不联网，CI 也跑这条路径。
+5. **Safety 是 deterministic guard + LLM prompt 的组合。** 高风险关键字在 LLM 调用前短路，不可能变成训练修改。
 
 > **录屏注意**：mock 模式录，避免暴露 real provider 响应；不要在视频里暴露 `LLM_API_KEY` / `FITFORGE_AGENT_AUTH_TOKEN`；privacy banner 出现时停留够长以便观众看清。
 
