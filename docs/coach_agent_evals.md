@@ -239,6 +239,15 @@ provider-coverage signal (the mock router doesn't extract those fields, so
 a JSON case would just assert "no fake support fields appear" which is what
 the validator already enforces strictly).
 
+**C-1 vs C-2 split.** C-1 (PR #39) locks the *behavior contract* for
+B-stage capabilities in this JSON file. C-2 standardizes how a
+real-provider eval *run* should be summarized, via
+[`docs/real_llm_provider_scorecard_template.md`](real_llm_provider_scorecard_template.md).
+The two layers are intentionally separate: the eval JSON pins what the
+agent must do; the scorecard pins how a provider's run against that JSON
+is reported, so single-run promotion and unscrubbed raw output can't sneak
+in.
+
 ### Cases that remain `expectedGap` (and why)
 
 After this round, the remaining 4 expectedGap cases are stable gaps and one volatile case:
