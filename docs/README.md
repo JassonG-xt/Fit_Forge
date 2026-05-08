@@ -15,5 +15,8 @@ This directory holds repository-grounded documentation for the current Flutter a
 - [agent_demo_recording_checklist.md](agent_demo_recording_checklist.md) — recording-time execution checklist for the demo script: privacy checks, environment options, ordered flow, things to say / not say, post-recording review
 - [release_notes_agent_mvp_eval_v2.md](release_notes_agent_mvp_eval_v2.md) — `agent-mvp-eval-v2` release notes: included capabilities, intentional non-goals, eval status, safety model, and known limitations
 - [generate_plan_agent_boundary.md](generate_plan_agent_boundary.md) — generatePlan product boundary: LLM is a router, not a plan generator
+- [real_llm_eval_harness.md](real_llm_eval_harness.md) — manual real-LLM eval harness: configuration, dry-run vs real, reading the report
+- [real_llm_provider_scorecard_template.md](real_llm_provider_scorecard_template.md) — reusable scorecard template for summarizing real-provider eval runs
+- [real_llm_scorecards/](real_llm_scorecards/) — sanitized summaries of manual real-provider smoke runs (raw JSON outputs are gitignored; only scrubbed Markdown lives here)
 
 If the code and docs disagree, the code in `lib/`, `test/`, and `.github/workflows/` is the source of truth and the docs should be updated.
