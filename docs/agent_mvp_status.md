@@ -269,7 +269,13 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
     - 强制 ≥3 cross-run 才能翻 active；不接受单次 run 提名 provider
     - 不跑 real LLM、不比较 provider，**只**铺 reporting 基建
 
-12. **再考虑 streaming 或 multi-agent**
+12. **C-3 单 provider smoke scorecard** ✅ 已完成（本次 PR）
+    - 用 C-2 模板记录一次 MiMo v2.5 Pro 真实跑：3 类 active 共 20 cases，全 pass
+    - 4 个 B-stage cases 单跑通过（preference-aware generatePlan / structured weeklyReview / no-data fallback / safety-over-weeklyReview）
+    - 决策：**Keep provider as experimental**，**不**升级为 default、**不**翻 expectedGap、**不**横评
+    - Raw JSON 留在 `agent_backend/evals/results/`（gitignored），committed scorecard 是脱敏版
+
+13. **再考虑 streaming 或 multi-agent**
    前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。streaming / multi-agent / 长期记忆 / 自动执行 mutation 都不是当前 MVP 的目标。
 
 ## 操作守则（合并任何 agent 相关 PR 前 self-check）
