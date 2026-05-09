@@ -88,7 +88,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 - **不是长期记忆教练**：每次对话都是基于当前 `AppState` 重建的快照；没有跨会话 memory。
 - **不是 autonomous planner**：所有 mutation 必须用户确认；Coach 不会在后台自己改你的计划。
 - **不是 NLU 引擎**：mock router 是确定性 keyword 路由，不应被扩成伪 NLU；real LLM 模式才有真正 NLU 能力，但 real 模式不进 CI。
-- **eval suite 不是分数表**：`coach_agent_eval_cases.json` 是行为契约，37 active / 4 expectedGap；保留 expectedGap 作为 regression signal，不为「全绿」放宽守护。
+- **eval suite 不是分数表**：`coach_agent_eval_cases.json` 是行为契约，41 active / 4 expectedGap；保留 expectedGap 作为 regression signal，不为「全绿」放宽守护。
 - **真实模式只做手动 eval**：real LLM 不进 per-PR CI；多 provider 比较只在本地手动跑，结果不提交。
 - **safety 关键字是中文语料为主**：英文输入下的 deterministic guard 覆盖率有限；不能替代医疗判断。
 - **generatePlan 偏好是后处理，不是 PlanEngine 内部决策**：`availableWeekdays` 通过 `reschedulePlanToWeekdays` 应用，`targetMinutes` 通过 `compressDayInPlan` 应用。这意味着如果偏好里的训练日数量超过 `PlanEngine` 给出的 workout 日数量，多余的 weekdays 会保持休息，不会自动加塞训练。
