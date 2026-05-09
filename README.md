@@ -104,6 +104,25 @@ Flutter 本地执行器也会再次检查 mutation action 的 `requiresConfirmat
 > - [`docs/agent_capabilities.md`](docs/agent_capabilities.md) — 完整能力地图（mode / action / safety / privacy / 当前限制 / out-of-scope）
 > - [`docs/coach_agent_demo_script.md`](docs/coach_agent_demo_script.md) — 5 分钟 demo 脚本（preference-aware generatePlan / replace / compress / weeklyReview / safety 五个核心场景）
 
+### Current Coach Agent maturity
+
+The Coach Agent is a **human-in-the-loop fitness coaching MVP** with a stable B-stage showcase path:
+
+- preference-aware plan generation (`availableWeekdays`, `targetMinutes`)
+- exercise replacement and workout compression through user-confirmed mutation actions
+- structured weekly review insights with a read-only UI panel (no plan mutation)
+- deterministic safety handling for high-risk requests (Chinese keyword guardrail short-circuits before LLM)
+- mock + back-end eval coverage for B-stage behavior contracts (eval suite: 45 cases / 41 active / 4 expectedGap)
+- one sanitized real-provider smoke scorecard for manual compatibility tracking — see [`docs/real_llm_scorecards/`](docs/real_llm_scorecards/)
+
+A single real-provider smoke run has been recorded (20/20 active cases passing, including the 4 B-stage cases). This is treated as **basic compatibility evidence only** — it is **not** a production-readiness claim, **not** a provider promotion, and **not** a provider comparison. Per [`docs/coach_agent_evals.md`](docs/coach_agent_evals.md), promoting a case (or a provider) requires ≥3 cross-run stable conversions on the same data; a single smoke run is one data point, not a green light. Real-provider runs remain manual rather than per-PR CI gates, and provider API keys live only in backend env (Flutter never touches them).
+
+Milestone tag lineage:
+
+`agent-mvp-eval-v1` → `agent-mvp-eval-v2` → `agent-b-stage-showcase-v1` → `agent-b-stage-evals-v1` → `agent-real-provider-smoke-v1`
+
+`agent-mvp-eval-v2` remains the MVP-level stability snapshot; the three tags after it are showcase / eval-contract / single-smoke milestones rather than new stability snapshots.
+
 ### Running Coach Agent
 
 默认即 mock 模式，无需后端：
@@ -347,6 +366,10 @@ Current project documentation lives in:
 - [docs/agent_demo_script.md](docs/agent_demo_script.md) — longer Coach Agent eval walkthrough (5–8 min, covers clarification + generatePlan boundary)
 - [docs/agent_demo_recording_checklist.md](docs/agent_demo_recording_checklist.md) — Coach Agent demo recording checklist (privacy checks, environment, ordered flow, things to say / not say)
 - [docs/release_notes_agent_mvp_eval_v2.md](docs/release_notes_agent_mvp_eval_v2.md) — `agent-mvp-eval-v2` release notes: included capabilities, non-goals, eval baseline
+- [docs/coach_agent_evals.md](docs/coach_agent_evals.md) — Coach Agent eval suite contract: case categories, status meanings, how to add a case
+- [docs/real_llm_eval_harness.md](docs/real_llm_eval_harness.md) — manual real-LLM eval harness: configuration, dry-run vs real, reading the report
+- [docs/real_llm_provider_scorecard_template.md](docs/real_llm_provider_scorecard_template.md) — reusable scorecard template for summarizing real-provider eval runs
+- [docs/real_llm_scorecards/](docs/real_llm_scorecards/) — sanitized summaries of manual real-provider smoke runs (raw JSON outputs are gitignored)
 - [docs/security.md](docs/security.md) — CI gates, secret scan, dependency audit, GitHub Actions hardening, remaining risks
 - [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow, lint, tests, PR process
 - [CHANGELOG.md](CHANGELOG.md) — release history and planned work

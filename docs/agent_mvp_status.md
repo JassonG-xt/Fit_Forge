@@ -4,7 +4,7 @@
 
 - Tag: `agent-mvp-eval-v2`
 - Main commit: `1fc443e5f98ebeae58a4644d0b9551d5252dbeb1`
-- 状态：Coach Agent MVP + eval suite (41 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-1 eval 覆盖
+- 状态：Coach Agent MVP + eval suite (41 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-1 eval 覆盖 + C-2 real-LLM scorecard 模板 + C-3 单 provider sanitized smoke scorecard（experimental）+ C-4 portfolio positioning
 
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
@@ -12,6 +12,18 @@
 
 - `agent-mvp-eval-v1` (`54ce588`) — 首个 stability tag：Coach Agent MVP + eval suite + real LLM eval harness + Web build CI gate
 - `agent-mvp-eval-v2` (`1fc443e`) — 当前 stability tag：在 v1 基础上完成 generatePlan context completeness guard、Chinese safety guardrails、generatePlan eval 升级到 active（PR #14 / #15 / #16），以及一组安全加固（PR #17）：mock safety guardrails 扩展、LLM 日志脱敏、API exposure controls、不可信 LLM output validation、local execution / import 校验硬化、backend / secret / dependency / Dependabot CI gates、ignore local agent instructions
+
+### Milestone 标签序列
+
+按时间顺序的 lightweight milestone tag（每个 tag 都指向当时 main 分支的 commit；运行时行为以代码为准）：
+
+1. `agent-mvp-eval-v1` — 首个 stability tag：Coach Agent MVP + eval suite + real LLM eval harness + Web build CI gate
+2. `agent-mvp-eval-v2` — 在 v1 基础上完成 generatePlan context completeness guard、Chinese safety guardrails、安全加固（PR #14 / #15 / #16 / #17）
+3. `agent-b-stage-showcase-v1` — B-stage 能力对外展示就绪：preference-aware generatePlan + structured weeklyReview + 配套 demo docs（PR #36 / #37 / #38）
+4. `agent-b-stage-evals-v1` — B-stage 行为契约纳入 eval suite + real LLM scorecard 模板就绪（PR #39 / #40）
+5. `agent-real-provider-smoke-v1` — 单 provider sanitized smoke scorecard 落地（MiMo v2.5 Pro，20/20 active，含 4 条 B-stage case）；决策保持 **experimental**，**不**作为 provider promotion，**不**作为 provider comparison（PR #41）
+
+> Tag 序列**不**等同于 production-readiness。`agent-mvp-eval-v2` 仍是 MVP-level stability snapshot；其后三个 tag 是 showcase / eval-contract / single-smoke 性质的里程碑，不是新的 stability snapshot。real-provider 路径仍是手动 eval 路径，不进 per-PR CI。
 
 ## 架构概览
 
@@ -263,19 +275,25 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
     - 三层不重不漏：eval JSON 锁结构、`test_coach_agent_mock.py` 锁值、`test_output_validation.py` + `extra="forbid"` 锁 schema
     - eval suite 总计：45 cases / 41 active / 4 expectedGap
 
-11. **C-2 real LLM eval scorecard template** ✅ 已完成（本次 PR）
+11. **C-2 real LLM eval scorecard template** ✅ 已完成（PR #40）
     - 新增 `docs/real_llm_provider_scorecard_template.md`：run metadata / 计数 / category breakdown / B-stage capability 检查 / safety boundary 检查 / 错误统计 / 决策 / 非目标
     - 模板字段对齐 harness `report.summary` JSON shape，operator 可直接抄数
     - 强制 ≥3 cross-run 才能翻 active；不接受单次 run 提名 provider
     - 不跑 real LLM、不比较 provider，**只**铺 reporting 基建
 
-12. **C-3 单 provider smoke scorecard** ✅ 已完成（本次 PR）
+12. **C-3 单 provider smoke scorecard** ✅ 已完成（PR #41）
     - 用 C-2 模板记录一次 MiMo v2.5 Pro 真实跑：3 类 active 共 20 cases，全 pass
     - 4 个 B-stage cases 单跑通过（preference-aware generatePlan / structured weeklyReview / no-data fallback / safety-over-weeklyReview）
     - 决策：**Keep provider as experimental**，**不**升级为 default、**不**翻 expectedGap、**不**横评
     - Raw JSON 留在 `agent_backend/evals/results/`（gitignored），committed scorecard 是脱敏版
 
-13. **再考虑 streaming 或 multi-agent**
+13. **C-4 README / portfolio positioning** ✅ 已完成（本次 PR）
+    - README 顶层加 "Current Coach Agent maturity" 段：6 条 B-stage 能力 + 1 条 sanitized smoke scorecard 提示
+    - 显式声明 single smoke run 仅作 compatibility evidence、**不** promote provider、**不** compare providers、real-provider **不**进 per-PR CI
+    - milestone tag lineage 5 步链补全：`agent-mvp-eval-v1 → v2 → b-stage-showcase-v1 → b-stage-evals-v1 → real-provider-smoke-v1`
+    - docs-only PR；不动 runtime / eval cases / safety middleware / CI workflow
+
+14. **再考虑 streaming 或 multi-agent**
    前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。streaming / multi-agent / 长期记忆 / 自动执行 mutation 都不是当前 MVP 的目标。
 
 ## 操作守则（合并任何 agent 相关 PR 前 self-check）
