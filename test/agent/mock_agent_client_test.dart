@@ -121,6 +121,10 @@ void main() {
         (payload['observations'] as List).first.toString(),
         contains('没有'),
       );
+      expect(
+        (payload['nextWeekSuggestions'] as List).join('\n'),
+        contains('恢复判断有限'),
+      );
       // No fabricated focus areas / risk notes when there is no data.
       expect(payload.containsKey('focusAreas'), false);
       expect(payload.containsKey('riskNotes'), false);
@@ -238,6 +242,86 @@ void main() {
       expect(response.intent, AgentIntent.weeklyReview);
     });
 
+    test('recovery adjustment wording routes to read-only review', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '我最近练得有点累，帮我看看要不要调整',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.weeklyReview);
+      expect(response.actions.single.type, AgentActionType.weeklyReview);
+      expect(response.actions.single.requiresConfirmation, false);
+    });
+
+    test('weekly review flags recovery risk at four-day streak', () async {
+      final state = await primedAppStateWithProfile();
+      final now = DateTime.now();
+      for (var i = 0; i < 4; i++) {
+        state.saveSession(
+          WorkoutSession(
+            id: 'streak_$i',
+            date: now.subtract(Duration(days: i)),
+            dayType: WorkoutDayType.fullBody,
+            durationMinutes: 40,
+            isCompleted: true,
+          ),
+        );
+      }
+
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '我连续练了好几天，今天还要继续吗？',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.weeklyReview);
+      final action = response.actions.single;
+      expect(action.requiresConfirmation, false);
+      final riskNotes = action.payload['riskNotes'] as List;
+      expect(riskNotes.join('\n'), contains('连续训练天数较高'));
+      expect(
+        (action.payload['nextWeekSuggestions'] as List).join('\n'),
+        contains('低强度或休息'),
+      );
+    });
+
+    test('weekly review notes when completed sessions exceed plan', () async {
+      final state = await primedAppStateWithProfile(
+        profile: UserProfile(weeklyFrequency: 3),
+      );
+      final now = DateTime.now();
+      for (var i = 0; i < 4; i++) {
+        state.saveSession(
+          WorkoutSession(
+            id: 'over_frequency_$i',
+            date: now.subtract(Duration(days: i)),
+            dayType: WorkoutDayType.push,
+            durationMinutes: 45,
+            isCompleted: true,
+          ),
+        );
+      }
+
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '这周练得太密了，下周该怎么安排？',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.weeklyReview);
+      final payload = response.actions.single.payload;
+      expect((payload['riskNotes'] as List).join('\n'), contains('超过计划频率'));
+      expect(
+        (payload['nextWeekSuggestions'] as List).join('\n'),
+        contains('下一次训练可以适当降低强度'),
+      );
+    });
+
     test(
       'weekly review request with chest pain routes to safety, not review',
       () async {
@@ -249,6 +333,26 @@ void main() {
           history: const [],
         );
         expect(response.intent, AgentIntent.safetyResponse);
+        expect(
+          response.actions.map((a) => a.type),
+          isNot(contains(AgentActionType.weeklyReview)),
+        );
+      },
+    );
+
+    test(
+      'recovery request with chest pain routes to safety response',
+      () async {
+        final state = await primedAppStateWithProfile();
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '我最近练得有点累而且胸痛，帮我看看恢复情况',
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.safetyResponse);
+        expect(response.safety.shouldStopWorkout, true);
         expect(
           response.actions.map((a) => a.type),
           isNot(contains(AgentActionType.weeklyReview)),

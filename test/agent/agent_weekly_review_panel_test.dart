@@ -52,15 +52,40 @@ void main() {
       makeWeeklyReview(const {
         'completedSessions': 0,
         'observations': ['最近没有训练记录。'],
+        'nextWeekSuggestions': ['目前缺少最近训练记录，恢复判断有限。'],
       }),
     );
     expect(find.text('完成训练'), findsOneWidget);
     expect(find.text('0 次'), findsOneWidget);
     expect(find.text('观察'), findsOneWidget);
+    expect(find.text('下周建议'), findsOneWidget);
+    expect(find.text('目前缺少最近训练记录，恢复判断有限。'), findsOneWidget);
     // Sections that have no data must not render their headers.
     expect(find.text('重点部位'), findsNothing);
-    expect(find.text('下周建议'), findsNothing);
     expect(find.text('风险提示'), findsNothing);
+  });
+
+  testWidgets('renders recovery guidance as read-only weekly review content', (
+    tester,
+  ) async {
+    await pumpPanel(
+      tester,
+      makeWeeklyReview(const {
+        'completedSessions': 4,
+        'observations': ['已经连续训练 4 天。'],
+        'nextWeekSuggestions': ['如果今天疲劳明显，优先选择低强度或休息。'],
+        'riskNotes': ['最近连续训练天数较高，注意安排恢复日。'],
+      }),
+    );
+
+    expect(find.text('观察'), findsOneWidget);
+    expect(find.text('已经连续训练 4 天。'), findsOneWidget);
+    expect(find.text('下周建议'), findsOneWidget);
+    expect(find.text('如果今天疲劳明显，优先选择低强度或休息。'), findsOneWidget);
+    expect(find.text('风险提示'), findsOneWidget);
+    expect(find.text('最近连续训练天数较高，注意安排恢复日。'), findsOneWidget);
+    expect(find.text('应用修改'), findsNothing);
+    expect(find.text('取消'), findsNothing);
   });
 
   testWidgets('risk notes section only renders when riskNotes is non-empty', (

@@ -293,7 +293,13 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
     - milestone tag lineage 5 步链补全：`agent-mvp-eval-v1 → v2 → b-stage-showcase-v1 → b-stage-evals-v1 → real-provider-smoke-v1`
     - docs-only PR；不动 runtime / eval cases / safety middleware / CI workflow
 
-14. **再考虑 streaming 或 multi-agent**
+14. **D-1 recovery-aware coaching signals**（本 PR）
+    - 在现有 read-only `weeklyReview` 中加入简单恢复 / 训练密度信号：连续训练天数偏高、已达到或超过计划频率、数据不足 fallback
+    - 只使用 `recentSessions` / `progressSummary` / `weeklyFrequency` 等本地上下文；不引入长期记忆、HealthKit / Health Connect、云同步或 provider endpoint 改动
+    - 不自动改下周计划；任何 plan mutation 仍必须走现有 supported action + 用户确认 + `LocalAgentActionExecutor`
+    - 高风险症状继续优先走 deterministic `safetyResponse`；不做医疗诊断
+
+15. **再考虑 streaming 或 multi-agent**
    前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。streaming / multi-agent / 长期记忆 / 自动执行 mutation 都不是当前 MVP 的目标。
 
 ## 操作守则（合并任何 agent 相关 PR 前 self-check）
