@@ -2,9 +2,9 @@
 
 ## 当前稳定点
 
-- Tag: `agent-mvp-eval-v2`
-- Main commit: `1fc443e5f98ebeae58a4644d0b9551d5252dbeb1`
-- 状态：Coach Agent MVP + eval suite (41 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-1 eval 覆盖 + C-2 real-LLM scorecard 模板 + C-3 单 provider sanitized smoke scorecard（experimental）+ C-4 portfolio positioning
+- Tag: `agent-recovery-aware-v1`
+- Latest tagged commit: `fe129c6d6b0ece10feb6c6c4e18e266093c02650`
+- 状态：Coach Agent MVP + eval suite (45 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-stage portfolio / real-provider smoke docs + D-1 recovery-aware coaching + D-2 recovery eval 覆盖
 
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
@@ -22,8 +22,10 @@
 3. `agent-b-stage-showcase-v1` — B-stage 能力对外展示就绪：preference-aware generatePlan + structured weeklyReview + 配套 demo docs（PR #36 / #37 / #38）
 4. `agent-b-stage-evals-v1` — B-stage 行为契约纳入 eval suite + real LLM scorecard 模板就绪（PR #39 / #40）
 5. `agent-real-provider-smoke-v1` — 单 provider sanitized smoke scorecard 落地（MiMo v2.5 Pro，20/20 active，含 4 条 B-stage case）；决策保持 **experimental**，**不**作为 provider promotion，**不**作为 provider comparison（PR #41）
+6. `agent-portfolio-ready-v1` — README / docs portfolio positioning 完成；明确 real-provider smoke 仅是 compatibility evidence，不是 production readiness 或 provider promotion（PR #42）
+7. `agent-recovery-aware-v1` — D-1 recovery-aware coaching signals 合并：read-only weeklyReview 可提示连续训练 / 超过计划频率 / 数据不足；安全症状仍优先 `safetyResponse`（PR #43）
 
-> Tag 序列**不**等同于 production-readiness。`agent-mvp-eval-v2` 仍是 MVP-level stability snapshot；其后三个 tag 是 showcase / eval-contract / single-smoke 性质的里程碑，不是新的 stability snapshot。real-provider 路径仍是手动 eval 路径，不进 per-PR CI。
+> Tag 序列**不**等同于 production-readiness。real-provider 路径仍是手动 eval 路径，不进 per-PR CI；C-stage / D-stage tag 记录 portfolio、single-smoke、recovery-aware behavior 等里程碑，不代表 provider promotion。
 
 ## 架构概览
 
@@ -106,8 +108,8 @@ AppState (lib/services/app_state.dart)
 
 源数据：`agent_backend/evals/coach_agent_eval_cases.json`。
 
-- Eval cases 总数：**45**
-- `active`：**41**（mock router 必须保持通过；含一个非 mutation 的 clarification case、扩展后的中文 safety guardrail、4 个 generatePlan paraphrase、以及 C-1 加入的 4 条 B-stage 行为契约）
+- Eval cases 总数：**49**
+- `active`：**45**（mock router 必须保持通过；含一个非 mutation 的 clarification case、扩展后的中文 safety guardrail、4 个 generatePlan paraphrase、C-1 加入的 4 条 B-stage 行为契约，以及 D-2 加入的 4 条 recovery-aware 行为契约）
 - `expectedGap`：**4**（stable gaps 和 volatile case 保留为 regression signal）
 
 > `agent-mvp-eval-v2` 在 `agent-mvp-eval-v1` 基础上完成的促进：MiMo v2.5 Pro post-timeout 跨多 run stable converted 的 2 个 reschedule paraphrase 已升级为 active；`compress_busy_no_minutes_zh_007` 升级为 clarification case（不允许猜 `targetMinutes`）；3 个中文 safety case (`头晕` / `膝盖剧痛` / `受伤`) 通过扩展 deterministic guardrail 升级为 active（safety 不依赖 LLM）；4 个 generatePlan paraphrase 在 eval harness context 修复后达到 3/3 clean converted，升级为 active。详细历史见 `docs/coach_agent_evals.md`。
@@ -293,13 +295,18 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
     - milestone tag lineage 5 步链补全：`agent-mvp-eval-v1 → v2 → b-stage-showcase-v1 → b-stage-evals-v1 → real-provider-smoke-v1`
     - docs-only PR；不动 runtime / eval cases / safety middleware / CI workflow
 
-14. **D-1 recovery-aware coaching signals**（本 PR）
+14. **D-1 recovery-aware coaching signals** ✅ 已完成（PR #43）
     - 在现有 read-only `weeklyReview` 中加入简单恢复 / 训练密度信号：连续训练天数偏高、已达到或超过计划频率、数据不足 fallback
     - 只使用 `recentSessions` / `progressSummary` / `weeklyFrequency` 等本地上下文；不引入长期记忆、HealthKit / Health Connect、云同步或 provider endpoint 改动
     - 不自动改下周计划；任何 plan mutation 仍必须走现有 supported action + 用户确认 + `LocalAgentActionExecutor`
     - 高风险症状继续优先走 deterministic `safetyResponse`；不做医疗诊断
 
-15. **再考虑 streaming 或 multi-agent**
+15. **D-2 recovery-aware eval coverage**（本 PR）
+    - 在 `coach_agent_eval_cases.json` 加 4 条 active case：high streak recovery review、over-weekly-frequency recovery caution、no-data recovery fallback、safety-over-recovery
+    - eval JSON 只断言 action / confirmation / payload 结构；具体中文文案仍由 unit tests 覆盖
+    - expectedGap 保持 4；不跑 real LLM、不比较 provider、不推广 provider
+
+16. **再考虑 streaming 或 multi-agent**
    前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。streaming / multi-agent / 长期记忆 / 自动执行 mutation 都不是当前 MVP 的目标。
 
 ## 操作守则（合并任何 agent 相关 PR 前 self-check）
