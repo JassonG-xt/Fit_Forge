@@ -151,10 +151,44 @@ class MockAgentClient implements AgentClient {
     if (text.contains('调整') || text.contains('重新排') || text.contains('改时间')) {
       return true;
     }
+    if (_isRecoveryWeeklyReschedule(text)) {
+      return true;
+    }
     final dayRegex = RegExp(r'周[一二三四五六日天]|星期[一二三四五六日天]');
     final hasMultipleDays = dayRegex.allMatches(text).length >= 2;
     final intentKeywords = ['练', '训练', '安排'];
     return hasMultipleDays && intentKeywords.any(text.contains);
+  }
+
+  bool _isRecoveryWeeklyReschedule(String text) {
+    final hasWeekday = _extractWeekdaysFromMessage(text).isNotEmpty;
+    final hasRecoveryContext = [
+      '累',
+      '恢复',
+      '练太密',
+      '练得太密',
+      '连续练',
+      '连续训练',
+    ].any(text.contains);
+    final hasWeeklyScope = ['这周', '本周', '训练日'].any(text.contains);
+    final hasScheduleIntent = [
+      '安排',
+      '改到',
+      '改在',
+      '重新排',
+      '调整',
+    ].any(text.contains);
+    return hasWeekday &&
+        hasRecoveryContext &&
+        hasWeeklyScope &&
+        hasScheduleIntent &&
+        !_looksLikeSingleSessionMove(text);
+  }
+
+  bool _looksLikeSingleSessionMove(String text) {
+    final hasToday = ['今天', '今日', '这次'].any(text.contains);
+    if (!hasToday) return false;
+    return ['挪到', '往后挪', '改到', '改在'].any(text.contains);
   }
 
   bool _isGenerateIntent(String text) {

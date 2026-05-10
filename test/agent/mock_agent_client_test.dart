@@ -188,6 +188,105 @@ void main() {
       expect(payload['availableWeekdays'], [2, 4, 7]);
     });
 
+    test('recovery weekly reschedule routes to rescheduleWeek', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '这周练太密了，把训练安排到周三和周六',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.rescheduleWeek);
+      final action = response.actions.single;
+      expect(action.type, AgentActionType.rescheduleWeek);
+      expect(action.requiresConfirmation, true);
+      expect(action.payload['availableWeekdays'], [3, 6]);
+    });
+
+    test(
+      'single weekday recovery reschedule routes to rescheduleWeek',
+      () async {
+        final state = await primedAppStateWithProfile();
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '今天恢复不好，这周只安排周五训练',
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.rescheduleWeek);
+        final action = response.actions.single;
+        expect(action.type, AgentActionType.rescheduleWeek);
+        expect(action.requiresConfirmation, true);
+        expect(action.payload['availableWeekdays'], [5]);
+      },
+    );
+
+    test('vague recovery schedule question does not mutate', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '这周练太密了，你怎么看？',
+        context: context,
+        history: const [],
+      );
+
+      expect(
+        response.actions.map((a) => a.type),
+        isNot(
+          contains(
+            isIn({
+              AgentActionType.compressWorkout,
+              AgentActionType.replaceExercise,
+              AgentActionType.rescheduleWeek,
+              AgentActionType.generatePlan,
+            }),
+          ),
+        ),
+      );
+      for (final action in response.actions) {
+        expect(action.requiresConfirmation, false);
+        expect(action.sourceContextHash, isNull);
+      }
+    });
+
+    test('today-to-tomorrow recovery request does not mutate', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '我连续练了好几天，把今天训练挪到明天',
+        context: context,
+        history: const [],
+      );
+
+      expect(
+        response.actions.map((a) => a.type),
+        isNot(contains(AgentActionType.rescheduleWeek)),
+      );
+      for (final action in response.actions) {
+        expect(action.requiresConfirmation, false);
+        expect(action.sourceContextHash, isNull);
+      }
+    });
+
+    test('safety beats recovery weekly reschedule request', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '我胸口疼，但想把这周训练安排到周五',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.safetyResponse);
+      expect(response.safety.shouldStopWorkout, true);
+      expect(
+        response.actions.map((a) => a.type),
+        isNot(contains(AgentActionType.rescheduleWeek)),
+      );
+    });
+
     test('weekly review with no recent sessions falls back safely', () async {
       // primedAppStateWithProfile has no sessions → mock should not invent.
       final state = await primedAppStateWithProfile();

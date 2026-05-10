@@ -481,6 +481,84 @@ def test_mock_recovery_lighten_without_minutes_does_not_mutate() -> None:
         assert action.requiresConfirmation is False
 
 
+# ── E-1C: recovery-aware weekly reschedule routing stays narrow ──
+
+
+def test_mock_recovery_weekly_reschedule_routes_to_reschedule_week() -> None:
+    """Recovery + weekly schedule intent + concrete weekdays can use rescheduleWeek."""
+    response = _run_mock_coach_agent(
+        _request("这周练太密了，把训练安排到周三和周六")
+    )
+
+    assert response.intent == "rescheduleWeek"
+    assert response.actions, "expected a rescheduleWeek action"
+    action = response.actions[0]
+    assert action.type == "rescheduleWeek"
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+    assert action.payload["availableWeekdays"] == [3, 6]
+    assert action.type not in {"weeklyReview", "answerOnly", "safetyResponse"}
+
+
+def test_mock_recovery_weekly_reschedule_single_weekday_routes() -> None:
+    response = _run_mock_coach_agent(
+        _request("今天恢复不好，这周只安排周五训练")
+    )
+
+    assert response.intent == "rescheduleWeek"
+    action = response.actions[0]
+    assert action.type == "rescheduleWeek"
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+    assert action.payload["availableWeekdays"] == [5]
+
+
+def test_mock_vague_recovery_schedule_question_does_not_mutate() -> None:
+    response = _run_mock_coach_agent(_request("这周练太密了，你怎么看？"))
+
+    assert response.intent in {"answerOnly", "weeklyReview"}
+    for action in response.actions:
+        assert action.type not in {
+            "compressWorkout",
+            "replaceExercise",
+            "rescheduleWeek",
+            "generatePlan",
+        }
+        assert action.requiresConfirmation is False
+        assert action.sourceContextHash is None
+
+
+def test_mock_today_to_tomorrow_recovery_request_does_not_mutate() -> None:
+    response = _run_mock_coach_agent(
+        _request("我连续练了好几天，把今天训练挪到明天")
+    )
+
+    assert response.intent in {"answerOnly", "weeklyReview"}
+    for action in response.actions:
+        assert action.type not in {
+            "compressWorkout",
+            "replaceExercise",
+            "rescheduleWeek",
+            "generatePlan",
+        }
+        assert action.requiresConfirmation is False
+        assert action.sourceContextHash is None
+
+
+def test_mock_safety_beats_recovery_weekly_reschedule_request() -> None:
+    response = _run_mock_coach_agent(
+        _request("我胸口疼，但想把这周训练安排到周五")
+    )
+
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    assert response.actions, "expected a safety action"
+    for action in response.actions:
+        assert action.type == "safetyResponse"
+        assert action.requiresConfirmation is False
+        assert action.sourceContextHash is None
+
+
 # ── Chinese safety guardrails — high-risk short-circuit before any routing ──
 
 
