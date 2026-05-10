@@ -119,6 +119,7 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=mock
   - observations（观察项）
   - next-week suggestions（下周建议）
   - risk notes（恢复 / 训练量级别的提示）
+- 对恢复类问题（例如「我连续练了好几天，今天还要继续吗？」），Coach 只基于 `recentSessions` / `progressSummary` / `weeklyFrequency` 给出 read-only 建议，例如训练频率已达标、连续训练天数偏高、今天疲劳明显时优先低强度或休息。
 - 当 `recentSessions` 为空或非常稀疏时：退回到「数据不足」回复，**不**编造数字、**不**虚构 PR / 1RM / 体重趋势。
 
 **What to show：**

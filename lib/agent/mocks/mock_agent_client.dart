@@ -52,7 +52,10 @@ class MockAgentClient implements AgentClient {
     }
 
     if (_isRescheduleIntent(message)) {
-      return _rescheduleResponse(message, context);
+      final rescheduled = _rescheduleResponse(message, context);
+      if (rescheduled.intent != AgentIntent.answerOnly) {
+        return rescheduled;
+      }
     }
 
     if (_isWeeklyReviewIntent(lower)) {
@@ -169,6 +172,13 @@ class MockAgentClient implements AgentClient {
       '最近训练',
       '下周应该注意',
       '练得怎么样',
+      '恢复',
+      '练得有点累',
+      '练得太密',
+      '连续练',
+      '连续训练',
+      '今天还要继续',
+      '要不要调整',
     ];
     return keywords.any(text.contains);
   }
@@ -493,7 +503,7 @@ class MockAgentClient implements AgentClient {
           'summary': '暂无近期训练数据。',
           'completedSessions': 0,
           'observations': ['最近没有已完成的训练记录。'],
-          'nextWeekSuggestions': ['先完成几次训练，让 Coach 有数据可以复盘。'],
+          'nextWeekSuggestions': ['目前缺少最近训练记录，恢复判断有限。先完成几次训练后可以给出更具体建议。'],
         },
       );
     }
@@ -523,27 +533,32 @@ class MockAgentClient implements AgentClient {
 
     // Risk: training density vs profile target frequency.
     final riskNotes = <String>[];
-    if (weeklyFrequency != null && completedThisWeek > weeklyFrequency + 1) {
+    if (weeklyFrequency != null && completedThisWeek > weeklyFrequency) {
       riskNotes.add(
-        '本周训练 $completedThisWeek 次，超过目标频率 $weeklyFrequency 次，注意恢复。',
+        '本周完成 $completedThisWeek 次，已经超过计划频率 $weeklyFrequency 次，注意恢复。',
       );
     }
-    if (streak >= 7) {
-      riskNotes.add('连续训练已超过 7 天，建议安排一天完整休息。');
+    if (streak >= 4) {
+      riskNotes.add('最近连续训练天数较高，注意安排恢复日。');
     }
 
     final nextWeekSuggestions = <String>[];
     if (weeklyFrequency != null) {
       if (completedThisWeek < weeklyFrequency) {
         nextWeekSuggestions.add('下周尽量补足到每周 $weeklyFrequency 次训练。');
+      } else if (completedThisWeek == weeklyFrequency) {
+        nextWeekSuggestions.add('本周训练频率已经达标，接下来优先保证恢复和动作质量。');
       } else {
-        nextWeekSuggestions.add('保持每周 $weeklyFrequency 次的训练节奏。');
+        nextWeekSuggestions.add('本周已经超过计划频率，下一次训练可以适当降低强度。');
       }
     } else {
       nextWeekSuggestions.add('维持当前训练频率。');
     }
     if (focusAreas.isNotEmpty) {
       nextWeekSuggestions.add('继续保证 ${focusAreas.first} 训练日的复合动作质量。');
+    }
+    if (streak >= 4) {
+      nextWeekSuggestions.add('如果今天疲劳明显，优先选择低强度或休息。');
     }
     if (riskNotes.isEmpty) {
       nextWeekSuggestions.add('感觉疲劳时优先降低训练量，不要硬加重量。');

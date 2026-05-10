@@ -385,7 +385,9 @@ def _weekly_review_response(request: AgentRequest) -> AgentResponse:
             "summary": "暂无近期训练数据。",
             "completedSessions": 0,
             "observations": ["最近没有已完成的训练记录。"],
-            "nextWeekSuggestions": ["先完成几次训练，让 Coach 有数据可以复盘。"],
+            "nextWeekSuggestions": [
+                "目前缺少最近训练记录，恢复判断有限。先完成几次训练后可以给出更具体建议。"
+            ],
         }
         return AgentResponse(
             message=message,
@@ -424,23 +426,27 @@ def _weekly_review_response(request: AgentRequest) -> AgentResponse:
         observations.append(f"已经连续训练 {streak} 天。")
 
     risk_notes: list[str] = []
-    if weekly_frequency is not None and completed > weekly_frequency + 1:
+    if weekly_frequency is not None and completed > weekly_frequency:
         risk_notes.append(
-            f"本周训练 {completed} 次，超过目标频率 {weekly_frequency} 次，注意恢复。"
+            f"本周完成 {completed} 次，已经超过计划频率 {weekly_frequency} 次，注意恢复。"
         )
-    if streak >= 7:
-        risk_notes.append("连续训练已超过 7 天，建议安排一天完整休息。")
+    if streak >= 4:
+        risk_notes.append("最近连续训练天数较高，注意安排恢复日。")
 
     next_week: list[str] = []
     if weekly_frequency is not None:
         if completed < weekly_frequency:
             next_week.append(f"下周尽量补足到每周 {weekly_frequency} 次训练。")
+        elif completed == weekly_frequency:
+            next_week.append("本周训练频率已经达标，接下来优先保证恢复和动作质量。")
         else:
-            next_week.append(f"保持每周 {weekly_frequency} 次的训练节奏。")
+            next_week.append("本周已经超过计划频率，下一次训练可以适当降低强度。")
     else:
         next_week.append("维持当前训练频率。")
     if focus_areas:
         next_week.append(f"继续保证 {focus_areas[0]} 训练日的复合动作质量。")
+    if streak >= 4:
+        next_week.append("如果今天疲劳明显，优先选择低强度或休息。")
     if not risk_notes:
         next_week.append("感觉疲劳时优先降低训练量，不要硬加重量。")
 
@@ -598,7 +604,26 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
         if rescheduled is not None:
             return rescheduled
 
-    if _has_any(message, ("总结", "复盘", "本周训练", "这周训练", "一周训练", "最近训练", "下周应该注意", "练得怎么样")):
+    if _has_any(
+        message,
+        (
+            "总结",
+            "复盘",
+            "本周训练",
+            "这周训练",
+            "一周训练",
+            "最近训练",
+            "下周应该注意",
+            "练得怎么样",
+            "恢复",
+            "练得有点累",
+            "练得太密",
+            "连续练",
+            "连续训练",
+            "今天还要继续",
+            "要不要调整",
+        ),
+    ):
         return _weekly_review_response(request)
 
     if _has_any(message, ("吃多了", "晚餐", "午餐", "饮食", "热量", "碳水")):

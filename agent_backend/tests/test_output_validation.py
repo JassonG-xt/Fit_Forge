@@ -620,6 +620,27 @@ def test_weekly_review_payload_rejects_non_string_list_item() -> None:
     assert response.actions == []
 
 
+def test_weekly_review_payload_rejects_empty_recovery_risk_note() -> None:
+    raw = _base_response(
+        {
+            "id": "review_1",
+            "type": "weeklyReview",
+            "title": "x",
+            "summary": "x",
+            "requiresConfirmation": False,
+            "payload": {"riskNotes": [""]},
+        },
+        intent="weeklyReview",
+    )
+    response = normalize_agent_response(
+        raw,
+        user_message="hello",
+        context_hash="trusted_hash",
+        context_profile={},
+    )
+    assert response.actions == []
+
+
 def test_weekly_review_payload_rejects_negative_completed_sessions() -> None:
     raw = _base_response(
         {

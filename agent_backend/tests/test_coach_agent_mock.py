@@ -750,6 +750,7 @@ def test_mock_weekly_review_no_sessions_returns_limited_review() -> None:
     payload = action.payload
     assert payload["completedSessions"] == 0
     assert "没有" in payload["observations"][0]
+    assert any("恢复判断有限" in item for item in payload["nextWeekSuggestions"])
     # No fabricated focus areas / risk notes when there is no data.
     assert "focusAreas" not in payload
     assert "riskNotes" not in payload
@@ -778,6 +779,44 @@ def test_mock_weekly_review_with_sessions_extracts_focus_areas() -> None:
     assert any("连续" in obs for obs in payload["observations"])
 
 
+def test_mock_weekly_review_high_streak_emits_recovery_risk_note() -> None:
+    """4 consecutive training days should produce recovery guidance."""
+    sessions = [{"id": f"s{i}", "dayType": "fullBody"} for i in range(4)]
+    response = _run_mock_coach_agent(
+        _request_with_sessions(
+            "我连续练了好几天，今天还要继续吗？",
+            sessions=sessions,
+            completed_this_week=4,
+            streak=4,
+            weekly_frequency=4,
+        )
+    )
+    payload = response.actions[0].payload
+    assert response.intent == "weeklyReview"
+    assert any("连续训练天数较高" in note for note in payload["riskNotes"])
+    assert any("低强度或休息" in item for item in payload["nextWeekSuggestions"])
+
+
+def test_mock_weekly_review_over_weekly_frequency_suggests_lower_intensity() -> None:
+    """Completing more sessions than planned should suggest easing the next session."""
+    sessions = [{"id": f"s{i}", "dayType": "push"} for i in range(4)]
+    response = _run_mock_coach_agent(
+        _request_with_sessions(
+            "这周练得太密了，下周该怎么安排？",
+            sessions=sessions,
+            completed_this_week=4,
+            streak=3,
+            weekly_frequency=3,
+        )
+    )
+    payload = response.actions[0].payload
+    assert any("超过计划频率" in note for note in payload["riskNotes"])
+    assert any(
+        "下一次训练可以适当降低强度" in item
+        for item in payload["nextWeekSuggestions"]
+    )
+
+
 def test_mock_weekly_review_emits_risk_note_when_overtraining() -> None:
     """4 sessions/week vs frequency=2 should produce a risk note."""
     sessions = [{"id": f"s{i}", "dayType": "push"} for i in range(4)]
@@ -792,7 +831,7 @@ def test_mock_weekly_review_emits_risk_note_when_overtraining() -> None:
     )
     payload = response.actions[0].payload
     assert "riskNotes" in payload
-    assert any("超过目标频率" in note for note in payload["riskNotes"])
+    assert any("超过计划频率" in note for note in payload["riskNotes"])
 
 
 def test_mock_weekly_review_chest_pain_routes_to_safety() -> None:
@@ -802,6 +841,16 @@ def test_mock_weekly_review_chest_pain_routes_to_safety() -> None:
     )
     assert all(a.type != "weeklyReview" for a in response.actions)
     assert response.safety.shouldStopWorkout is True
+
+
+def test_mock_recovery_request_chest_pain_routes_to_safety() -> None:
+    """Recovery wording must not bypass the high-risk safety response."""
+    response = _run_mock_coach_agent(
+        _request_with_sessions("我最近练得有点累而且胸痛，帮我看看恢复情况")
+    )
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    assert all(a.type != "weeklyReview" for a in response.actions)
 
 
 def test_mock_weekly_review_alt_phrasing_practice_status() -> None:
