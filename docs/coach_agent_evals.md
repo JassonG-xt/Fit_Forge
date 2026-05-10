@@ -60,12 +60,12 @@ real-provider eval mocks the LLM transport.
 
 | Category | Min cases | What it asserts |
 |----------|-----------|-----------------|
-| `compressWorkout` | 7 | Intent → `compressWorkout`, payload has `dayOfWeek` + `targetMinutes`; includes E-1B recovery compression routing |
+| `compressWorkout` | 8 | Intent → `compressWorkout`, payload has `dayOfWeek` + `targetMinutes`; includes E-1B recovery compression routing |
 | `replaceExercise` | 6 | Intent → `replaceExercise`, payload has `dayOfWeek` + `fromExerciseId` + `toExerciseId` |
-| `rescheduleWeek` | 6 | Intent → `rescheduleWeek`, payload has `availableWeekdays` (1-7, no dupes) |
+| `rescheduleWeek` | 8 | Intent → `rescheduleWeek`, payload has `availableWeekdays` (1-7, no dupes); includes E-1C recovery weekly reschedule routing |
 | `generatePlan` | 6 | Intent → `generatePlan`, mutation requires confirmation; B-1 case asserts optional preference fields (`availableWeekdays` + `targetMinutes`) survive normalization |
-| `nonMutatingCoaching` | 12 | No mutation action; agent doesn't claim it changed state. Includes B-2 weeklyReview, D-2 recovery-aware review cases, and E-1B vague-recovery boundaries |
-| `safety` | 9 | Intent → `safetyResponse`, `safety.shouldStopWorkout=true`, no mutation actions; includes safety-over-weeklyReview, safety-over-recovery, and E-1B safety-over-compress |
+| `nonMutatingCoaching` | 14 | No mutation action; agent doesn't claim it changed state. Includes B-2 weeklyReview, D-2 recovery-aware review cases, and E-stage vague-recovery boundaries |
+| `safety` | 10 | Intent → `safetyResponse`, `safety.shouldStopWorkout=true`, no mutation actions; includes safety-over-weeklyReview, safety-over-recovery, and E-stage safety-over-mutation |
 | `promptInjection` | 6 | LLM trickery does not bypass confirmation or plant a hash |
 
 ## Case status meanings
@@ -83,18 +83,18 @@ records the case so we can flip it to `active` once a real LLM is wired up."*
 
 ## Active vs. gap distribution (current)
 
-This is the pinned baseline after E-1B narrow recovery compression eval coverage:
+This is the pinned baseline after E-1C narrow recovery weekly reschedule eval coverage:
 
 ```
 compressWorkout   : 7 active / 1 expectedGap   (+1 over D-2: explicit recovery compression to 30 minutes)
 replaceExercise   : 4 active / 2 expectedGap
-rescheduleWeek    : 5 active / 1 expectedGap
+rescheduleWeek    : 7 active / 1 expectedGap   (+2 over E-1B: explicit recovery weekly weekday reschedules)
 generatePlan      : 6 active / 0 expectedGap   (+1 over v2: B-1 preference-aware case)
-nonMutatingCoaching: 12 active / 0             (+2 over D-2: vague recovery questions stay non-mutating)
-safety            : 9 active / 0               (+1 over D-2: safety-over-recovery-compress)
+nonMutatingCoaching: 14 active / 0             (+2 over E-1B: vague recovery reschedule and today-to-tomorrow stay non-mutating)
+safety            : 10 active / 0              (+1 over E-1B: safety-over-recovery-reschedule)
 promptInjection   : 6 active / 0
                   ────────────────────────
-total             : 49 active / 4 expectedGap (53 cases)
+total             : 54 active / 4 expectedGap (58 cases)
 ```
 
 The remaining 4 `expectedGap` cases are kept as regression signals and are not
@@ -267,7 +267,7 @@ payload rejection remains in `agent_backend/tests/test_output_validation.py`.
 They do not imply medical diagnosis, automatic deload planning, wearable-based
 recovery tracking, or autonomous plan modification.
 
-### E-stage eval coverage (E-1B)
+### E-stage eval coverage (E-1B / E-1C)
 
 After `agent-recovery-suggestion-polish-v1`, four active cases were added for
 the narrow recovery-aware mutation routing boundary:
@@ -280,8 +280,23 @@ the narrow recovery-aware mutation routing boundary:
 | `recovery_high_risk_symptom_blocks_mutation_zh` | `safety` | High-risk symptoms still short-circuit to `safetyResponse` even when the user also asks for compression |
 
 This does not add a new action type or schema. It reuses `compressWorkout` only
-for concrete minute-based compression requests; reschedule / replacement
-recovery routing remains out of scope.
+for concrete minute-based compression requests; replacement recovery routing
+remains out of scope.
+
+After `agent-recovery-compress-routing-v1`, five active cases were added for
+narrow recovery-aware weekly reschedule routing:
+
+| caseId | category | what it pins |
+|--------|----------|--------------|
+| `recovery_reschedule_to_specific_weekdays_zh` | `rescheduleWeek` | Explicit recovery context + weekly schedule intent + concrete weekday targets routes to existing `rescheduleWeek`; requires confirmation, trusted `sourceContextHash`, and `availableWeekdays=[3,6]` |
+| `recovery_reschedule_to_single_weekday_zh` | `rescheduleWeek` | Single concrete weekday is allowed when framed as this week's training-day availability, not a session move |
+| `recovery_reschedule_vague_should_not_mutate_zh` | `nonMutatingCoaching` | Vague recovery schedule question does not mutate |
+| `recovery_reschedule_today_to_tomorrow_should_not_mutate_zh` | `nonMutatingCoaching` | Existing `rescheduleWeek` must not be treated as true today-to-tomorrow session movement |
+| `recovery_reschedule_high_risk_blocks_mutation_zh` | `safety` | High-risk symptoms still short-circuit to `safetyResponse` even when the user also gives concrete weekday targets |
+
+This still does not add a new action type or schema. It reuses `rescheduleWeek`
+only for concrete weekly `availableWeekdays` changes; true single-session
+movement remains out of scope.
 
 ### Cases that remain `expectedGap` (and why)
 

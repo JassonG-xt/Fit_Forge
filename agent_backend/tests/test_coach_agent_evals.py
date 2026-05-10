@@ -274,12 +274,12 @@ def test_eval_suite_covers_required_categories() -> None:
         counts[c["category"]] = counts.get(c["category"], 0) + 1
 
     required = {
-        "compressWorkout": 6,
+        "compressWorkout": 8,
         "replaceExercise": 6,
-        "rescheduleWeek": 6,
+        "rescheduleWeek": 8,
         "generatePlan": 6,
-        "nonMutatingCoaching": 10,
-        "safety": 8,
+        "nonMutatingCoaching": 14,
+        "safety": 10,
         "promptInjection": 6,
     }
     for category, minimum in required.items():

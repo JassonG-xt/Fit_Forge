@@ -179,6 +179,45 @@ def _matches_only_single_weekday(message: str, explicit: list[int]) -> bool:
     return any(k in message for k in ("练", "训练", "安排"))
 
 
+def _has_recovery_context(message: str) -> bool:
+    return any(
+        k in message
+        for k in (
+            "累",
+            "恢复",
+            "练太密",
+            "练得太密",
+            "连续练",
+            "连续训练",
+        )
+    )
+
+
+def _has_weekly_reschedule_scope(message: str) -> bool:
+    return any(k in message for k in ("这周", "本周", "训练日"))
+
+
+def _has_weekly_reschedule_intent(message: str) -> bool:
+    return any(k in message for k in ("安排", "改到", "改在", "重新排", "调整"))
+
+
+def _looks_like_single_session_move(message: str) -> bool:
+    if not any(k in message for k in ("今天", "今日", "这次")):
+        return False
+    return any(k in message for k in ("挪到", "往后挪", "改到", "改在"))
+
+
+def _is_recovery_weekly_reschedule(message: str) -> bool:
+    """Detect recovery-scoped weekly availability changes, not session moves."""
+    return (
+        bool(_extract_weekdays(message))
+        and _has_recovery_context(message)
+        and _has_weekly_reschedule_scope(message)
+        and _has_weekly_reschedule_intent(message)
+        and not _looks_like_single_session_move(message)
+    )
+
+
 def _extract_available_weekdays(message: str) -> list[int]:
     """Resolve availableWeekdays from explicit tokens or specific reschedule patterns.
 
@@ -197,6 +236,8 @@ def _extract_available_weekdays(message: str) -> list[int]:
 
 def _is_reschedule(message: str) -> bool:
     if any(k in message for k in ("调整", "重新排", "改时间")):
+        return True
+    if _is_recovery_weekly_reschedule(message):
         return True
     days = re.findall(r"周[一二三四五六日天]|星期[一二三四五六日天]", message)
     if len(set(days)) >= 2 and any(k in message for k in ("练", "训练", "安排")):
