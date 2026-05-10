@@ -30,9 +30,9 @@ Secrets were provided through environment variables and are omitted here.
 
 ```bash
 cd agent_backend
+
 FITFORGE_AGENT_MODE=real \
-LLM_BASE_URL="$LLM_BASE_URL" \
-LLM_API_KEY="$LLM_API_KEY" \
+LLM_BASE_URL="<configured locally>" \
 LLM_MODEL="mimo-v2.5-pro" \
 LLM_TIMEOUT_SECONDS=90 \
 .venv/bin/python -m evals.run_real_llm_eval \
@@ -42,7 +42,11 @@ LLM_TIMEOUT_SECONDS=90 \
   --model "mimo-v2.5-pro" \
   --out evals/results/recovery_routing_real_provider.json \
   --markdown-out evals/results/recovery_routing_real_provider.md
+
+cd ..
 ```
+
+The provider credential was set locally and omitted from this scorecard.
 
 ## Selected cases
 
