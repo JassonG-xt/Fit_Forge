@@ -91,13 +91,13 @@ def _is_compress(message: str) -> int | None:
     """Return target minutes if the message asks to compress today, else None.
 
     Triggers (any one is enough alongside a duration):
-      压缩 / 短一点 / 快一点 / 只有 / 只能
+      压缩 / 缩短 / 短一点 / 快一点 / 只有 / 只能
 
     Duration extraction:
       - explicit `<digits> 分钟` → that number
       - `半小时` → 30
     """
-    triggers = ("压缩", "短一点", "快一点", "只有", "只能")
+    triggers = ("压缩", "缩短", "短一点", "快一点", "只有", "只能")
     if not any(token in message for token in triggers):
         return None
     match = re.search(r"(\d+)\s*分钟", message)

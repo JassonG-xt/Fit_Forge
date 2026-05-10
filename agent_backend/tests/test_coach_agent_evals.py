@@ -191,6 +191,15 @@ def test_active_case_against_mock_provider(case: Dict[str, Any]) -> None:
                 f"Got payload keys: {list(first.payload.keys())}"
             )
 
+    # ── exact target minutes (compressWorkout) ──
+    expected_target_minutes = expected.get("expectedTargetMinutes")
+    if expected_target_minutes is not None and response.actions:
+        first = response.actions[0]
+        assert first.payload.get("targetMinutes") == expected_target_minutes, (
+            f"[{case['id']}] expected targetMinutes={expected_target_minutes}, "
+            f"got {first.payload.get('targetMinutes')}"
+        )
+
     # ── expected weekdays (rescheduleWeek) ──
     expected_weekdays = expected.get("expectedWeekdays")
     if expected_weekdays is not None and response.actions:

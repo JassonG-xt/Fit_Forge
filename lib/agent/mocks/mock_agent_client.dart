@@ -138,7 +138,7 @@ class MockAgentClient implements AgentClient {
 
   bool _isCompressIntent(String text) {
     final hasMinutes = RegExp(r'(\d+)\s*分钟').hasMatch(text);
-    final compressKeywords = ['压缩', '短一点', '快一点', '只有'];
+    final compressKeywords = ['压缩', '缩短', '短一点', '快一点', '只有'];
     return hasMinutes && compressKeywords.any(text.contains);
   }
 

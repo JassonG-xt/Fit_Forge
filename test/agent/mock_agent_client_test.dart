@@ -87,6 +87,94 @@ void main() {
       expect(response.actions.single.payload['targetMinutes'], 25);
     });
 
+    test('recovery compress with minutes routes to compressWorkout', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '今天有点累，帮我把今天训练缩短到 30 分钟',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.compressWorkout);
+      final action = response.actions.single;
+      expect(action.type, AgentActionType.compressWorkout);
+      expect(action.requiresConfirmation, true);
+      expect(action.payload['targetMinutes'], 30);
+    });
+
+    test('vague recovery question does not mutate', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '我有点累，要不要休息？',
+        context: context,
+        history: const [],
+      );
+
+      expect(
+        response.actions.map((a) => a.type),
+        isNot(
+          contains(
+            isIn({
+              AgentActionType.compressWorkout,
+              AgentActionType.replaceExercise,
+              AgentActionType.rescheduleWeek,
+              AgentActionType.generatePlan,
+            }),
+          ),
+        ),
+      );
+      for (final action in response.actions) {
+        expect(action.requiresConfirmation, false);
+        expect(action.sourceContextHash, isNull);
+      }
+    });
+
+    test('safety beats recovery compression request', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '我胸口疼但想把今天训练缩短到 30 分钟',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.safetyResponse);
+      expect(response.safety.shouldStopWorkout, true);
+      expect(
+        response.actions.map((a) => a.type),
+        isNot(contains(AgentActionType.compressWorkout)),
+      );
+    });
+
+    test(
+      'vague recovery lighten request without minutes does not mutate',
+      () async {
+        final state = await primedAppStateWithProfile();
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '今天有点累，帮我把训练改轻一点',
+          context: context,
+          history: const [],
+        );
+
+        expect(
+          response.actions.map((a) => a.type),
+          isNot(
+            contains(
+              isIn({
+                AgentActionType.compressWorkout,
+                AgentActionType.replaceExercise,
+                AgentActionType.rescheduleWeek,
+                AgentActionType.generatePlan,
+              }),
+            ),
+          ),
+        );
+      },
+    );
+
     test('reschedule extracts weekdays', () async {
       final state = await primedAppStateWithProfile();
       final context = const AgentContextBuilder().build(state);
