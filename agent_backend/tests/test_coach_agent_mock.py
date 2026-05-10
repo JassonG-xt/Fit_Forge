@@ -749,8 +749,14 @@ def test_mock_weekly_review_no_sessions_returns_limited_review() -> None:
     assert action.requiresConfirmation is False
     payload = action.payload
     assert payload["completedSessions"] == 0
-    assert "没有" in payload["observations"][0]
-    assert any("恢复判断有限" in item for item in payload["nextWeekSuggestions"])
+    observations = "\n".join(payload["observations"])
+    suggestions = "\n".join(payload["nextWeekSuggestions"])
+    assert "没有" in observations
+    assert "睡眠" in observations
+    assert "酸痛" in observations
+    assert "真实恢复状态" in observations
+    assert "恢复判断有限" in suggestions
+    assert "不会直接修改你的计划" in suggestions
     # No fabricated focus areas / risk notes when there is no data.
     assert "focusAreas" not in payload
     assert "riskNotes" not in payload
@@ -794,7 +800,10 @@ def test_mock_weekly_review_high_streak_emits_recovery_risk_note() -> None:
     payload = response.actions[0].payload
     assert response.intent == "weeklyReview"
     assert any("连续训练天数较高" in note for note in payload["riskNotes"])
-    assert any("低强度或休息" in item for item in payload["nextWeekSuggestions"])
+    suggestions = "\n".join(payload["nextWeekSuggestions"])
+    assert "低强度" in suggestions
+    assert "避免高强度腿部" in suggestions
+    assert "不会直接修改你的计划" in suggestions
 
 
 def test_mock_weekly_review_over_weekly_frequency_suggests_lower_intensity() -> None:
@@ -811,10 +820,9 @@ def test_mock_weekly_review_over_weekly_frequency_suggests_lower_intensity() -> 
     )
     payload = response.actions[0].payload
     assert any("超过计划频率" in note for note in payload["riskNotes"])
-    assert any(
-        "下一次训练可以适当降低强度" in item
-        for item in payload["nextWeekSuggestions"]
-    )
+    suggestions = "\n".join(payload["nextWeekSuggestions"])
+    assert "恢复和技术动作" in suggestions
+    assert "不会直接修改你的计划" in suggestions
 
 
 def test_mock_weekly_review_emits_risk_note_when_overtraining() -> None:
@@ -846,7 +854,7 @@ def test_mock_weekly_review_chest_pain_routes_to_safety() -> None:
 def test_mock_recovery_request_chest_pain_routes_to_safety() -> None:
     """Recovery wording must not bypass the high-risk safety response."""
     response = _run_mock_coach_agent(
-        _request_with_sessions("我最近练得有点累而且胸痛，帮我看看恢复情况")
+        _request_with_sessions("我连续练了几天，现在胸口痛还有点头晕，今天还要继续吗？")
     )
     assert response.intent == "safetyResponse"
     assert response.safety.shouldStopWorkout is True

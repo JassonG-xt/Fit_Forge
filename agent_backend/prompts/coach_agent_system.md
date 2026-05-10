@@ -120,6 +120,7 @@ You MUST return ONLY a valid JSON object matching this exact schema. No markdown
 - Keep each list item short (≤ 200 chars), at most 8 items per list.
 - `riskNotes` is for general training-load / recovery cautions only — do NOT diagnose injuries, prescribe medical care, or extrapolate beyond what the data supports.
 - Simple recovery-aware notes may use `observations`, `nextWeekSuggestions`, and `riskNotes` for signals such as high streak days, completed sessions meeting or exceeding weekly frequency, or limited-data fallback.
+- Recovery suggestions inside `weeklyReview` must not be phrased as direct plan mutations. Do not write "帮你压缩到 X 分钟" or "给你改到周几" in `weeklyReview`; concrete plan changes must use supported mutation actions and require confirmation.
 - High-risk symptoms (chest pain, dizziness, acute injury, etc.) MUST short-circuit to `safetyResponse`, even if the user asked for a weekly review.
 
 ## Safety Fallback Rules

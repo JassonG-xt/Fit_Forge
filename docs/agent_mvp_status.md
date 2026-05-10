@@ -2,9 +2,9 @@
 
 ## 当前稳定点
 
-- Tag: `agent-recovery-aware-v1`
-- Latest tagged commit: `fe129c6d6b0ece10feb6c6c4e18e266093c02650`
-- 状态：Coach Agent MVP + eval suite (45 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-stage portfolio / real-provider smoke docs + D-1 recovery-aware coaching + D-2 recovery eval 覆盖
+- Tag: `agent-recovery-evals-v1`
+- Latest tagged commit: `245c5411aa375ec67dc62d1b92934d6b7e97d353`
+- 状态：Coach Agent MVP + eval suite (45 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-stage portfolio / real-provider smoke docs + D-1 recovery-aware coaching + D-2 recovery eval 覆盖 + E-1A recovery-aware suggestion-only polish
 
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
@@ -301,12 +301,17 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
     - 不自动改下周计划；任何 plan mutation 仍必须走现有 supported action + 用户确认 + `LocalAgentActionExecutor`
     - 高风险症状继续优先走 deterministic `safetyResponse`；不做医疗诊断
 
-15. **D-2 recovery-aware eval coverage**（本 PR）
+15. **D-2 recovery-aware eval coverage** ✅ 已完成（PR #44）
     - 在 `coach_agent_eval_cases.json` 加 4 条 active case：high streak recovery review、over-weekly-frequency recovery caution、no-data recovery fallback、safety-over-recovery
     - eval JSON 只断言 action / confirmation / payload 结构；具体中文文案仍由 unit tests 覆盖
     - expectedGap 保持 4；不跑 real LLM、不比较 provider、不推广 provider
 
-16. **再考虑 streaming 或 multi-agent**
+16. **E-1A recovery-aware suggestion-only polish**（本 PR）
+    - 打磨 read-only `weeklyReview` 的恢复建议文案：high streak、超过计划频率、数据不足 fallback 都更明确地说明 suggestion-only 边界
+    - 不新增 action type、不改 executor、不改 schema、不自动 compress / reschedule / replace / generatePlan
+    - `safetyResponse` 优先级保持不变；不诊断伤病，不编造睡眠 / 酸痛 / HRV / 疲劳数据
+
+17. **再考虑 streaming 或 multi-agent**
    前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。streaming / multi-agent / 长期记忆 / 自动执行 mutation 都不是当前 MVP 的目标。
 
 ## 操作守则（合并任何 agent 相关 PR 前 self-check）

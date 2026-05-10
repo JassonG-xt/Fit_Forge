@@ -377,6 +377,9 @@ def _weekly_review_response(request: AgentRequest) -> AgentResponse:
     weekly_frequency = progress.get("weeklyFrequency")
     recent_sessions = request.context.recentSessions or []
     recent = len(recent_sessions)
+    suggestion_footer = (
+        "我不会直接修改你的计划；如果之后想调整今天或下周的训练，需要你明确说一句，并经过确认。"
+    )
 
     if recent == 0:
         message = "最近还没有完成的训练记录，先完成几次训练后我可以给出更具体的复盘和建议。"
@@ -384,9 +387,13 @@ def _weekly_review_response(request: AgentRequest) -> AgentResponse:
         payload = {
             "summary": "暂无近期训练数据。",
             "completedSessions": 0,
-            "observations": ["最近没有已完成的训练记录。"],
+            "observations": [
+                "最近没有已完成的训练记录。",
+                "也没有睡眠、酸痛、主观疲劳等数据，所以不能判断你目前的真实恢复状态。",
+            ],
             "nextWeekSuggestions": [
-                "目前缺少最近训练记录，恢复判断有限。先完成几次训练后可以给出更具体建议。"
+                "目前缺少最近训练记录，恢复判断有限。先完成几次训练后可以给出更具体建议。",
+                suggestion_footer,
             ],
         }
         return AgentResponse(
@@ -440,15 +447,25 @@ def _weekly_review_response(request: AgentRequest) -> AgentResponse:
         elif completed == weekly_frequency:
             next_week.append("本周训练频率已经达标，接下来优先保证恢复和动作质量。")
         else:
-            next_week.append("本周已经超过计划频率，下一次训练可以适当降低强度。")
+            next_week.append("本周已经超过计划频率，下一次训练建议以恢复和技术动作为主，不再额外加大强度。")
     else:
         next_week.append("维持当前训练频率。")
     if focus_areas:
         next_week.append(f"继续保证 {focus_areas[0]} 训练日的复合动作质量。")
     if streak >= 4:
-        next_week.append("如果今天疲劳明显，优先选择低强度或休息。")
+        next_week.append(
+            "今天可以优先休息或做低强度活动（如散步、动态拉伸）。如果仍想训练，建议降低强度、缩短时长，避免高强度腿部训练。"
+        )
     if not risk_notes:
         next_week.append("感觉疲劳时优先降低训练量，不要硬加重量。")
+    if (
+        streak >= 4
+        or (
+            weekly_frequency is not None
+            and completed >= weekly_frequency
+        )
+    ):
+        next_week.append(suggestion_footer)
 
     focus_clause = (
         f"训练集中在 {'、'.join(focus_areas)}。" if focus_areas else ""
