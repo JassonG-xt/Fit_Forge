@@ -417,6 +417,70 @@ def test_mock_compress_short_no_minutes_returns_no_mutation() -> None:
         }
 
 
+# ── E-1B: recovery-aware compress routing stays narrow ──
+
+
+def test_mock_recovery_compress_with_minutes_routes_to_compress_workout() -> None:
+    """Explicit recovery + shortening + minutes can use existing compressWorkout."""
+    response = _run_mock_coach_agent(
+        _request("今天有点累，帮我把今天训练缩短到 30 分钟")
+    )
+
+    assert response.intent == "compressWorkout"
+    assert response.actions, "expected a compressWorkout action"
+    action = response.actions[0]
+    assert action.type == "compressWorkout"
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+    assert action.payload["targetMinutes"] == 30
+    assert action.payload["dayOfWeek"] == 1
+    assert action.type not in {"weeklyReview", "answerOnly", "safetyResponse"}
+
+
+def test_mock_vague_recovery_question_does_not_mutate() -> None:
+    response = _run_mock_coach_agent(_request("我有点累，要不要休息？"))
+
+    assert response.intent in {"answerOnly", "weeklyReview"}
+    for action in response.actions:
+        assert action.type not in {
+            "compressWorkout",
+            "replaceExercise",
+            "rescheduleWeek",
+            "generatePlan",
+        }
+        assert action.requiresConfirmation is False
+        assert action.sourceContextHash is None
+
+
+def test_mock_safety_beats_recovery_compress_request() -> None:
+    response = _run_mock_coach_agent(
+        _request("我胸口疼但想把今天训练缩短到 30 分钟")
+    )
+
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    assert response.actions, "expected a safety action"
+    for action in response.actions:
+        assert action.type == "safetyResponse"
+        assert action.requiresConfirmation is False
+        assert action.sourceContextHash is None
+
+
+def test_mock_recovery_lighten_without_minutes_does_not_mutate() -> None:
+    response = _run_mock_coach_agent(
+        _request("今天有点累，帮我把训练改轻一点")
+    )
+
+    for action in response.actions:
+        assert action.type not in {
+            "compressWorkout",
+            "replaceExercise",
+            "rescheduleWeek",
+            "generatePlan",
+        }
+        assert action.requiresConfirmation is False
+
+
 # ── Chinese safety guardrails — high-risk short-circuit before any routing ──
 
 
