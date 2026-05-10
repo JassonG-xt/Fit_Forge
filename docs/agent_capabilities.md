@@ -92,7 +92,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 - **真实模式只做手动 eval**：real LLM 不进 per-PR CI；多 provider 比较只在本地手动跑，结果不提交。
 - **safety 关键字是中文语料为主**：英文输入下的 deterministic guard 覆盖率有限；不能替代医疗判断。
 - **generatePlan 偏好是后处理，不是 PlanEngine 内部决策**：`availableWeekdays` 通过 `reschedulePlanToWeekdays` 应用，`targetMinutes` 通过 `compressDayInPlan` 应用。这意味着如果偏好里的训练日数量超过 `PlanEngine` 给出的 workout 日数量，多余的 weekdays 会保持休息，不会自动加塞训练。
-- **weeklyReview 不是长期记忆教练**：复盘只用最近 10 条 session 摘要 + 当周进度计数，没有跨会话 memory；可提示简单恢复 / 训练密度信号（如连续训练天数较高、已达到或超过计划频率、数据不足）；不分析 PR / 1RM / 体重趋势；不诊断伤病；不自动改下周计划。`riskNotes` 仅做训练量 / 恢复量级别的提示，不是医疗建议。
+- **weeklyReview 不是长期记忆教练**：复盘只用最近 10 条 session 摘要 + 当周进度计数，没有跨会话 memory；可提示简单恢复 / 训练密度信号（如连续训练天数较高、已达到或超过计划频率、数据不足），并用 suggestion-only 文案提醒不会直接修改计划；不分析 PR / 1RM / 体重趋势；不诊断伤病；不自动改下周计划。`riskNotes` 仅做训练量 / 恢复量级别的提示，不是医疗建议。
 
 ## Out of scope for the MVP
 

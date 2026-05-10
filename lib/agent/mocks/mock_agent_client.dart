@@ -494,6 +494,7 @@ class MockAgentClient implements AgentClient {
     final recentSessions = context.recentSessions;
     final recent = recentSessions.length;
     final weeklyFrequency = progress['weeklyFrequency'] as int?;
+    const suggestionFooter = '我不会直接修改你的计划；如果之后想调整今天或下周的训练，需要你明确说一句，并经过确认。';
 
     if (recent == 0) {
       return const _WeeklyReviewInsights(
@@ -502,8 +503,14 @@ class MockAgentClient implements AgentClient {
         payload: {
           'summary': '暂无近期训练数据。',
           'completedSessions': 0,
-          'observations': ['最近没有已完成的训练记录。'],
-          'nextWeekSuggestions': ['目前缺少最近训练记录，恢复判断有限。先完成几次训练后可以给出更具体建议。'],
+          'observations': [
+            '最近没有已完成的训练记录。',
+            '也没有睡眠、酸痛、主观疲劳等数据，所以不能判断你目前的真实恢复状态。',
+          ],
+          'nextWeekSuggestions': [
+            '目前缺少最近训练记录，恢复判断有限。先完成几次训练后可以给出更具体建议。',
+            '我不会直接修改你的计划；如果之后想调整今天或下周的训练，需要你明确说一句，并经过确认。',
+          ],
         },
       );
     }
@@ -549,7 +556,7 @@ class MockAgentClient implements AgentClient {
       } else if (completedThisWeek == weeklyFrequency) {
         nextWeekSuggestions.add('本周训练频率已经达标，接下来优先保证恢复和动作质量。');
       } else {
-        nextWeekSuggestions.add('本周已经超过计划频率，下一次训练可以适当降低强度。');
+        nextWeekSuggestions.add('本周已经超过计划频率，下一次训练建议以恢复和技术动作为主，不再额外加大强度。');
       }
     } else {
       nextWeekSuggestions.add('维持当前训练频率。');
@@ -558,10 +565,16 @@ class MockAgentClient implements AgentClient {
       nextWeekSuggestions.add('继续保证 ${focusAreas.first} 训练日的复合动作质量。');
     }
     if (streak >= 4) {
-      nextWeekSuggestions.add('如果今天疲劳明显，优先选择低强度或休息。');
+      nextWeekSuggestions.add(
+        '今天可以优先休息或做低强度活动（如散步、动态拉伸）。如果仍想训练，建议降低强度、缩短时长，避免高强度腿部训练。',
+      );
     }
     if (riskNotes.isEmpty) {
       nextWeekSuggestions.add('感觉疲劳时优先降低训练量，不要硬加重量。');
+    }
+    if (streak >= 4 ||
+        (weeklyFrequency != null && completedThisWeek >= weeklyFrequency)) {
+      nextWeekSuggestions.add(suggestionFooter);
     }
 
     final summary =

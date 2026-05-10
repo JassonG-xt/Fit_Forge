@@ -121,9 +121,16 @@ void main() {
         (payload['observations'] as List).first.toString(),
         contains('没有'),
       );
+      expect((payload['observations'] as List).join('\n'), contains('睡眠'));
+      expect((payload['observations'] as List).join('\n'), contains('酸痛'));
+      expect((payload['observations'] as List).join('\n'), contains('真实恢复状态'));
       expect(
         (payload['nextWeekSuggestions'] as List).join('\n'),
         contains('恢复判断有限'),
+      );
+      expect(
+        (payload['nextWeekSuggestions'] as List).join('\n'),
+        contains('不会直接修改你的计划'),
       );
       // No fabricated focus areas / risk notes when there is no data.
       expect(payload.containsKey('focusAreas'), false);
@@ -285,7 +292,15 @@ void main() {
       expect(riskNotes.join('\n'), contains('连续训练天数较高'));
       expect(
         (action.payload['nextWeekSuggestions'] as List).join('\n'),
-        contains('低强度或休息'),
+        contains('低强度'),
+      );
+      expect(
+        (action.payload['nextWeekSuggestions'] as List).join('\n'),
+        contains('避免高强度腿部'),
+      );
+      expect(
+        (action.payload['nextWeekSuggestions'] as List).join('\n'),
+        contains('不会直接修改你的计划'),
       );
     });
 
@@ -318,7 +333,11 @@ void main() {
       expect((payload['riskNotes'] as List).join('\n'), contains('超过计划频率'));
       expect(
         (payload['nextWeekSuggestions'] as List).join('\n'),
-        contains('下一次训练可以适当降低强度'),
+        contains('恢复和技术动作'),
+      );
+      expect(
+        (payload['nextWeekSuggestions'] as List).join('\n'),
+        contains('不会直接修改你的计划'),
       );
     });
 
@@ -346,7 +365,7 @@ void main() {
         final state = await primedAppStateWithProfile();
         final context = const AgentContextBuilder().build(state);
         final response = await client.sendMessage(
-          message: '我最近练得有点累而且胸痛，帮我看看恢复情况',
+          message: '我连续练了几天，现在胸口痛还有点头晕，今天还要继续吗？',
           context: context,
           history: const [],
         );
