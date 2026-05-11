@@ -500,7 +500,7 @@ void main() {
         state.saveSession(
           WorkoutSession(
             id: 'over_frequency_$i',
-            date: now.subtract(Duration(days: i)),
+            date: now.subtract(Duration(minutes: i)),
             dayType: WorkoutDayType.push,
             durationMinutes: 45,
             isCompleted: true,
