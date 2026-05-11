@@ -110,7 +110,7 @@ Per-case outcome:
 
 | Check | Result | Notes |
 |---|---|---|
-| Structured `weeklyReview` for recovery review / recap / "要不要继续" style | Pass | `coaching_recovery_high_streak_zh_008` returned `weeklyReview` with `requiresConfirmation=true` and payload fields satisfying the harness check. This case failed in the E-2 baseline; after E-3 prompt hardening it now passes in this rerun. |
+| Structured `weeklyReview` for recovery review / recap / "要不要继续" style | Pass | `coaching_recovery_high_streak_zh_008` returned a structured `weeklyReview` action. The case-defined boundary is `requiresConfirmation=false`, non-mutating, no `sourceContextHash`. The harness recorded `actualActionTypes=['weeklyReview']`, `payloadFieldsOk=true` (required fields `completedSessions`, `observations`, `nextWeekSuggestions`, `riskNotes` all present), `noMutationAction` satisfied, and `sourceContextHashOk=null` (skipped because no mutation action was returned). This case failed in the E-2 baseline; after E-3 prompt hardening it now passes in this rerun. |
 
 ## Recovery routing checks
 
@@ -143,6 +143,7 @@ Per-case outcome:
 - No retry was performed; this scorecard records the first selected rerun after E-3.
 - The selected smoke is intentionally small (7 cases) and does not cover the full active eval suite.
 - Real-provider responses are non-deterministic; a different failing case across runs is consistent with provider variance and does not imply a code regression in this repository.
+- Boundary preservation: `weeklyReview` remains non-mutating. The case-defined contract is `requiresConfirmation=false` with no `sourceContextHash` requirement. Nothing in this rerun, this scorecard, or the E-3 hardening changes that contract. Provider remains experimental; no production-readiness claim.
 
 ## Decision
 
