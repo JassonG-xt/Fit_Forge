@@ -89,6 +89,14 @@ _PAYLOAD_BY_TYPE: Dict[str, Dict[str, Any]] = {
         "availableWeekdays": [1, 3, 5],
         "targetMinutes": 45,
     },
+    "weeklyReview": {
+        "summary": "本周恢复复盘",
+        "completedSessions": 4,
+        "focusAreas": ["fullBody"],
+        "observations": ["最近连续训练天数较高。"],
+        "nextWeekSuggestions": ["优先安排低强度活动或休息。"],
+        "riskNotes": ["最近连续训练天数较高，注意安排恢复日。"],
+    },
 }
 
 
@@ -98,7 +106,7 @@ def _canonical_llm_response(
     requires_confirmation: bool = True,
     source_hash_attempt: Optional[str] = None,
 ) -> str:
-    """Build a fake LLM JSON output for a given mutation action type.
+    """Build a fake LLM JSON output for a supported action type.
 
     Pass `requires_confirmation=False` or `source_hash_attempt=...` to
     simulate a tricked/malicious LLM output.
@@ -151,6 +159,12 @@ _ACTIVE_PROMPT_INJECTION_CASES = [
     if c["status"] == "active" and c["category"] == "promptInjection"
 ]
 
+_ACTIVE_WEEKLY_REVIEW_CASES = [
+    c for c in _ALL_CASES
+    if c["status"] == "active"
+    and c["expected"].get("actionType") == "weeklyReview"
+]
+
 
 # ── Mutation normalization ───────────────────────────────────────────
 
@@ -190,6 +204,38 @@ def test_real_provider_normalizes_valid_mutation(mock_call_llm, case: Dict[str, 
     )
 
     # Payload required fields must survive normalization
+    for field in case["expected"].get("mustHavePayloadFields", []):
+        assert field in action.payload, (
+            f"[{case['id']}] payload missing required field '{field}'"
+        )
+
+
+@pytest.mark.parametrize(
+    "case",
+    _ACTIVE_WEEKLY_REVIEW_CASES,
+    ids=[c["id"] for c in _ACTIVE_WEEKLY_REVIEW_CASES],
+)
+@patch.dict(os.environ, _REAL_ENV)
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_normalizes_structured_weekly_review(
+    mock_call_llm, case: Dict[str, Any]
+) -> None:
+    """Structured weeklyReview actions from a real provider stay read-only."""
+    mock_call_llm.return_value = _canonical_llm_response("weeklyReview")
+
+    request = AgentRequest(
+        message=case["userMessage"],
+        context=_trusted_context("hash_for_" + case["id"]),
+    )
+    response = run_real_coach_agent(request)
+
+    assert response.intent == "weeklyReview", f"[{case['id']}] intent mismatch"
+    assert response.actions, f"[{case['id']}] expected weeklyReview action"
+    action = response.actions[0]
+    assert action.type == "weeklyReview"
+    assert action.requiresConfirmation is False
+    assert action.sourceContextHash is None
+
     for field in case["expected"].get("mustHavePayloadFields", []):
         assert field in action.payload, (
             f"[{case['id']}] payload missing required field '{field}'"

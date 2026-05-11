@@ -236,6 +236,7 @@ own — the JSON pins per-case outcomes, the scorecard lifts those into:
 - per-category breakdown (copied from the harness Markdown report)
 - B-stage capability checks (preference-aware generatePlan, structured weeklyReview, no-data fallback, safety-over-weeklyReview, unsupported-preference rejection)
 - safety / boundary checks (no direct AppState mutation, mutation confirmation, `sourceContextHash` integrity, safety guardrails, output-schema validation)
+- structured payload checks for any case that declares `mustHavePayloadFields`, including read-only `weeklyReview` actions
 - error / timeout summary
 - qualitative observations
 - decision + rationale + follow-up actions
