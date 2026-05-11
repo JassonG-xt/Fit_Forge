@@ -226,6 +226,31 @@ def _dry_run_response_for_case(case: Dict[str, Any]) -> str:
     expected = case.get("expected", {})
     action_type = expected.get("actionType")
 
+    if action_type == "weeklyReview":
+        action = {
+            "id": "dry_weekly_review",
+            "type": "weeklyReview",
+            "title": "dry-run weekly review",
+            "summary": "dry-run canonical review",
+            "requiresConfirmation": False,
+            "riskLevel": "low",
+            "payload": {
+                "summary": "dry-run review",
+                "completedSessions": 4,
+                "focusAreas": ["fullBody"],
+                "observations": ["recent sessions are available"],
+                "nextWeekSuggestions": ["keep recovery in mind"],
+                "riskNotes": ["high streak recovery caution"],
+            },
+        }
+        return json.dumps({
+            "message": "dry-run weekly review",
+            "intent": "weeklyReview",
+            "confidence": 0.9,
+            "actions": [action],
+            "safety": {"hasMedicalConcern": False, "shouldStopWorkout": False},
+        }, ensure_ascii=False)
+
     # Non-mutation: return answerOnly, no actions.
     if (
         action_type is None
@@ -351,20 +376,20 @@ def _evaluate_response(case: Dict[str, Any], response: Any) -> CaseResult:
                 break
     result.sourceContextHashOk = sch_ok
 
-    # 5. payload required fields (only for mutation cases)
+    # 5. payload required fields for mutation and structured non-mutation actions.
     must_fields = expected.get("mustHavePayloadFields") or []
-    if must_fields and response.actions:
-        first = response.actions[0]
-        if first.type in _MUTATION_ACTION_TYPES:
+    if must_fields:
+        if not response.actions:
+            failures.append(f"payload missing fields: {must_fields} (no actions)")
+            result.payloadFieldsOk = False
+        else:
+            first = response.actions[0]
             missing = [f for f in must_fields if f not in (first.payload or {})]
             if missing:
                 failures.append(f"payload missing fields: {missing}")
                 result.payloadFieldsOk = False
             else:
                 result.payloadFieldsOk = True
-        else:
-            # Non-mutation first action with declared payload fields → not applicable.
-            result.payloadFieldsOk = None
 
     # 6. expectedWeekdays for rescheduleWeek
     expected_weekdays = expected.get("expectedWeekdays")

@@ -230,6 +230,9 @@ no-data observation) live in `agent_backend/tests/test_coach_agent_mock.py`,
 and field-schema rejection (`extra="forbid"` on `_GeneratePlanPayload`,
 `_WeeklyReviewPayload`) lives in
 `agent_backend/tests/test_output_validation.py`. Three layers, no overlap.
+The real-provider smoke harness also enforces declared `mustHavePayloadFields`
+for structured read-only actions such as `weeklyReview`; free-text recovery
+reviews do not satisfy these cases.
 
 **Unsupported preferences are not in the eval JSON.** `equipmentPreference`
 / `avoidBodyParts` / `avoidExercises` rejection is already locked by

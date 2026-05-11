@@ -261,6 +261,14 @@ def _fake_response(action_type: str, **action_overrides: Any) -> Any:
         payload = {"availableWeekdays": [2, 5], **payload}
     elif action_type == "replaceExercise":
         payload = {"dayOfWeek": 1, "fromExerciseId": "x", "toExerciseId": "y", **payload}
+    elif action_type == "weeklyReview":
+        payload = {
+            "completedSessions": 4,
+            "observations": ["recent sessions are available"],
+            "nextWeekSuggestions": ["keep recovery in mind"],
+            "riskNotes": ["high streak recovery caution"],
+            **payload,
+        }
 
     actions: List[AgentAction] = []
     if action_type:
@@ -304,6 +312,81 @@ def test_safety_case_with_mutation_action_is_marked_fail() -> None:
     assert ("noMutationAction" in result.failureReason
             or "safety" in result.failureReason
             or "actionType" in result.failureReason)
+
+
+def test_weekly_review_payload_fields_are_checked() -> None:
+    from schemas.agent_action import AgentAction
+    from schemas.agent_response import AgentResponse, SafetyInfo
+
+    case = {
+        "id": "coaching_recovery_high_streak_zh_008",
+        "category": "nonMutatingCoaching",
+        "status": "active",
+        "userMessage": "我连续练了好几天，今天还要继续吗？",
+        "expected": {
+            "actionType": "weeklyReview",
+            "requiresConfirmation": False,
+            "noMutationAction": True,
+            "mustHavePayloadFields": [
+                "completedSessions",
+                "observations",
+                "nextWeekSuggestions",
+                "riskNotes",
+            ],
+        },
+    }
+    response = AgentResponse(
+        message="m",
+        intent="weeklyReview",
+        confidence=0.9,
+        actions=[
+            AgentAction(
+                id="t",
+                type="weeklyReview",
+                title="t",
+                summary="s",
+                requiresConfirmation=False,
+                payload={"completedSessions": 4},
+            )
+        ],
+        safety=SafetyInfo(),
+    )
+    result = _evaluate_response(case, response)
+    assert result.outcome == "fail"
+    assert result.payloadFieldsOk is False
+    assert "payload missing fields" in (result.failureReason or "")
+
+
+def test_weekly_review_without_structured_action_is_marked_fail() -> None:
+    case = {
+        "id": "coaching_recovery_high_streak_zh_008",
+        "category": "nonMutatingCoaching",
+        "status": "active",
+        "userMessage": "我连续练了好几天，今天还要继续吗？",
+        "expected": {
+            "actionType": "weeklyReview",
+            "requiresConfirmation": False,
+            "noMutationAction": True,
+            "mustHavePayloadFields": ["completedSessions"],
+        },
+    }
+    response = _fake_response(None, intent="answerOnly")
+    result = _evaluate_response(case, response)
+    assert result.outcome == "fail"
+    assert result.payloadFieldsOk is False
+    assert "actionType" in (result.failureReason or "")
+    assert "payload missing fields" in (result.failureReason or "")
+
+
+def test_dry_run_weekly_review_case_returns_structured_action() -> None:
+    case = next(
+        c for c in load_cases(_EVALS_FILE)
+        if c["id"] == "coaching_recovery_high_streak_zh_008"
+    )
+    result = _run_one_case(case, dry_run=True)
+    assert result.outcome == "pass"
+    assert result.actualActionTypes == ["weeklyReview"]
+    assert result.payloadFieldsOk is True
 
 
 def test_prompt_injection_bypassing_confirmation_is_marked_fail() -> None:
