@@ -101,6 +101,63 @@ python -m evals.run_real_llm_eval \
   --markdown-out evals/results/gpt4o_mini_expected_gap.md
 ```
 
+### Selected case runs
+
+For focused smoke runs, you can pick exact case IDs directly instead of
+creating a temporary one-off cases JSON. Two ways:
+
+- `--case-id <ID>` — repeatable for multiple cases.
+- `--case-list <ID,ID,...>` — comma-separated.
+
+Both flags can be combined. The merged list is de-duplicated in first-seen
+order. Unknown IDs fail fast with a clear error (exit code 2); they are
+never silently skipped. `--only-status` / `--category` / `--limit` still
+apply on top of the selection — if a selected case is filtered out, the
+harness warns; if every selected case is filtered out, it exits with 2.
+
+The provider credential must be configured locally and omitted from
+committed docs / scorecards. Raw eval result files under
+`evals/results/*.json|md` are gitignored and must not be committed.
+
+#### Single case
+
+```bash
+cd agent_backend
+
+FITFORGE_AGENT_MODE=real \
+LLM_BASE_URL="<configured locally>" \
+LLM_MODEL="<configured locally>" \
+LLM_TIMEOUT_SECONDS=90 \
+.venv/bin/python -m evals.run_real_llm_eval \
+  --case-id recovery_compress_today_to_30_zh \
+  --only-status active \
+  --provider "<provider>" \
+  --model "<model>" \
+  --out evals/results/selected_case.json \
+  --markdown-out evals/results/selected_case.md
+```
+
+#### Multiple cases
+
+```bash
+cd agent_backend
+
+FITFORGE_AGENT_MODE=real \
+LLM_BASE_URL="<configured locally>" \
+LLM_MODEL="<configured locally>" \
+LLM_TIMEOUT_SECONDS=90 \
+.venv/bin/python -m evals.run_real_llm_eval \
+  --case-list recovery_compress_today_to_30_zh,recovery_question_should_not_mutate_zh \
+  --only-status active \
+  --provider "<provider>" \
+  --model "<model>" \
+  --out evals/results/selected_cases.json \
+  --markdown-out evals/results/selected_cases.md
+```
+
+Real-provider runs remain manual; they are not a per-PR CI gate, not a
+provider-promotion signal, and not production-readiness evidence.
+
 ### All flags
 
 | Flag | Description |
@@ -108,15 +165,18 @@ python -m evals.run_real_llm_eval \
 | `--cases <path>` | Path to eval cases JSON. Default: `evals/coach_agent_eval_cases.json`. |
 | `--out <path>` | JSON report output path. Default: `evals/results/real_llm_eval_<runId>.json`. |
 | `--markdown-out <path>` | Optional Markdown summary path. |
-| `--limit <N>` | Run at most N cases (after filters). |
+| `--limit <N>` | Run at most N cases (after selection and filters). |
 | `--category <name>` | Only run this category. |
 | `--only-status active\|expectedGap\|all` | Filter by status. Default: `all`. |
+| `--case-id <ID>` | Run this case ID. Repeatable. Unknown IDs fail fast (exit 2). |
+| `--case-list <ID,ID,...>` | Comma-separated case IDs. Combines with `--case-id`; de-duped in first-seen order. |
 | `--model <str>` | Model name recorded in the report. Falls back to `$LLM_MODEL`. |
 | `--provider <str>` | Provider label recorded in the report. Default: `openai-compatible`. |
 | `--dry-run` | Skip real LLM calls; use canonical fake responses. |
 
-The harness always exits 0 on a completed run. **Failures show up in the
-report, not the shell exit code** — this is observational tooling.
+A completed run exits 0; **eval failures show up in the report, not the
+shell exit code** — this is observational tooling. Configuration errors
+(missing env, unknown case IDs, all selected cases filtered out) exit 2.
 
 ## Per-case context overrides
 
