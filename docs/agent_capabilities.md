@@ -114,6 +114,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 - `README.md` — Coach Agent 顶层概览
 - `docs/coach_agent_demo_script.md` — 录屏 / demo 脚本（4 个核心场景）
 - `docs/agent_mvp_status.md` — MVP 稳定点 / 架构 / 质量门禁
+- `docs/recovery_routing_phase_summary.md` — recovery-routing 阶段最终汇总（PRs #43–#52：能力、安全边界、eval 覆盖、real-provider scorecard 证据链、里程碑 tag、experimental 状态）
 - `docs/agent_architecture_diagram.md` — Mermaid 数据流 / 安全边界图
 - `docs/coach_agent_evals.md` — eval suite 字段含义
 - `docs/generate_plan_agent_boundary.md` — generatePlan 产品边界

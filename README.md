@@ -106,22 +106,25 @@ Flutter 本地执行器也会再次检查 mutation action 的 `requiresConfirmat
 
 ### Current Coach Agent maturity
 
-The Coach Agent is a **human-in-the-loop fitness coaching MVP** with a stable B-stage showcase path:
+The Coach Agent is a **human-in-the-loop fitness coaching MVP** with a stable B-stage showcase path, extended by a recovery-routing phase (PRs #43–#52):
 
 - preference-aware plan generation (`availableWeekdays`, `targetMinutes`)
 - exercise replacement and workout compression through user-confirmed mutation actions
-- structured weekly review insights with a read-only UI panel (no plan mutation)
-- deterministic safety handling for high-risk requests (Chinese keyword guardrail short-circuits before LLM)
-- mock + back-end eval coverage for B-stage behavior contracts (eval suite: 45 cases / 41 active / 4 expectedGap)
-- one sanitized real-provider smoke scorecard for manual compatibility tracking — see [`docs/real_llm_scorecards/`](docs/real_llm_scorecards/)
+- structured weekly review insights with a read-only UI panel (no plan mutation), now with recovery-aware suggestion-only signals (high streak / over-frequency / no-data fallback)
+- recovery-context mutation routing for `compressWorkout` (concrete minutes) and `rescheduleWeek` (concrete weekdays) — still confirmed mutations with trusted `sourceContextHash`; vague recovery questions and "today→tomorrow" single-session moves remain non-mutating
+- deterministic safety handling for high-risk requests (Chinese keyword guardrail short-circuits before LLM; safety precedence preserved over recovery mutation routing)
+- mock + back-end eval coverage for B-stage and recovery-routing behavior contracts (eval suite: 58 cases / 54 active / 4 expectedGap)
+- four sanitized real-provider smoke scorecards (initial 20/20 smoke, plus E-2 / E-4 / E-5 focused recovery-routing runs) — see [`docs/real_llm_scorecards/`](docs/real_llm_scorecards/)
 
-A single real-provider smoke run has been recorded (20/20 active cases passing, including the 4 B-stage cases). This is treated as **basic compatibility evidence only** — it is **not** a production-readiness claim, **not** a provider promotion, and **not** a provider comparison. Per [`docs/coach_agent_evals.md`](docs/coach_agent_evals.md), promoting a case (or a provider) requires ≥3 cross-run stable conversions on the same data; a single smoke run is one data point, not a green light. Real-provider runs remain manual rather than per-PR CI gates, and provider API keys live only in backend env (Flutter never touches them).
+The recovery-routing phase is feature-complete for the current stage. The phase summary at [`docs/recovery_routing_phase_summary.md`](docs/recovery_routing_phase_summary.md) consolidates capabilities, mutation/safety boundaries, eval coverage, the full real-provider scorecard chain, milestone tags, and known limitations.
+
+Real-provider smoke runs are treated as **manual diagnostic evidence only** — not a production-readiness claim, not a provider promotion, and not a provider comparison. Per [`docs/coach_agent_evals.md`](docs/coach_agent_evals.md), promoting a case (or a provider) requires ≥3 cross-run stable conversions on the same data; the recovery-routing smoke chain is narrow (≤7 cases per run plus the focused single-case rerun), not a green light. Real-provider runs remain manual rather than per-PR CI gates, and provider API keys live only in backend env (Flutter never touches them).
 
 Milestone tag lineage:
 
-`agent-mvp-eval-v1` → `agent-mvp-eval-v2` → `agent-b-stage-showcase-v1` → `agent-b-stage-evals-v1` → `agent-real-provider-smoke-v1`
+`agent-mvp-eval-v1` → `agent-mvp-eval-v2` → `agent-b-stage-showcase-v1` → `agent-b-stage-evals-v1` → `agent-real-provider-smoke-v1` → `agent-portfolio-ready-v1` → `agent-recovery-aware-v1` → `agent-recovery-evals-v1` → `agent-recovery-suggestion-polish-v1` → `agent-recovery-compress-routing-v1` → `agent-recovery-weekly-reschedule-v1` → `agent-recovery-routing-smoke-v1` → `agent-recovery-weeklyreview-hardening-v1` → `agent-recovery-routing-smoke-after-e3-v1` → `agent-recovery-compress-focused-rerun-v1` → `agent-recovery-routing-phase-summary-v1`
 
-`agent-mvp-eval-v2` remains the MVP-level stability snapshot; the three tags after it are showcase / eval-contract / single-smoke milestones rather than new stability snapshots.
+`agent-mvp-eval-v2` remains the MVP-level stability snapshot; subsequent tags are showcase / eval-contract / smoke / recovery-routing milestones rather than new stability snapshots. Provider status remains **experimental** throughout.
 
 ### Running Coach Agent
 
