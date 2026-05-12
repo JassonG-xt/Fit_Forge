@@ -18,5 +18,6 @@ This directory holds repository-grounded documentation for the current Flutter a
 - [real_llm_eval_harness.md](real_llm_eval_harness.md) — manual real-LLM eval harness: configuration, dry-run vs real, reading the report
 - [real_llm_provider_scorecard_template.md](real_llm_provider_scorecard_template.md) — reusable scorecard template for summarizing real-provider eval runs
 - [real_llm_scorecards/](real_llm_scorecards/) — sanitized summaries of manual real-provider smoke runs (raw JSON outputs are gitignored; only scrubbed Markdown lives here)
+- [recovery_routing_phase_summary.md](recovery_routing_phase_summary.md) — consolidates PRs #43–#52: recovery-aware coaching capabilities, mutation/safety boundaries, eval coverage, real-provider scorecard chain, milestone tags, and current experimental status
 
 If the code and docs disagree, the code in `lib/`, `test/`, and `.github/workflows/` is the source of truth and the docs should be updated.
