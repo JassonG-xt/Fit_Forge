@@ -148,6 +148,45 @@ def filter_cases(
     return out
 
 
+def parse_case_list(spec: Optional[str]) -> List[str]:
+    """Parse a comma-separated case-ID string into a list.
+
+    Empty / whitespace-only entries are dropped. Whitespace around each ID is
+    stripped. Returns `[]` when `spec` is None or empty.
+    """
+    if not spec:
+        return []
+    return [token.strip() for token in spec.split(",") if token.strip()]
+
+
+def select_cases_by_id(
+    cases: List[Dict[str, Any]],
+    case_ids: List[str],
+) -> List[Dict[str, Any]]:
+    """Select cases by exact ID, preserving the first-seen order of requested IDs.
+
+    Behavior:
+    - Empty `case_ids` returns `cases` unchanged (no selection requested).
+    - Requested IDs are de-duplicated while preserving first-seen order.
+    - Unknown IDs raise `ValueError` with the full list — fail-fast, no silent skip.
+    """
+    if not case_ids:
+        return list(cases)
+
+    seen: set = set()
+    ordered_unique: List[str] = []
+    for cid in case_ids:
+        if cid not in seen:
+            seen.add(cid)
+            ordered_unique.append(cid)
+
+    by_id: Dict[str, Dict[str, Any]] = {c.get("id"): c for c in cases if c.get("id")}
+    missing = [cid for cid in ordered_unique if cid not in by_id]
+    if missing:
+        raise ValueError(f"Unknown case id(s): {', '.join(missing)}")
+    return [by_id[cid] for cid in ordered_unique]
+
+
 # ── Trusted eval context ────────────────────────────────────────────
 
 
@@ -676,7 +715,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--markdown-out", default=None,
                    help="Optional path to write a Markdown summary.")
     p.add_argument("--limit", type=int, default=None,
-                   help="Run at most N cases (after category/status filters).")
+                   help="Run at most N cases (after exact selection and category/status filters).")
     p.add_argument("--category", default=None,
                    help="Only run cases with this category.")
     p.add_argument(
@@ -684,6 +723,24 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         choices=("active", "expectedGap", "all"),
         default="all",
         help="Filter cases by status. Default: all.",
+    )
+    p.add_argument(
+        "--case-id",
+        action="append",
+        default=None,
+        help=(
+            "Run exactly this case ID. Repeatable: --case-id A --case-id B. "
+            "Unknown IDs fail fast; duplicates are de-duped in first-seen order."
+        ),
+    )
+    p.add_argument(
+        "--case-list",
+        default=None,
+        help=(
+            "Comma-separated list of case IDs to run (e.g. caseA,caseB). "
+            "Combines with --case-id; the merged set is de-duped in first-seen "
+            "order. Unknown IDs fail fast."
+        ),
     )
     p.add_argument("--model", default=None,
                    help="Model name to record in the report (overrides $LLM_MODEL).")
@@ -710,14 +767,40 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"error: {env_err}", file=sys.stderr)
             return 2
 
+    requested_case_ids: List[str] = list(args.case_id or [])
+    requested_case_ids.extend(parse_case_list(args.case_list))
+
+    all_cases = load_cases(cases_path)
+    try:
+        selected_cases = select_cases_by_id(all_cases, requested_case_ids)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     cases = filter_cases(
-        load_cases(cases_path),
+        selected_cases,
         category=args.category,
         only_status=args.only_status,
         limit=args.limit,
     )
     if not cases:
+        if requested_case_ids:
+            print(
+                f"error: {len(selected_cases)} case(s) selected by --case-id/--case-list "
+                f"but none survived filters "
+                f"(--only-status={args.only_status!r}, --category={args.category!r}).",
+                file=sys.stderr,
+            )
+            return 2
         print("warning: no cases matched filters", file=sys.stderr)
+    elif requested_case_ids and len(cases) < len(selected_cases):
+        dropped = [c["id"] for c in selected_cases if c not in cases]
+        print(
+            "warning: some selected case(s) filtered out by "
+            f"--only-status={args.only_status!r} / --category={args.category!r}: "
+            f"{', '.join(dropped)}",
+            file=sys.stderr,
+        )
 
     report = run_eval(
         cases=cases,

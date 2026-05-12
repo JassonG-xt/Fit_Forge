@@ -89,7 +89,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 - **不是 autonomous planner**：所有 mutation 必须用户确认；Coach 不会在后台自己改你的计划。
 - **不是 NLU 引擎**：mock router 是确定性 keyword 路由，不应被扩成伪 NLU；real LLM 模式才有真正 NLU 能力，但 real 模式不进 CI。
 - **eval suite 不是分数表**：`coach_agent_eval_cases.json` 是行为契约，54 active / 4 expectedGap（58 cases）；保留 expectedGap 作为 regression signal，不为「全绿」放宽守护。
-- **真实模式只做手动 eval**：real LLM 不进 per-PR CI；多 provider 比较只在本地手动跑，结果不提交。
+- **真实模式只做手动 eval**：real LLM 不进 per-PR CI；多 provider 比较只在本地手动跑，结果不提交。Real-provider harness 支持通过 `--case-id` / `--case-list` 直接指定要跑的 eval case ID（不再需要写临时 JSON），unknown ID 立刻失败，raw 输出仍 gitignored；详见 `docs/real_llm_eval_harness.md` 的 *Selected case runs* 段。
 - **safety 关键字是中文语料为主**：英文输入下的 deterministic guard 覆盖率有限；不能替代医疗判断。
 - **generatePlan 偏好是后处理，不是 PlanEngine 内部决策**：`availableWeekdays` 通过 `reschedulePlanToWeekdays` 应用，`targetMinutes` 通过 `compressDayInPlan` 应用。这意味着如果偏好里的训练日数量超过 `PlanEngine` 给出的 workout 日数量，多余的 weekdays 会保持休息，不会自动加塞训练。
 - **weeklyReview 不是长期记忆教练**：复盘只用最近 10 条 session 摘要 + 当周进度计数，没有跨会话 memory；可提示简单恢复 / 训练密度信号（如连续训练天数较高、已达到或超过计划频率、数据不足），并用 suggestion-only 文案提醒不会直接修改计划；不分析 PR / 1RM / 体重趋势；不诊断伤病；不自动改下周计划。`riskNotes` 仅做训练量 / 恢复量级别的提示，不是医疗建议。

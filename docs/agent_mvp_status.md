@@ -368,6 +368,10 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
 24. **再考虑 streaming 或 multi-agent**
    前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。streaming / multi-agent / 长期记忆 / 自动执行 mutation 都不是当前 MVP 的目标。
 
+## 工具 / Eval 杂项
+
+- **Real-provider harness 支持精确选择 case**：`agent_backend/evals/run_real_llm_eval.py` 新增 `--case-id`（可重复）和 `--case-list`（逗号分隔）两个 flag，可直接指定一个或多个 eval case ID 跑 selected smoke，不再需要为 focused rerun 写临时 JSON。Unknown ID 立刻失败（exit 2），重复 ID 按首次出现顺序去重，`--only-status` / `--category` / `--limit` 仍在 selection 之后生效。Raw eval 结果仍 gitignored，real-provider 仍**不**进 per-PR CI、**不**作为 provider promotion 证据。详见 `docs/real_llm_eval_harness.md` 的 *Selected case runs* 段。
+
 ## 操作守则（合并任何 agent 相关 PR 前 self-check）
 
 - 没让 LLM 直接写 `AppState`

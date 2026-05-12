@@ -35,7 +35,9 @@ from evals.run_real_llm_eval import (
     filter_cases,
     load_cases,
     main,
+    parse_case_list,
     run_eval,
+    select_cases_by_id,
     write_json_report,
     write_markdown_report,
 )
@@ -85,6 +87,188 @@ def test_filter_cases_all_status_passthrough() -> None:
     cases = load_cases(_EVALS_FILE)
     out = filter_cases(cases, only_status="all")
     assert len(out) == len(cases)
+
+
+# ── exact case selection ──
+
+
+def _two_real_case_ids() -> List[str]:
+    """Pick two stable active case IDs from the real eval file for selection tests."""
+    cases = [c for c in load_cases(_EVALS_FILE) if c.get("status") == "active"]
+    assert len(cases) >= 2, "eval suite needs ≥2 active cases for selection tests"
+    return [cases[0]["id"], cases[1]["id"]]
+
+
+def test_parse_case_list_basic() -> None:
+    assert parse_case_list("a,b,c") == ["a", "b", "c"]
+
+
+def test_parse_case_list_strips_whitespace_and_skips_empty() -> None:
+    assert parse_case_list(" a , ,b ,  ") == ["a", "b"]
+
+
+def test_parse_case_list_returns_empty_when_none_or_blank() -> None:
+    assert parse_case_list(None) == []
+    assert parse_case_list("") == []
+    assert parse_case_list("   ") == []
+
+
+def test_select_cases_by_id_returns_cases_unchanged_when_no_ids() -> None:
+    cases = load_cases(_EVALS_FILE)
+    out = select_cases_by_id(cases, [])
+    assert out == cases
+    assert out is not cases  # new list, original not mutated
+
+
+def test_select_cases_by_id_picks_single_case() -> None:
+    cases = load_cases(_EVALS_FILE)
+    target = cases[0]["id"]
+    out = select_cases_by_id(cases, [target])
+    assert [c["id"] for c in out] == [target]
+
+
+def test_select_cases_by_id_preserves_requested_order() -> None:
+    cases = load_cases(_EVALS_FILE)
+    a, b = _two_real_case_ids()
+    # request in non-file order
+    out = select_cases_by_id(cases, [b, a])
+    assert [c["id"] for c in out] == [b, a]
+
+
+def test_select_cases_by_id_dedupes_in_first_seen_order() -> None:
+    cases = load_cases(_EVALS_FILE)
+    a, b = _two_real_case_ids()
+    out = select_cases_by_id(cases, [a, b, a, b, a])
+    assert [c["id"] for c in out] == [a, b]
+
+
+def test_select_cases_by_id_fails_fast_on_unknown_id() -> None:
+    cases = load_cases(_EVALS_FILE)
+    a, _ = _two_real_case_ids()
+    with pytest.raises(ValueError) as exc:
+        select_cases_by_id(cases, [a, "definitely_not_a_real_case_xyz_123"])
+    assert "definitely_not_a_real_case_xyz_123" in str(exc.value)
+
+
+def test_main_with_case_id_runs_exactly_that_case(tmp_path: Path) -> None:
+    a, b = _two_real_case_ids()
+    out_path = tmp_path / "single.json"
+    code = main([
+        "--dry-run",
+        "--case-id", a,
+        "--out", str(out_path),
+    ])
+    assert code == 0
+    report = json.loads(out_path.read_text())
+    ids_run = [r["caseId"] for r in report["results"]]
+    assert ids_run == [a]
+
+
+def test_main_with_case_list_runs_multiple_cases(tmp_path: Path) -> None:
+    a, b = _two_real_case_ids()
+    out_path = tmp_path / "multi.json"
+    code = main([
+        "--dry-run",
+        "--case-list", f"{a},{b}",
+        "--out", str(out_path),
+    ])
+    assert code == 0
+    report = json.loads(out_path.read_text())
+    ids_run = [r["caseId"] for r in report["results"]]
+    assert ids_run == [a, b]
+
+
+def test_main_combines_case_id_and_case_list_with_dedupe(tmp_path: Path) -> None:
+    a, b = _two_real_case_ids()
+    out_path = tmp_path / "combined.json"
+    code = main([
+        "--dry-run",
+        "--case-id", a,
+        "--case-list", f"{b},{a}",
+        "--out", str(out_path),
+    ])
+    assert code == 0
+    report = json.loads(out_path.read_text())
+    ids_run = [r["caseId"] for r in report["results"]]
+    assert ids_run == [a, b]  # de-duped, first-seen order
+
+
+def test_main_unknown_case_id_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main([
+        "--dry-run",
+        "--case-id", "definitely_not_a_real_case_xyz_123",
+        "--out", str(tmp_path / "unused.json"),
+    ])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "Unknown case id" in err
+    assert "definitely_not_a_real_case_xyz_123" in err
+
+
+def test_main_filters_still_apply_after_exact_selection(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A selected case whose status is filtered out is dropped with a clear warning,
+    and only matching selected cases are run."""
+    cases = load_cases(_EVALS_FILE)
+    active = next(c for c in cases if c.get("status") == "active")
+    gap = next((c for c in cases if c.get("status") == "expectedGap"), None)
+    assert gap is not None, "eval suite needs at least one expectedGap case for this test"
+
+    out_path = tmp_path / "filtered.json"
+    code = main([
+        "--dry-run",
+        "--case-id", active["id"],
+        "--case-id", gap["id"],
+        "--only-status", "active",
+        "--out", str(out_path),
+    ])
+    assert code == 0
+    report = json.loads(out_path.read_text())
+    ids_run = [r["caseId"] for r in report["results"]]
+    assert ids_run == [active["id"]]  # gap filtered out
+    err = capsys.readouterr().err
+    assert "filtered out" in err
+    assert gap["id"] in err
+
+
+def test_main_all_selected_cases_filtered_out_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When every selected case is filtered out, exit 2 with a clear error."""
+    gap = next(
+        (c for c in load_cases(_EVALS_FILE) if c.get("status") == "expectedGap"),
+        None,
+    )
+    assert gap is not None
+    code = main([
+        "--dry-run",
+        "--case-id", gap["id"],
+        "--only-status", "active",
+        "--out", str(tmp_path / "empty.json"),
+    ])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "none survived filters" in err
+
+
+def test_main_default_behavior_unchanged_without_selection(tmp_path: Path) -> None:
+    """No --case-id / --case-list flags → harness behaves as before (status/limit)."""
+    out_path = tmp_path / "default.json"
+    code = main([
+        "--dry-run",
+        "--only-status", "active",
+        "--limit", "2",
+        "--out", str(out_path),
+    ])
+    assert code == 0
+    report = json.loads(out_path.read_text())
+    assert len(report["results"]) == 2
+    assert all(
+        r["status"] == "active" for r in report["results"]
+    ), "default-behavior path must still respect --only-status"
 
 
 # ── env validation ──
