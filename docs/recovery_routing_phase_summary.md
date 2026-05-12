@@ -97,6 +97,8 @@ Sanitized scorecards under `docs/real_llm_scorecards/`. All are **manual** smoke
 
 These scorecards are diagnostic evidence for narrow case sets at specific points in time. They are not, individually or collectively, evidence of production-readiness or a basis for provider promotion.
 
+> **Future workflow note.** The E-2 / E-4 / E-5 reruns used temporary local selected-case JSON files (e.g. `recovery_routing_smoke_cases.json`, `recovery_compress_single_case.json`) to scope each smoke. Post-phase, the harness gained `--case-id` and `--case-list` flags (tag `agent-real-llm-selected-case-evals-v1`, PR #55), so future selected-case manual smoke runs should target eval cases directly from the canonical eval file — no temporary JSON, no extra files to keep out of git. See `docs/real_llm_eval_harness.md` → *Selected case runs*. Manual only; not CI; not provider promotion; raw outputs remain uncommitted.
+
 ## 8. Known limitations
 
 - The MiMo v2.5 Pro real-provider integration remains experimental. Real-provider outputs are non-deterministic; E-2 and E-4 both saw at least one non-JSON / empty-content event in a single 7-case run.
