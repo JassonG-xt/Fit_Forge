@@ -2,9 +2,11 @@
 
 ## 当前稳定点
 
-- Tag: `agent-recovery-compress-routing-v1`
-- Latest tagged commit: `81ef7b7adfba9d98d450427c772d4c31f63ff840`
-- 状态：Coach Agent MVP + eval suite (54 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-stage portfolio / real-provider smoke docs + D-1 recovery-aware coaching + D-2 recovery eval 覆盖 + E-1A recovery-aware suggestion-only polish + E-1B narrow recovery compression routing + E-1C narrow recovery weekly reschedule routing
+- Tag: `agent-recovery-routing-phase-summary-v1`
+- Latest tagged commit: `2d81e91351b22ce7d6b5cb0653309c7097de0973`
+- 状态：Coach Agent MVP + eval suite (54 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-stage portfolio / real-provider smoke docs + D-1 recovery-aware coaching + D-2 recovery eval 覆盖 + E-1A recovery-aware suggestion-only polish + E-1B narrow recovery compression routing + E-1C narrow recovery weekly reschedule routing + E-2/E-4/E-5 selected real-provider smoke + E-3 structured `weeklyReview` hardening + recovery-routing phase summary（详见 `docs/recovery_routing_phase_summary.md`）
+
+> Recovery-routing 当前阶段已收尾：四个功能步骤（E-1A 文案、E-1B 压缩路由、E-1C 周度日程路由 + D-1/D-2 基础信号）+ 一个 prompt-first 硬化步骤（E-3）+ 四份脱敏 real-provider scorecard（E-2/E-4/E-5 focused）。Provider 仍是 **experimental**：不作为 production-readiness 证据，不作为 provider promotion，不进 per-PR CI。Single-session "把今天训练挪到明天" 类需求保持 non-mutating，未来若要做需要另起设计提案，不应通过扩 `rescheduleWeek` 实现。
 
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
@@ -27,6 +29,12 @@
 8. `agent-recovery-evals-v1` — D-2 recovery-aware eval coverage 合并：high streak、over-frequency、no-data fallback、safety-over-recovery 纳入 deterministic eval contract（PR #44）
 9. `agent-recovery-suggestion-polish-v1` — E-1A recovery-aware suggestion-only polish 合并：weeklyReview 恢复建议文案更明确，但不自动修改计划（PR #45）
 10. `agent-recovery-compress-routing-v1` — E-1B narrow recovery compression routing 合并：明确恢复语境 + 明确压缩 / 缩短意图 + 具体分钟数才路由到现有 `compressWorkout`（PR #46）
+11. `agent-recovery-weekly-reschedule-v1` — E-1C narrow recovery weekly reschedule routing 合并：明确恢复语境 + 明确 weekly schedule intent + 具体 weekday targets 才路由到现有 `rescheduleWeek`；`rescheduleWeek` 仅改 weekly available days，不是 today-to-tomorrow session move（PR #47）
+12. `agent-recovery-routing-smoke-v1` — E-2 selected recovery-routing real-provider smoke 落地（MiMo v2.5 Pro，7 cases / 6 pass / 1 fail）+ recovery frequency mock test 稳定化；决策保持 **experimental**（PR #48 + PR #49；tag 落在 PR #49 稳定化 commit）
+13. `agent-recovery-weeklyreview-hardening-v1` — E-3 prompt-first hardening + harness 严格化，要求 recovery review / recap 类请求返回结构化 `weeklyReview`；不改 executor / schema / provider 逻辑（PR #50）
+14. `agent-recovery-routing-smoke-after-e3-v1` — E-4 selected real-provider rerun 落地：headline 仍 7/6/1，但 high-streak `weeklyReview` 由 fail → pass，compression case 出现 transient regression；决策保持 **experimental**（PR #51）
+15. `agent-recovery-compress-focused-rerun-v1` — E-5 focused 5× rerun of regressed compression case：5/5 pass，最佳解释为 transient provider empty-content 事件而非 sustained regression；不改 prompt / schema / eval contract，决策保持 **experimental**（PR #52）
+16. `agent-recovery-routing-phase-summary-v1` — recovery-routing 阶段最终汇总：PRs #43–#52 的能力、安全边界、eval 覆盖、real-provider smoke 证据链、里程碑 tag 与 experimental 状态汇集到 `docs/recovery_routing_phase_summary.md`；docs-only，不改运行时（本 PR 系列）
 
 > Tag 序列**不**等同于 production-readiness。real-provider 路径仍是手动 eval 路径，不进 per-PR CI；C-stage / D-stage / E-stage tag 记录 portfolio、single-smoke、recovery-aware behavior 等里程碑，不代表 provider promotion。
 
@@ -320,13 +328,44 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
     - 不新增 action type、不改 executor、不改 schema；`compressWorkout` 仍必须用户确认并携带 trusted `sourceContextHash`
     - 高风险症状仍优先 `safetyResponse`；不做医疗诊断，不编造恢复数据
 
-18. **E-1C narrow recovery weekly reschedule routing**（本 PR）
+18. **E-1C narrow recovery weekly reschedule routing** ✅ 已完成（PR #47）
     - 只有明确恢复语境 + 明确 weekly schedule / reschedule intent + 具体 weekday targets 的请求才路由到现有 `rescheduleWeek`
     - `rescheduleWeek` 只表示 weekly `availableWeekdays`，不表示 true today-to-tomorrow session move；“把今天训练挪到明天”保持 non-mutating
     - 不新增 action type、不改 executor、不改 schema；`rescheduleWeek` 仍必须用户确认并携带 trusted `sourceContextHash`
     - 高风险症状仍优先 `safetyResponse`；不做医疗诊断，不编造恢复数据
 
-19. **再考虑 streaming 或 multi-agent**
+19. **E-2 selected recovery-routing real-provider smoke** ✅ 已完成（PR #48 + 稳定化 PR #49）
+    - 用 7 条 selected case 跑 MiMo v2.5 Pro：`7 total / 6 pass / 1 fail / 0 errors`
+    - 唯一失败：`coaching_recovery_high_streak_zh_008` 未返回结构化 `weeklyReview`；记录 1 条 non-JSON、1 条 SSL EOF 警告
+    - 决策：**Keep provider as experimental**；只是 diagnostic evidence，不是 promotion / production-readiness / CI gate
+    - 脱敏 scorecard：`docs/real_llm_scorecards/2026-05-10_mimo-v25-pro_recovery-routing-smoke.md`
+
+20. **E-3 structured recovery weeklyReview hardening** ✅ 已完成（PR #50）
+    - Prompt-first 硬化：recovery review / recap / "要不要继续" 等请求**必须**返回结构化 `weeklyReview`，不能只回 free text
+    - Harness 在 recovery `weeklyReview` 案例上更严格地校验 payload 必填字段
+    - 不改 executor / schema / provider 逻辑；`weeklyReview` 仍非 mutation、`requiresConfirmation=false`、不带 `sourceContextHash`
+    - 高风险症状仍优先 `safetyResponse`；不做医疗诊断，不编造恢复数据
+
+21. **E-4 selected real-provider rerun after E-3** ✅ 已完成（PR #51）
+    - 同 7 条 selected case 重新跑一遍：headline 仍 `7 total / 6 pass / 1 fail`
+    - 改进：`coaching_recovery_high_streak_zh_008` 由 fail → pass，正确返回结构化 `weeklyReview`
+    - 回归：`recovery_compress_today_to_30_zh` 由 pass → fail，`actualActionTypes=[]`，run 内出现两次 length=0 non-JSON 事件
+    - 决策：**Keep provider as experimental**；记录回归并继续下一步焦点 rerun，不立即调 prompt / schema
+    - 脱敏 scorecard：`docs/real_llm_scorecards/2026-05-11_mimo-v25-pro_recovery-routing-smoke-after-e3.md`
+
+22. **E-5 focused compression rerun** ✅ 已完成（PR #52）
+    - 对回归 case `recovery_compress_today_to_30_zh` 单独跑 5 次：`5 pass / 0 fail / 0 errors`，全部返回正确 `compressWorkout` + confirmation + sourceContextHash + payload 字段
+    - 解释：E-4 的 compression 失败最佳解释是 transient provider empty-content 事件，不是 sustained prompt-routing 或 contract regression
+    - 决策：**Document only**，不改 prompt、不改 schema、不放宽 eval；provider 保持 experimental
+    - 脱敏 scorecard：`docs/real_llm_scorecards/2026-05-12_mimo-v25-pro_recovery-compress-focused-rerun.md`
+
+23. **Recovery-routing phase summary** ✅ 已完成（PR #53）
+    - 一份 doc-only 阶段汇总：`docs/recovery_routing_phase_summary.md`
+    - 覆盖 PRs #43–#52 的产品能力、mutation / safety 边界、eval 覆盖 (58/54/4)、real-provider scorecard 证据链、九条里程碑 tag、experimental 状态
+    - 明确**不**声明 production readiness、provider promotion、provider comparison、real-provider CI gating；明确 true single-session 移动需另起设计提案
+    - 不改运行时 / tests / prompt / eval contract / provider 逻辑
+
+24. **再考虑 streaming 或 multi-agent**
    前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。streaming / multi-agent / 长期记忆 / 自动执行 mutation 都不是当前 MVP 的目标。
 
 ## 操作守则（合并任何 agent 相关 PR 前 self-check）
