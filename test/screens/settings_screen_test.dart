@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
+import 'package:fit_forge/agent/agent_event_log.dart';
+import 'package:fit_forge/agent/models/agent_action.dart';
 import 'package:fit_forge/screens/settings/settings_screen.dart';
+import 'package:fit_forge/services/app_state.dart';
 
 import '../helpers/app_state_fixtures.dart';
 
@@ -109,4 +114,93 @@ void main() {
     expect(find.text('清除所有数据'), findsOneWidget);
     expect(find.text('删除个人信息、训练记录、成就等所有数据'), findsOneWidget);
   });
+
+  testWidgets('复制本周报告会带上本地结构化 weeklyReview', (tester) async {
+    String? clipboardText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          switch (call.method) {
+            case 'Clipboard.setData':
+              final args = call.arguments as Map<Object?, Object?>;
+              clipboardText = args['text'] as String?;
+              return null;
+            case 'Clipboard.getData':
+              return <String, Object?>{'text': clipboardText};
+          }
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    final appState = await primedAppStateWithProfile();
+    final eventLog = AgentEventLog();
+    await eventLog.hydrate();
+    addTearDown(eventLog.dispose);
+    eventLog.record(
+      id: 'event-weekly-review',
+      userMessage: '总结本周训练',
+      agentMessage: 'RAW_PROVIDER_OUTPUT_FROM_MESSAGE',
+      actions: [
+        AgentAction(
+          id: 'review-1',
+          type: AgentActionType.weeklyReview,
+          title: 'Weekly Review',
+          summary: 'RAW_PROVIDER_OUTPUT_FROM_ACTION_SUMMARY',
+          requiresConfirmation: false,
+          payload: const {
+            'summary': 'Structured report summary.',
+            'observations': ['Training sessions were spread across the week.'],
+            'nextWeekSuggestions': ['Keep the same weekly frequency.'],
+            'riskNotes': ['Keep monitoring total volume.'],
+          },
+        ),
+      ],
+    );
+
+    await _pumpSettingsWithEventLog(tester, appState, eventLog);
+
+    await tester.scrollUntilVisible(
+      find.text('复制本周报告'),
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.tap(find.text('复制本周报告'));
+    await tester.pump();
+
+    final clip = await Clipboard.getData(Clipboard.kTextPlain);
+    expect(clip?.text, isNotNull);
+    expect(clip!.text, contains('# Fit_Forge Weekly Report'));
+    expect(clip.text, contains('Structured report summary.'));
+    expect(
+      clip.text,
+      contains('- Training sessions were spread across the week.'),
+    );
+    expect(clip.text, contains('- Keep the same weekly frequency.'));
+    expect(clip.text, contains('- Keep monitoring total volume.'));
+    expect(clip.text, isNot(contains('RAW_PROVIDER_OUTPUT_FROM_MESSAGE')));
+    expect(
+      clip.text,
+      isNot(contains('RAW_PROVIDER_OUTPUT_FROM_ACTION_SUMMARY')),
+    );
+    expect(clip.text, contains('## Safety Note'));
+  });
+}
+
+Future<void> _pumpSettingsWithEventLog(
+  WidgetTester tester,
+  AppState appState,
+  AgentEventLog eventLog,
+) async {
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppState>.value(value: appState),
+        ChangeNotifierProvider<AgentEventLog>.value(value: eventLog),
+      ],
+      child: const MaterialApp(home: SettingsScreen()),
+    ),
+  );
+  await tester.pump();
 }
