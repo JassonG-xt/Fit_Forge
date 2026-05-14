@@ -44,11 +44,7 @@ WeeklyReportInput buildWeeklyReportInput({
   required DateTime now,
   Iterable<AgentEvent> agentEvents = const [],
 }) {
-  final weekStart = DateTime(
-    now.year,
-    now.month,
-    now.day,
-  ).subtract(Duration(days: now.weekday - 1));
+  final weekStart = _reportWeekStart(now);
   final weekEnd = weekStart.add(const Duration(days: 6));
 
   final plan = appState.activePlan;
@@ -158,6 +154,12 @@ WeeklyReviewReportData? latestWeeklyReviewReportDataFromEvents(
     }
   }
   return null;
+}
+
+DateTime _reportWeekStart(DateTime now) {
+  final today = DateTime(now.year, now.month, now.day);
+  // Weekly reports use the ISO-style app week: Monday through Sunday.
+  return today.subtract(Duration(days: today.weekday - 1));
 }
 
 bool _isInRange(DateTime date, DateTime? weekStart, DateTime? weekEnd) {
