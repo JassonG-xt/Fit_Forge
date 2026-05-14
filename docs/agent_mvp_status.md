@@ -8,6 +8,8 @@
 
 > Recovery-routing 当前阶段已收尾：四个功能步骤（E-1A 文案、E-1B 压缩路由、E-1C 周度日程路由 + D-1/D-2 基础信号）+ 一个 prompt-first 硬化步骤（E-3）+ 四份脱敏 real-provider scorecard（E-2/E-4/E-5 focused）。Provider 仍是 **experimental**：不作为 production-readiness 证据，不作为 provider promotion，不进 per-PR CI。Single-session "把今天训练挪到明天" 类需求保持 non-mutating，未来若要做需要另起设计提案，不应通过扩 `rescheduleWeek` 实现。
 
+> Portfolio/demo readiness docs now provide a reviewer-facing walkthrough and video-ready Coach Agent demo script — see `docs/coach_agent_portfolio_walkthrough.md` and `docs/coach_agent_final_demo_script.md`.
+
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
 ### 历史稳定点
