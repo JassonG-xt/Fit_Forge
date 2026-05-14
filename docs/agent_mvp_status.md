@@ -12,6 +12,8 @@
 
 > Phase 2 product polish (in progress): a deterministic local Markdown weekly report builder (`lib/reports/weekly_report_builder.dart`) and a Settings → 数据管理 "复制本周报告" entry. The report is generated locally from `AppState`, does not call the LLM, does not call the backend, and is not medical advice. It is separate from Coach Agent mutation behavior, the structured `weeklyReview` action, eval contracts, and the real-provider scorecard chain.
 
+> Stage 2-2: weekly report export now surfaces locally available structured `weeklyReview` data in the Coach Review section when present. The export remains local-only, deterministic, non-mutating, and does not call the LLM or backend during export.
+
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
 ### 历史稳定点
@@ -373,6 +375,7 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
 24. **Phase 2 — local Markdown weekly report export (product polish)** ✅ 本 PR
     - 新增 `lib/reports/weekly_report_builder.dart`：纯函数 `buildWeeklyReportMarkdown(WeeklyReportInput)`，按确定性顺序输出 `# Fit_Forge Weekly Report` + `Summary` / `Training Plan` / `Completed Training` / `Coach Review` / `Nutrition` / `Safety Note` 六个 section
     - Settings → 数据管理 增加 "复制本周报告" 入口；沿用已有 `Clipboard.setData` + snackbar 模式，不引入新依赖
+    - Stage 2-2 将本地已有的结构化 `weeklyReview` 字段接入 Coach Review section；无本周结构化复盘时继续使用确定性 fallback
     - 本地生成、纯函数、不调 LLM、不调 backend、不上传、不写入 `AppState`；不修改 Coach Agent mutation 行为 / `LocalAgentActionExecutor` / action schema / eval contract / real-provider scorecard
     - 不构成医疗建议；每份报告都包含 Safety Note；数据缺失时使用确定性 fallback 文案，不编造数字
     - 不在范围：PDF 导出、文件保存对话框、跨会话 memory、自动按周生成、上传 / 分享

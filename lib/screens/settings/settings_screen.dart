@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../engines/nutrition_engine.dart';
+import '../../agent/agent_event_log.dart';
 import '../../models/models.dart';
-import '../../reports/weekly_report_builder.dart';
+import '../../reports/weekly_report_input_adapter.dart';
 import '../../services/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
@@ -15,6 +15,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final state = context.watch<AppState>();
+    final agentEventLog = context.watch<AgentEventLog?>();
     final profile = state.profile;
     final dropdownColor = theme.brightness == Brightness.dark
         ? AppColors.bgSurface
@@ -136,7 +137,11 @@ class SettingsScreen extends StatelessWidget {
                   title: const Text('复制本周报告'),
                   subtitle: const Text('生成本地 Markdown 周报并复制到剪贴板'),
                   onTap: () {
-                    final markdown = _buildWeeklyReport(state);
+                    final markdown = buildWeeklyReportMarkdownFromAppState(
+                      appState: state,
+                      now: DateTime.now(),
+                      agentEventLog: agentEventLog,
+                    );
                     Clipboard.setData(ClipboardData(text: markdown));
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('本周报告已复制到剪贴板')),
@@ -290,75 +295,5 @@ class SettingsScreen extends StatelessWidget {
     title: Text(title),
     trailing: Text(value, style: theme.textTheme.bodySmall),
     dense: true,
-  );
-}
-
-String _buildWeeklyReport(AppState state) {
-  final now = DateTime.now();
-  final weekStart = DateTime(
-    now.year,
-    now.month,
-    now.day,
-  ).subtract(Duration(days: now.weekday - 1));
-  final weekEnd = weekStart.add(const Duration(days: 6));
-
-  final plan = state.activePlan;
-  final plannedWorkouts = <PlannedWorkoutSummary>[];
-  if (plan != null) {
-    for (final day in plan.days) {
-      if (day.dayType == WorkoutDayType.rest) continue;
-      plannedWorkouts.add(
-        PlannedWorkoutSummary(
-          dayOfWeek: day.dayOfWeek,
-          dayType: day.dayType,
-          exerciseCount: day.exercises.length,
-        ),
-      );
-    }
-  }
-
-  final completedThisWeek = state.completedSessions
-      .where((s) => !s.date.isBefore(weekStart))
-      .where((s) => s.date.isBefore(weekEnd.add(const Duration(days: 1))))
-      .map(
-        (s) => CompletedWorkoutSummary(
-          date: s.date,
-          dayType: s.dayType,
-          durationMinutes: s.durationMinutes,
-          completedSetCount: s.exerciseRecords
-              .expand((r) => r.sets)
-              .where((set) => set.isCompleted)
-              .length,
-          totalVolumeKg: s.exerciseRecords.fold<double>(
-            0,
-            (sum, r) => sum + r.totalVolume,
-          ),
-        ),
-      )
-      .toList();
-
-  final profile = state.profile;
-  NutritionSummary? nutrition;
-  if (profile != null) {
-    final macros = NutritionEngine.calculateMacros(profile);
-    nutrition = NutritionSummary(
-      calories: macros.calories,
-      proteinGrams: macros.proteinGrams,
-      carbGrams: macros.carbGrams,
-      fatGrams: macros.fatGrams,
-    );
-  }
-
-  return buildWeeklyReportMarkdown(
-    WeeklyReportInput(
-      userGoal: profile?.goal,
-      weeklyFrequencyTarget: profile?.weeklyFrequency,
-      weekStart: weekStart,
-      weekEnd: weekEnd,
-      plannedWorkouts: plannedWorkouts,
-      completedWorkouts: completedThisWeek,
-      nutrition: nutrition,
-      generatedAt: now,
-    ),
   );
 }
