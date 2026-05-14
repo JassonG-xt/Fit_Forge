@@ -339,6 +339,7 @@ Current checked coverage is **70%+** on this branch. Run `flutter test --coverag
 - Web Demo on GitHub Pages
 - Core engines + 14 screens + design system
 - Local JSON persistence, import/export, workout recovery
+- Local Markdown weekly report export (Settings → 数据管理 → 复制本周报告; deterministic, no LLM call, no backend, not medical advice)
 - Unit/widget tests with strict analyzer settings
 - GitHub Actions workflows for CI, release, and web deploy
 
