@@ -102,7 +102,9 @@ Flutter 本地执行器也会再次检查 mutation action 的 `requiresConfirmat
 
 > **Showcase 入口**：
 > - [`docs/agent_capabilities.md`](docs/agent_capabilities.md) — 完整能力地图（mode / action / safety / privacy / 当前限制 / out-of-scope）
+> - [`docs/coach_agent_portfolio_walkthrough.md`](docs/coach_agent_portfolio_walkthrough.md) — Reviewer-oriented overview of the local-first structured-action Agent architecture
 > - [`docs/coach_agent_demo_script.md`](docs/coach_agent_demo_script.md) — 5 分钟 demo 脚本（preference-aware generatePlan / replace / compress / weeklyReview / safety 五个核心场景）
+> - [`docs/coach_agent_final_demo_script.md`](docs/coach_agent_final_demo_script.md) — Video-ready Coach Agent demo script (6 scenarios incl. recovery routing + safety-over-mutation)
 
 ### Current Coach Agent maturity
 
@@ -117,6 +119,8 @@ The Coach Agent is a **human-in-the-loop fitness coaching MVP** with a stable B-
 - four sanitized real-provider smoke scorecards (initial 20/20 smoke, plus E-2 / E-4 / E-5 focused recovery-routing runs) — see [`docs/real_llm_scorecards/`](docs/real_llm_scorecards/)
 
 The recovery-routing phase is feature-complete for the current stage. The phase summary at [`docs/recovery_routing_phase_summary.md`](docs/recovery_routing_phase_summary.md) consolidates capabilities, mutation/safety boundaries, eval coverage, the full real-provider scorecard chain, milestone tags, and known limitations.
+
+For a reviewer-oriented overview of the local-first structured-action Agent architecture, see the [Coach Agent Portfolio Walkthrough](docs/coach_agent_portfolio_walkthrough.md). For a video-ready walkthrough of the six core demo scenarios (including recovery routing and safety-over-mutation), see the [Coach Agent Final Demo Script](docs/coach_agent_final_demo_script.md).
 
 Real-provider smoke runs are treated as **manual diagnostic evidence only** — not a production-readiness claim, not a provider promotion, and not a provider comparison. Per [`docs/coach_agent_evals.md`](docs/coach_agent_evals.md), promoting a case (or a provider) requires ≥3 cross-run stable conversions on the same data; the recovery-routing smoke chain is narrow (≤7 cases per run plus the focused single-case rerun), not a green light. Real-provider runs remain manual rather than per-PR CI gates, and provider API keys live only in backend env (Flutter never touches them).
 
@@ -366,6 +370,8 @@ Current project documentation lives in:
 - [docs/agent_mvp_status.md](docs/agent_mvp_status.md) — Coach Agent MVP stability snapshot, eval status, runtime modes, next-stage roadmap
 - [docs/agent_architecture_diagram.md](docs/agent_architecture_diagram.md) — Mermaid diagrams: data flow, mutation safety boundary, safety short-circuit, generatePlan boundary, eval/CI boundary
 - [docs/coach_agent_demo_script.md](docs/coach_agent_demo_script.md) — short showcase demo script (5 core scenarios: preference-aware generatePlan / replace / compress / weeklyReview / safety)
+- [docs/coach_agent_final_demo_script.md](docs/coach_agent_final_demo_script.md) — video-ready Coach Agent demo script (6 scenarios incl. recovery routing and safety-over-mutation)
+- [docs/coach_agent_portfolio_walkthrough.md](docs/coach_agent_portfolio_walkthrough.md) — reviewer-oriented walkthrough of the local-first structured-action Coach Agent architecture
 - [docs/agent_demo_script.md](docs/agent_demo_script.md) — longer Coach Agent eval walkthrough (5–8 min, covers clarification + generatePlan boundary)
 - [docs/agent_demo_recording_checklist.md](docs/agent_demo_recording_checklist.md) — Coach Agent demo recording checklist (privacy checks, environment, ordered flow, things to say / not say)
 - [docs/release_notes_agent_mvp_eval_v2.md](docs/release_notes_agent_mvp_eval_v2.md) — `agent-mvp-eval-v2` release notes: included capabilities, non-goals, eval baseline
