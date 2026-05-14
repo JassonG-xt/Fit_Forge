@@ -14,6 +14,8 @@
 
 > Stage 2-2: weekly report export now surfaces the latest locally available structured `weeklyReview` from the report week in the Coach Review section when present. If no in-week structured review exists, it uses deterministic fallback text. The export remains local-only, deterministic, non-mutating, and does not call the LLM or backend during export.
 
+> Stage 3 design planning: Stage 3 starts with a design-only proposal for `moveWorkoutSession`, a future confirmed mutation for true single-session movement. Runtime implementation is intentionally deferred; no action schema, executor, parser, backend, provider, or eval contract changes are included in the design step.
+
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
 ### 历史稳定点
