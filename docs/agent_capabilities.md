@@ -93,7 +93,8 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 - **safety 关键字是中文语料为主**：英文输入下的 deterministic guard 覆盖率有限；不能替代医疗判断。
 - **generatePlan 偏好是后处理，不是 PlanEngine 内部决策**：`availableWeekdays` 通过 `reschedulePlanToWeekdays` 应用，`targetMinutes` 通过 `compressDayInPlan` 应用。这意味着如果偏好里的训练日数量超过 `PlanEngine` 给出的 workout 日数量，多余的 weekdays 会保持休息，不会自动加塞训练。
 - **weeklyReview 不是长期记忆教练**：复盘只用最近 10 条 session 摘要 + 当周进度计数，没有跨会话 memory；可提示简单恢复 / 训练密度信号（如连续训练天数较高、已达到或超过计划频率、数据不足），并用 suggestion-only 文案提醒不会直接修改计划；不分析 PR / 1RM / 体重趋势；不诊断伤病；不自动改下周计划。`riskNotes` 仅做训练量 / 恢复量级别的提示，不是医疗建议。
-- **recovery-aware mutation routing 很窄**：只有明确要求“压缩 / 缩短到 X 分钟”等带具体分钟数的恢复相关请求才会路由到现有 `compressWorkout`；只有明确“这周 / 本周训练日安排到周几”的恢复相关请求才会路由到现有 `rescheduleWeek`。模糊恢复问题保持 non-mutating；true today-to-tomorrow session move 仍不支持。所有 mutation 仍需要确认、trusted `sourceContextHash` 和 `LocalAgentActionExecutor`。
+- **recovery-aware mutation routing 很窄**：只有明确要求”压缩 / 缩短到 X 分钟”等带具体分钟数的恢复相关请求才会路由到现有 `compressWorkout`；只有明确”这周 / 本周训练日安排到周几”的恢复相关请求才会路由到现有 `rescheduleWeek`。模糊恢复问题保持 non-mutating；true today-to-tomorrow session move 仍不支持。所有 mutation 仍需要确认、trusted `sourceContextHash` 和 `LocalAgentActionExecutor`。
+- **本地 Markdown 周报导出是产品 polish，不是 Agent 能力**：`lib/reports/weekly_report_builder.dart` 是确定性纯函数，从 `AppState`（profile / activePlan / 本周完成的 session / 计算出的 nutrition target）派生 Markdown，Settings → 数据管理 → “复制本周报告” 入口复制到剪贴板。不调用 LLM、不调用 backend、不上传、不写入 `AppState`、不进入 `LocalAgentActionExecutor` 路径；任何场景下都包含 Safety Note；不是医疗建议；不替代结构化 `weeklyReview` action。
 
 ## Out of scope for the MVP
 

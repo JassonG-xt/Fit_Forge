@@ -2,13 +2,15 @@
 
 ## 当前稳定点
 
-- Tag: `agent-recovery-routing-phase-summary-v1`
-- Latest tagged commit: `2d81e91351b22ce7d6b5cb0653309c7097de0973`
-- 状态：Coach Agent MVP + eval suite (54 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-stage portfolio / real-provider smoke docs + D-1 recovery-aware coaching + D-2 recovery eval 覆盖 + E-1A recovery-aware suggestion-only polish + E-1B narrow recovery compression routing + E-1C narrow recovery weekly reschedule routing + E-2/E-4/E-5 selected real-provider smoke + E-3 structured `weeklyReview` hardening + recovery-routing phase summary（详见 `docs/recovery_routing_phase_summary.md`）
+- Tag: `agent-coach-portfolio-readiness-v1`
+- Latest tagged commit: `470855f65d81d1a8855f436d6063cfbee23ce5c2`
+- 状态：Coach Agent MVP + eval suite (54 active / 4 expectedGap) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ C-stage portfolio / real-provider smoke docs + D-1 recovery-aware coaching + D-2 recovery eval 覆盖 + E-1A recovery-aware suggestion-only polish + E-1B narrow recovery compression routing + E-1C narrow recovery weekly reschedule routing + E-2/E-4/E-5 selected real-provider smoke + E-3 structured `weeklyReview` hardening + recovery-routing phase summary（详见 `docs/recovery_routing_phase_summary.md`）+ Phase 1 portfolio readiness docs（详见 `docs/coach_agent_portfolio_walkthrough.md` 与 `docs/coach_agent_final_demo_script.md`）
 
 > Recovery-routing 当前阶段已收尾：四个功能步骤（E-1A 文案、E-1B 压缩路由、E-1C 周度日程路由 + D-1/D-2 基础信号）+ 一个 prompt-first 硬化步骤（E-3）+ 四份脱敏 real-provider scorecard（E-2/E-4/E-5 focused）。Provider 仍是 **experimental**：不作为 production-readiness 证据，不作为 provider promotion，不进 per-PR CI。Single-session "把今天训练挪到明天" 类需求保持 non-mutating，未来若要做需要另起设计提案，不应通过扩 `rescheduleWeek` 实现。
 
 > Portfolio/demo readiness docs now provide a reviewer-facing walkthrough and video-ready Coach Agent demo script — see `docs/coach_agent_portfolio_walkthrough.md` and `docs/coach_agent_final_demo_script.md`.
+
+> Phase 2 product polish (in progress): a deterministic local Markdown weekly report builder (`lib/reports/weekly_report_builder.dart`) and a Settings → 数据管理 "复制本周报告" entry. The report is generated locally from `AppState`, does not call the LLM, does not call the backend, and is not medical advice. It is separate from Coach Agent mutation behavior, the structured `weeklyReview` action, eval contracts, and the real-provider scorecard chain.
 
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
@@ -37,6 +39,7 @@
 14. `agent-recovery-routing-smoke-after-e3-v1` — E-4 selected real-provider rerun 落地：headline 仍 7/6/1，但 high-streak `weeklyReview` 由 fail → pass，compression case 出现 transient regression；决策保持 **experimental**（PR #51）
 15. `agent-recovery-compress-focused-rerun-v1` — E-5 focused 5× rerun of regressed compression case：5/5 pass，最佳解释为 transient provider empty-content 事件而非 sustained regression；不改 prompt / schema / eval contract，决策保持 **experimental**（PR #52）
 16. `agent-recovery-routing-phase-summary-v1` — recovery-routing 阶段最终汇总：PRs #43–#52 的能力、安全边界、eval 覆盖、real-provider smoke 证据链、里程碑 tag 与 experimental 状态汇集到 `docs/recovery_routing_phase_summary.md`；docs-only，不改运行时（本 PR 系列）
+17. `agent-coach-portfolio-readiness-v1` — Phase 1 portfolio readiness 收尾：`docs/coach_agent_portfolio_walkthrough.md` + `docs/coach_agent_final_demo_script.md` + README / docs index / MVP status 互链；保持 provider experimental、不声明 production readiness、不声明 provider promotion；docs-only
 
 > Tag 序列**不**等同于 production-readiness。real-provider 路径仍是手动 eval 路径，不进 per-PR CI；C-stage / D-stage / E-stage tag 记录 portfolio、single-smoke、recovery-aware behavior 等里程碑，不代表 provider promotion。
 
@@ -367,7 +370,14 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
     - 明确**不**声明 production readiness、provider promotion、provider comparison、real-provider CI gating；明确 true single-session 移动需另起设计提案
     - 不改运行时 / tests / prompt / eval contract / provider 逻辑
 
-24. **再考虑 streaming 或 multi-agent**
+24. **Phase 2 — local Markdown weekly report export (product polish)** ✅ 本 PR
+    - 新增 `lib/reports/weekly_report_builder.dart`：纯函数 `buildWeeklyReportMarkdown(WeeklyReportInput)`，按确定性顺序输出 `# Fit_Forge Weekly Report` + `Summary` / `Training Plan` / `Completed Training` / `Coach Review` / `Nutrition` / `Safety Note` 六个 section
+    - Settings → 数据管理 增加 "复制本周报告" 入口；沿用已有 `Clipboard.setData` + snackbar 模式，不引入新依赖
+    - 本地生成、纯函数、不调 LLM、不调 backend、不上传、不写入 `AppState`；不修改 Coach Agent mutation 行为 / `LocalAgentActionExecutor` / action schema / eval contract / real-provider scorecard
+    - 不构成医疗建议；每份报告都包含 Safety Note；数据缺失时使用确定性 fallback 文案，不编造数字
+    - 不在范围：PDF 导出、文件保存对话框、跨会话 memory、自动按周生成、上传 / 分享
+
+25. **再考虑 streaming 或 multi-agent**
    前提：上面 1–3 都稳定，eval suite 翻新一轮 cross-run 数据后仍然全绿；此时再启动 streaming 设计也不迟。streaming / multi-agent / 长期记忆 / 自动执行 mutation 都不是当前 MVP 的目标。
 
 ## 工具 / Eval 杂项
