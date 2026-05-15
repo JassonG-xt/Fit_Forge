@@ -16,6 +16,8 @@
 
 > Stage 3 design planning: Stage 3 starts with a design-only proposal for `moveWorkoutSession`, a future confirmed mutation for true single-session movement. Runtime implementation is intentionally deferred; no action schema, executor, parser, backend, provider, or eval contract changes are included in the design step.
 
+> Stage 3-1 frontend contract skeleton: `moveWorkoutSession` now has typed payload parsing (`parseMoveWorkoutSessionPayload`) and a deterministic weekday-level preview (`MovePreview`) wired into the existing `AgentActionPreviewer` and `AgentDiffView`. The action enum entry exists so the contract compiles end-to-end, but `LocalAgentActionExecutor` returns an explicit "designed but not executable yet" failure and asserts no `AppState` mutation. Backend, mock router, and eval suite remain unchanged; runtime execution, conflict handling, and provider routing are intentionally deferred to subsequent PRs.
+
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
 ### 历史稳定点

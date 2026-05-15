@@ -88,6 +88,23 @@ class WeeklyReviewPreview extends ActionPreview {
       riskNotes.isNotEmpty;
 }
 
+/// 单次训练移动的 weekday-level 预览。
+///
+/// 当前阶段（Stage 3-1，frontend contract skeleton）只承载 from/to 两个 weekday
+/// 与可选 reason；不读取 active plan、不预计算 after-plan，与 runtime 尚未实现
+/// 的事实保持一致。未来 PR 引入 executor 后，可在不破坏此契约的前提下扩展为
+/// 带 source/target WorkoutDay 的 rich preview。
+class MovePreview extends ActionPreview {
+  const MovePreview({
+    required this.fromDayOfWeek,
+    required this.toDayOfWeek,
+    this.reason,
+  });
+  final int fromDayOfWeek;
+  final int toDayOfWeek;
+  final String? reason;
+}
+
 /// 校验失败时返回此类型，附带用户可理解的中文消息。
 class PreviewFailure extends ActionPreview {
   const PreviewFailure(this.message);
@@ -116,6 +133,8 @@ class AgentActionPreviewer {
         return _previewGeneratePlan(action, appState);
       case AgentActionType.weeklyReview:
         return previewWeeklyReview(action);
+      case AgentActionType.moveWorkoutSession:
+        return previewMoveWorkoutSession(action);
       case AgentActionType.answerOnly:
       case AgentActionType.nutritionAdvice:
       case AgentActionType.safetyResponse:
@@ -298,6 +317,26 @@ class AgentActionPreviewer {
       observations: value.observations,
       nextWeekSuggestions: value.nextWeekSuggestions,
       riskNotes: value.riskNotes,
+    );
+  }
+
+  /// 解析 moveWorkoutSession payload 并产出 weekday-level preview。
+  ///
+  /// 故意不读取 AppState：当前 stage runtime 尚未实现，从 active plan 推导
+  /// "before/after" 会让 UI 暗示 mutation 可应用，与 executor 的 unsupported
+  /// 状态产生不一致。后续 PR 引入 executor 后，可在保持 [MovePreview] 字段
+  /// 兼容的前提下扩展更丰富的 source/target WorkoutDay 信息。
+  ActionPreview previewMoveWorkoutSession(AgentAction action) {
+    final parsed = parseMoveWorkoutSessionPayload(action.payload);
+    if (parsed is PayloadParseFailure<MoveWorkoutSessionPayload>) {
+      return PreviewFailure(parsed.message);
+    }
+    final value =
+        (parsed as PayloadParseSuccess<MoveWorkoutSessionPayload>).value;
+    return MovePreview(
+      fromDayOfWeek: value.fromDayOfWeek,
+      toDayOfWeek: value.toDayOfWeek,
+      reason: value.reason,
     );
   }
 }

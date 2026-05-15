@@ -58,6 +58,9 @@ class AgentDiffView extends StatelessWidget {
     if (preview is GeneratePlanPreview) {
       return _GeneratePlanDiff(preview: preview);
     }
+    if (preview is MovePreview) {
+      return _MoveDiff(preview: preview);
+    }
     return null;
   }
 }
@@ -433,6 +436,64 @@ class _PlanSummary extends StatelessWidget {
         const SizedBox(height: AppSpacing.xxs),
         Text(plan!.split.displayName),
         Text('每周 $workoutDayCount 训练日'),
+      ],
+    );
+  }
+}
+
+// ─── moveWorkoutSession ──────────────────────────────────────────────
+//
+// Stage 3-1 weekday-level diff. Runtime executor is not yet wired, so we
+// only render generic 原训练 / 休息 labels — never fabricated exercise names.
+
+class _MoveDiff extends StatelessWidget {
+  const _MoveDiff({required this.preview});
+
+  final MovePreview preview;
+
+  static const _names = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+  String _name(int d) => (d >= 1 && d <= 7) ? _names[d] : '周$d';
+
+  @override
+  Widget build(BuildContext context) {
+    final from = _name(preview.fromDayOfWeek);
+    final to = _name(preview.toDayOfWeek);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _BeforeAfterRow(
+          before: _MoveSide(workoutDay: from, restDay: to),
+          after: _MoveSide(workoutDay: to, restDay: from),
+        ),
+        if (preview.reason != null && preview.reason!.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '原因：${preview.reason}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MoveSide extends StatelessWidget {
+  const _MoveSide({required this.workoutDay, required this.restDay});
+
+  final String workoutDay;
+  final String restDay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('$workoutDay：原训练'),
+        const SizedBox(height: AppSpacing.xxs),
+        Text('$restDay：休息'),
       ],
     );
   }

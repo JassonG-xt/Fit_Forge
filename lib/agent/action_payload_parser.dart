@@ -332,3 +332,77 @@ PayloadParseResult<List<String>> _parseStringList(
   }
   return PayloadParseSuccess(result);
 }
+
+// ─── moveWorkoutSession（前端契约阶段，runtime 尚未实现） ─────────────
+//
+// 仅校验 payload 形状，不进入 executor。详见 docs/move_workout_session_design.md。
+// 复用 parseDayOfWeek 的范围/类型规则，但区分 fromDayOfWeek / toDayOfWeek
+// 的错误消息以便用户定位字段。
+
+class MoveWorkoutSessionPayload {
+  const MoveWorkoutSessionPayload({
+    required this.fromDayOfWeek,
+    required this.toDayOfWeek,
+    this.reason,
+  });
+  final int fromDayOfWeek;
+  final int toDayOfWeek;
+  final String? reason;
+}
+
+/// 校验 moveWorkoutSession payload。
+///
+/// 字段规则（与 design doc §5 对齐）：
+/// - `fromDayOfWeek`: 必填 int，1-7。
+/// - `toDayOfWeek`: 必填 int，1-7。
+/// - `fromDayOfWeek` 与 `toDayOfWeek` 不能相同。
+/// - `reason`: 可选 String（仅展示用）。
+///
+/// 不接受 double/num 截断，不接受 String。其他字段静默忽略，与现有 parser
+/// 风格一致；strict extra-field 校验在 backend 层做。
+PayloadParseResult<MoveWorkoutSessionPayload> parseMoveWorkoutSessionPayload(
+  Map<String, dynamic> payload,
+) {
+  final fromRaw = payload['fromDayOfWeek'];
+  if (fromRaw == null) {
+    return const PayloadParseFailure('fromDayOfWeek 缺失。');
+  }
+  if (fromRaw is! int) {
+    return const PayloadParseFailure('fromDayOfWeek 必须是整数（1-7），不接受小数或文本。');
+  }
+  if (fromRaw < 1 || fromRaw > 7) {
+    return PayloadParseFailure('fromDayOfWeek 必须在 1-7 之间，当前值为 $fromRaw。');
+  }
+
+  final toRaw = payload['toDayOfWeek'];
+  if (toRaw == null) {
+    return const PayloadParseFailure('toDayOfWeek 缺失。');
+  }
+  if (toRaw is! int) {
+    return const PayloadParseFailure('toDayOfWeek 必须是整数（1-7），不接受小数或文本。');
+  }
+  if (toRaw < 1 || toRaw > 7) {
+    return PayloadParseFailure('toDayOfWeek 必须在 1-7 之间，当前值为 $toRaw。');
+  }
+
+  if (fromRaw == toRaw) {
+    return const PayloadParseFailure('fromDayOfWeek 与 toDayOfWeek 必须不同。');
+  }
+
+  String? reason;
+  if (payload.containsKey('reason') && payload['reason'] != null) {
+    final raw = payload['reason'];
+    if (raw is! String) {
+      return const PayloadParseFailure('reason 必须是字符串。');
+    }
+    reason = raw;
+  }
+
+  return PayloadParseSuccess(
+    MoveWorkoutSessionPayload(
+      fromDayOfWeek: fromRaw,
+      toDayOfWeek: toRaw,
+      reason: reason,
+    ),
+  );
+}

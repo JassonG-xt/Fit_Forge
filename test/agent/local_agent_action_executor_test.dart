@@ -467,6 +467,73 @@ void main() {
       expect(result.success, false);
       expect(state.activePlan, isNull);
     });
+
+    // ─── moveWorkoutSession: designed but not executable yet ───
+    //
+    // The action is added to AgentActionType so the frontend contract
+    // (parser + preview) compiles, but the executor must explicitly refuse
+    // to mutate state. These tests guard the no-mutation invariant in case
+    // an upstream path emits the action before the runtime PR lands.
+
+    test(
+      'moveWorkoutSession is rejected as unsupported and does not mutate plan',
+      () async {
+        final state = await primedAppStateWithProfile();
+        state.adoptPlan(_seedPlan());
+        final beforePlan = state.activePlan!;
+        final beforeHash = computePlanContextHash(beforePlan);
+        final executor = LocalAgentActionExecutor(state);
+        final result = await executor.execute(
+          makeAction(AgentActionType.moveWorkoutSession, const {
+            'fromDayOfWeek': 1,
+            'toDayOfWeek': 2,
+          }, sourceContextHash: beforeHash),
+        );
+        expect(result.success, false);
+        expect(result.message, contains('暂未实现'));
+        expect(state.activePlan, same(beforePlan));
+        expect(computePlanContextHash(state.activePlan!), beforeHash);
+      },
+    );
+
+    test(
+      'moveWorkoutSession still enforces mutation boundary (no hash)',
+      () async {
+        final state = await primedAppStateWithProfile();
+        state.adoptPlan(_seedPlan());
+        final beforePlan = state.activePlan!;
+        final executor = LocalAgentActionExecutor(state);
+        final result = await executor.execute(
+          makeAction(AgentActionType.moveWorkoutSession, const {
+            'fromDayOfWeek': 1,
+            'toDayOfWeek': 2,
+          }),
+        );
+        expect(result.success, false);
+        expect(state.activePlan, same(beforePlan));
+      },
+    );
+
+    test(
+      'moveWorkoutSession still enforces mutation boundary (no confirmation)',
+      () async {
+        final state = await primedAppStateWithProfile();
+        state.adoptPlan(_seedPlan());
+        final beforePlan = state.activePlan!;
+        final hash = computePlanContextHash(beforePlan);
+        final executor = LocalAgentActionExecutor(state);
+        final result = await executor.execute(
+          makeAction(
+            AgentActionType.moveWorkoutSession,
+            const {'fromDayOfWeek': 1, 'toDayOfWeek': 2},
+            requiresConfirmation: false,
+            sourceContextHash: hash,
+          ),
+        );
+        expect(result.success, false);
+        expect(state.activePlan, same(beforePlan));
+      },
+    );
   });
 }
 

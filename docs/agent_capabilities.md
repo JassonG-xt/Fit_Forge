@@ -59,6 +59,12 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 
 > Source: `lib/agent/models/agent_action.dart` 的 `AgentActionType` 枚举与 `lib/agent/local_agent_action_executor.dart` 的 `_isMutationAction` / `execute` switch。
 
+### Planned / partial support
+
+| Action | Stage | Status |
+|---|---|---|
+| `moveWorkoutSession` | Stage 3-1 — frontend contract skeleton | **设计 + 前端契约阶段**：`AgentActionType.moveWorkoutSession` 已加入枚举；`parseMoveWorkoutSessionPayload` 做严格 payload 校验（`fromDayOfWeek` / `toDayOfWeek` 必填 1-7、不能相同；可选 `reason` 字符串）；`AgentActionPreviewer.previewMoveWorkoutSession` 返回 weekday-level `MovePreview`（不读 active plan，避免在 runtime 缺位时伪造训练内容）。**Backend、mock router、`LocalAgentActionExecutor` 写入路径以及 eval 套件均未路由此 action**；executor 显式返回 `"暂未实现"` failure 并断言不修改 `AppState`。后续 PR 才会引入 executor 实现、mock / backend 路由和 eval cases；详见 `docs/move_workout_session_design.md`。 |
+
 ## Safety model
 
 写入安全是多层守护，不是单一 guard：
