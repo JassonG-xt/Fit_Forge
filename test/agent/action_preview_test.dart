@@ -330,6 +330,103 @@ void main() {
         expect(result, isA<WeeklyReviewPreview>());
       });
     });
+
+    group('moveWorkoutSession', () {
+      test('returns MovePreview with valid payload', () async {
+        final state = await freshAppState();
+        final result = previewer.preview(
+          action: makeAction(AgentActionType.moveWorkoutSession, const {
+            'fromDayOfWeek': 1,
+            'toDayOfWeek': 2,
+          }),
+          appState: state,
+        );
+        expect(result, isA<MovePreview>());
+        final preview = result as MovePreview;
+        expect(preview.fromDayOfWeek, 1);
+        expect(preview.toDayOfWeek, 2);
+        expect(preview.reason, isNull);
+      });
+
+      test('preview includes optional reason', () async {
+        final state = await freshAppState();
+        final result = previewer.preview(
+          action: makeAction(AgentActionType.moveWorkoutSession, const {
+            'fromDayOfWeek': 3,
+            'toDayOfWeek': 5,
+            'reason': '今天太累了',
+          }),
+          appState: state,
+        );
+        expect(result, isA<MovePreview>());
+        final preview = result as MovePreview;
+        expect(preview.fromDayOfWeek, 3);
+        expect(preview.toDayOfWeek, 5);
+        expect(preview.reason, '今天太累了');
+      });
+
+      test(
+        'preview does not require active plan or exercise context',
+        () async {
+          // Preview must NOT depend on AppState plan content; runtime is
+          // unsupported in this stage and the preview should not fabricate
+          // exercise/session details from the active plan.
+          final state = await freshAppState();
+          expect(state.activePlan, isNull);
+          final result = previewer.preview(
+            action: makeAction(AgentActionType.moveWorkoutSession, const {
+              'fromDayOfWeek': 1,
+              'toDayOfWeek': 4,
+            }),
+            appState: state,
+          );
+          expect(result, isA<MovePreview>());
+        },
+      );
+
+      test('preview is deterministic across repeated calls', () async {
+        final state = await freshAppState();
+        final action = makeAction(AgentActionType.moveWorkoutSession, const {
+          'fromDayOfWeek': 2,
+          'toDayOfWeek': 6,
+          'reason': '出差',
+        });
+        final first = previewer.preview(action: action, appState: state);
+        final second = previewer.preview(action: action, appState: state);
+        expect(first, isA<MovePreview>());
+        expect(second, isA<MovePreview>());
+        final a = first as MovePreview;
+        final b = second as MovePreview;
+        expect(a.fromDayOfWeek, b.fromDayOfWeek);
+        expect(a.toDayOfWeek, b.toDayOfWeek);
+        expect(a.reason, b.reason);
+      });
+
+      test('returns PreviewFailure for invalid payload', () async {
+        final state = await freshAppState();
+        final result = previewer.preview(
+          action: makeAction(AgentActionType.moveWorkoutSession, const {
+            'fromDayOfWeek': 1,
+            'toDayOfWeek': 1,
+          }),
+          appState: state,
+        );
+        expect(result, isA<PreviewFailure>());
+        expect((result as PreviewFailure).message, contains('必须不同'));
+      });
+
+      test('returns PreviewFailure for missing fromDayOfWeek', () async {
+        final state = await freshAppState();
+        final result = previewer.preview(
+          action: makeAction(AgentActionType.moveWorkoutSession, const {
+            'toDayOfWeek': 2,
+          }),
+          appState: state,
+        );
+        expect(result, isA<PreviewFailure>());
+        expect((result as PreviewFailure).message, contains('fromDayOfWeek'));
+      });
+    });
   });
 }
 

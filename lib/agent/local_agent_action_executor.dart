@@ -32,6 +32,13 @@ class LocalAgentActionExecutor {
         return _replaceExercise(action);
       case AgentActionType.compressWorkout:
         return _compressWorkout(action);
+      case AgentActionType.moveWorkoutSession:
+        // moveWorkoutSession 已设计（docs/move_workout_session_design.md）但
+        // runtime executor 尚未实现。即便 boundary check 通过，也必须显式拒绝，
+        // 防止 enum 加上后某条上游路径偷偷把 action 走到 AppState 写入。
+        return AgentActionResult.failure(
+          'moveWorkoutSession 已设计但暂未实现，将在后续 PR 中支持。',
+        );
       case AgentActionType.answerOnly:
       case AgentActionType.nutritionAdvice:
       case AgentActionType.weeklyReview:
@@ -54,6 +61,10 @@ class LocalAgentActionExecutor {
       case AgentActionType.rescheduleWeek:
       case AgentActionType.replaceExercise:
       case AgentActionType.compressWorkout:
+      case AgentActionType.moveWorkoutSession:
+        // moveWorkoutSession 是 mutation（design §6），即使 runtime 尚未实现，
+        // 也保留 mutation boundary 检查（requiresConfirmation + sourceContextHash），
+        // 防止上游绕过用户确认。
         return true;
       case AgentActionType.answerOnly:
       case AgentActionType.nutritionAdvice:

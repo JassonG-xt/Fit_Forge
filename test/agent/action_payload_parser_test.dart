@@ -454,4 +454,159 @@ void main() {
       expect(result.message, contains('数组'));
     });
   });
+
+  group('parseMoveWorkoutSessionPayload', () {
+    test('accepts valid payload without reason', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 1,
+        'toDayOfWeek': 2,
+      });
+      expect(result, isA<PayloadParseSuccess<MoveWorkoutSessionPayload>>());
+      final value =
+          (result as PayloadParseSuccess<MoveWorkoutSessionPayload>).value;
+      expect(value.fromDayOfWeek, 1);
+      expect(value.toDayOfWeek, 2);
+      expect(value.reason, isNull);
+    });
+
+    test('accepts payload with reason', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 3,
+        'toDayOfWeek': 5,
+        'reason': '今天太累了',
+      });
+      expect(result, isA<PayloadParseSuccess<MoveWorkoutSessionPayload>>());
+      final value =
+          (result as PayloadParseSuccess<MoveWorkoutSessionPayload>).value;
+      expect(value.fromDayOfWeek, 3);
+      expect(value.toDayOfWeek, 5);
+      expect(value.reason, '今天太累了');
+    });
+
+    test('treats null reason as absent', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 1,
+        'toDayOfWeek': 4,
+        'reason': null,
+      });
+      expect(result, isA<PayloadParseSuccess<MoveWorkoutSessionPayload>>());
+      final value =
+          (result as PayloadParseSuccess<MoveWorkoutSessionPayload>).value;
+      expect(value.reason, isNull);
+    });
+
+    test('rejects missing fromDayOfWeek', () {
+      final result = parseMoveWorkoutSessionPayload(const {'toDayOfWeek': 2});
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('fromDayOfWeek'));
+      expect(result.message, contains('缺失'));
+    });
+
+    test('rejects missing toDayOfWeek', () {
+      final result = parseMoveWorkoutSessionPayload(const {'fromDayOfWeek': 1});
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('toDayOfWeek'));
+      expect(result.message, contains('缺失'));
+    });
+
+    test('rejects double fromDayOfWeek', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 1.5,
+        'toDayOfWeek': 2,
+      });
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('fromDayOfWeek'));
+      expect(result.message, contains('整数'));
+    });
+
+    test('rejects String fromDayOfWeek', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': '1',
+        'toDayOfWeek': 2,
+      });
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('fromDayOfWeek'));
+      expect(result.message, contains('整数'));
+    });
+
+    test('rejects double toDayOfWeek', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 1,
+        'toDayOfWeek': 2.5,
+      });
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('toDayOfWeek'));
+      expect(result.message, contains('整数'));
+    });
+
+    test('rejects String toDayOfWeek', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 1,
+        'toDayOfWeek': '2',
+      });
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('toDayOfWeek'));
+      expect(result.message, contains('整数'));
+    });
+
+    test('rejects fromDayOfWeek below range', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 0,
+        'toDayOfWeek': 2,
+      });
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('fromDayOfWeek'));
+      expect(result.message, contains('1-7'));
+    });
+
+    test('rejects fromDayOfWeek above range', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 8,
+        'toDayOfWeek': 2,
+      });
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('fromDayOfWeek'));
+      expect(result.message, contains('1-7'));
+    });
+
+    test('rejects toDayOfWeek below range', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 1,
+        'toDayOfWeek': 0,
+      });
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('toDayOfWeek'));
+      expect(result.message, contains('1-7'));
+    });
+
+    test('rejects toDayOfWeek above range', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 1,
+        'toDayOfWeek': 9,
+      });
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('toDayOfWeek'));
+      expect(result.message, contains('1-7'));
+    });
+
+    test('rejects same fromDayOfWeek and toDayOfWeek', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 3,
+        'toDayOfWeek': 3,
+      });
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('必须不同'));
+    });
+
+    test('rejects non-string reason', () {
+      final result = parseMoveWorkoutSessionPayload(const {
+        'fromDayOfWeek': 1,
+        'toDayOfWeek': 2,
+        'reason': 42,
+      });
+      expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
+      expect(result.message, contains('reason'));
+      expect(result.message, contains('字符串'));
+    });
+  });
 }
