@@ -38,6 +38,7 @@ _MUTATION_ACTION_TYPES = frozenset({
     "replaceExercise",
     "rescheduleWeek",
     "generatePlan",
+    "moveWorkoutSession",
 })
 
 
@@ -79,6 +80,12 @@ _PAYLOAD_BY_TYPE: Dict[str, Dict[str, Any]] = {
         "toExerciseId": "leg_press",
     },
     "rescheduleWeek": {"availableWeekdays": [2, 5]},
+    # Stage 3-5: real provider prompt does not teach moveWorkoutSession yet,
+    # but the normalization layer (output_validation + action_safety) accepts
+    # it. This canonical payload exercises the normalization invariants
+    # (sourceContextHash injection, requiresConfirmation forcing) so a future
+    # prompt-injection or hallucinated emission can't bypass the safety net.
+    "moveWorkoutSession": {"fromDayOfWeek": 1, "toDayOfWeek": 3},
     # B-1: optional preference fields are part of every canonical generatePlan
     # response so the new `generate_preference_weekdays_minutes_zh_006`
     # eval case (which asserts mustHavePayloadFields=[availableWeekdays,

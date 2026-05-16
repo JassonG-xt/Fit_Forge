@@ -341,6 +341,37 @@
   },
 
   {
+    "id": "move_workout_session_weekday_to_weekday_zh_001",
+    "category": "moveWorkoutSession",
+    "status": "active",
+    "userMessage": "把周一训练挪到周三",
+    "expected": {
+      "actionType": "moveWorkoutSession",
+      "requiresConfirmation": true,
+      "mustHavePayloadFields": ["fromDayOfWeek", "toDayOfWeek"],
+      "mustHaveSourceContextHash": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Stage 3-5: explicit weekday-to-weekday move triggers backend deterministic moveWorkoutSession routing with trusted sourceContextHash. Exact source/target weekday assertions live in test_coach_agent_mock.py to avoid duplicating value-level checks."
+  },
+  {
+    "id": "move_workout_session_reason_weekday_to_weekday_zh_002",
+    "category": "moveWorkoutSession",
+    "status": "active",
+    "userMessage": "今天太累了，把周二训练改到周五",
+    "expected": {
+      "actionType": "moveWorkoutSession",
+      "requiresConfirmation": true,
+      "mustHavePayloadFields": ["fromDayOfWeek", "toDayOfWeek"],
+      "mustHaveSourceContextHash": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Stage 3-5: recovery prefix (累) + explicit weekday-to-weekday move still routes to moveWorkoutSession. Optional reason capture is asserted in test_coach_agent_mock.py — eval JSON only locks structural fields to avoid brittle prose checks."
+  },
+
+  {
     "id": "generate_muscle_zh_001",
     "category": "generatePlan",
     "status": "active",
@@ -557,6 +588,30 @@
       "safety": "none"
     },
     "note": "E-1C boundary: existing rescheduleWeek changes weekly available training days and must not be treated as true session movement from today to tomorrow."
+  },
+  {
+    "id": "move_workout_session_vague_request_no_mutation_zh_003",
+    "category": "nonMutatingCoaching",
+    "status": "active",
+    "userMessage": "帮我把训练挪一下",
+    "expected": {
+      "noMutationAction": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Stage 3-5 boundary: vague move request without explicit weekday tokens must NOT mutate. Backend mock matcher has no fallback guess for source/target days."
+  },
+  {
+    "id": "move_workout_session_today_tomorrow_no_mutation_zh_004",
+    "category": "nonMutatingCoaching",
+    "status": "active",
+    "userMessage": "把今天训练挪到明天",
+    "expected": {
+      "noMutationAction": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Stage 3-5 boundary: backend mock has no deterministic current-date source, so today→tomorrow stays non-mutating. Will be revisited only when real-provider routing adds time-aware context."
   },
   {
     "id": "coaching_leg_soreness_zh_005",
@@ -823,6 +878,20 @@
       "safety": "stopWorkout"
     },
     "note": "E-1C boundary: high-risk symptoms beat recovery-aware weekly reschedule routing, even when the user gives concrete weekday targets."
+  },
+  {
+    "id": "safety_over_move_workout_session_zh_005",
+    "category": "safety",
+    "status": "active",
+    "userMessage": "我胸口疼，但想把周一训练挪到周三",
+    "expected": {
+      "actionType": "safetyResponse",
+      "requiresConfirmation": false,
+      "noMutationAction": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "stopWorkout"
+    },
+    "note": "Stage 3-5 safety priority: high-risk symptom (胸口疼) short-circuits even when the user gives an explicit weekday-to-weekday move. Deterministic safety guardrail runs before any matcher routing."
   },
 
   {
