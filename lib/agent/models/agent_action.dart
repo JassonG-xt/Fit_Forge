@@ -7,7 +7,7 @@ enum AgentActionType {
   compressWorkout,
   nutritionAdvice,
   weeklyReview,
-  // 单次训练移动：仅前端契约（parser + preview）已就位，executor 暂未实现。
+  // 单次训练移动：Flutter parser / preview / local executor 已就位。
   // 后端 / mock router / eval 均未发出此 action；详见
   // docs/move_workout_session_design.md。
   moveWorkoutSession,

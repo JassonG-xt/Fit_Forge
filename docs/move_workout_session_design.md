@@ -37,21 +37,24 @@ Ambiguous requests should ask a clarification question. Examples include "帮我
 调整一下这周训练" without a source day or target day, or "今天太累了怎么办" when
 the user has not asked to move a session.
 
-## 4. Proposed action
+## 4. Action
 
-Propose a new action type:
+Action type:
 
 ```text
 moveWorkoutSession
 ```
 
-First-version semantics:
+Current local semantics:
 
 Move one concrete planned workout from one day to another day within the
 current local plan.
 
-The action is a mutation and must follow the same confirmation, preview, and
-executor boundary as the existing mutation actions.
+The action is a mutation and follows the same confirmation, preview, and
+executor boundary as the existing mutation actions. Flutter parser, model,
+preview, diff, and local executor support are implemented. Backend routing,
+mock routing, real-provider prompt/routing, and backend eval coverage remain
+deferred.
 
 ## 5. Payload schema
 
@@ -106,7 +109,7 @@ on raw provider prose to describe the mutation.
 
 ## 8. Executor behavior
 
-The executor should:
+The Flutter local executor now:
 
 1. Validate the mutation boundary (`requiresConfirmation`, trusted
    `sourceContextHash`, current hash match).
@@ -114,10 +117,10 @@ The executor should:
 3. Require an active plan.
 4. Find the source day.
 5. Require the source day to contain a workout.
-6. Require the target day to be rest or empty in v1.
+6. Requires the target day to be rest or empty in v1.
 7. Move the full source workout to the target day.
 8. Convert the source day to rest.
-9. Persist through the existing local `AppState` plan adoption path.
+9. Persists through the existing local `AppState` plan adoption path.
 
 The executor must not infer missing days, merge workouts, or silently discard
 exercises.
@@ -126,8 +129,8 @@ exercises.
 
 First-version rule:
 
-If the target day already has a workout, do not auto-merge or swap. Return an
-unsupported / clarification response.
+If the target day already has a workout, reject the action. Do not auto-merge,
+swap, or append workouts.
 
 Do not silently combine workouts.
 
@@ -148,7 +151,7 @@ Safety remains higher priority than movement intent:
 
 ## 11. Eval cases
 
-Proposed future eval case IDs:
+Future eval case IDs:
 
 - `move_today_to_tomorrow_zh`
 - `move_specific_weekday_zh`
@@ -158,25 +161,27 @@ Proposed future eval case IDs:
 - `stale_hash_blocks_move_session`
 
 The evals should verify action type, payload fields, confirmation, trusted
-hash behavior, conflict handling, and safety precedence. Real-provider evals
-remain manual only and are not part of this design PR.
+hash behavior, conflict handling, and safety precedence. Backend/mock/provider
+routing and eval coverage are still deferred; real-provider evals remain manual
+only.
 
 ## 12. Implementation plan
 
-Future PR sequence:
+PR sequence:
 
-1. PR 1: add design doc.
-2. PR 2: add action model/parser/preview.
-3. PR 3: add executor implementation and tests.
-4. PR 4: add mock/backend routing and eval cases.
-5. PR 5: update demo docs.
+1. PR 1: add design doc. Done.
+2. PR 2: add action model/parser/preview. Done.
+3. PR 3: add executor implementation and tests. Done.
+4. PR 4: add mock/backend routing and eval cases. Deferred.
+5. PR 5: update demo docs. Deferred.
 
 Each runtime PR should be small enough to verify independently and should keep
 the existing write boundary intact.
 
 ## 13. Out of scope
 
-- No implementation in this design PR.
+- No backend/mock/provider routing yet.
+- No backend eval support yet.
 - No recurring schedule semantics.
 - No automatic swap.
 - No automatic merge.
@@ -185,7 +190,13 @@ the existing write boundary intact.
 - No health-data-driven automatic movement.
 - No change to `rescheduleWeek` semantics.
 
-## 14. Decision
+## 14. Current status
 
-Proceed with design-first. Do not implement runtime behavior until the action
-semantics, preview behavior, conflict rules, and eval cases are accepted.
+Flutter parser / model / preview / diff / local executor support is
+implemented. `moveWorkoutSession` remains a confirmed mutation requiring a
+trusted `sourceContextHash`; the LLM/backend cannot directly apply it.
+Target-day conflicts are rejected without auto-merge, swap, or append.
+
+Backend routing, mock routing, real-provider prompt/routing, and eval coverage
+remain deferred, so normal Agent conversation flows do not yet emit this
+action.

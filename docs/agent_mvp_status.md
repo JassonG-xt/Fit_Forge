@@ -14,9 +14,9 @@
 
 > Stage 2-2: weekly report export now surfaces the latest locally available structured `weeklyReview` from the report week in the Coach Review section when present. If no in-week structured review exists, it uses deterministic fallback text. The export remains local-only, deterministic, non-mutating, and does not call the LLM or backend during export.
 
-> Stage 3 design planning: Stage 3 starts with a design-only proposal for `moveWorkoutSession`, a future confirmed mutation for true single-session movement. Runtime implementation is intentionally deferred; no action schema, executor, parser, backend, provider, or eval contract changes are included in the design step.
+> Stage 3 design planning (historical): Stage 3 started with a design-only proposal for `moveWorkoutSession`, a confirmed mutation for true single-session movement. That first design step intentionally deferred runtime implementation and did not include action schema, executor, parser, backend, provider, or eval contract changes.
 
-> Stage 3-1 frontend contract skeleton: `moveWorkoutSession` now has typed payload parsing (`parseMoveWorkoutSessionPayload`) and a deterministic weekday-level preview (`MovePreview`) wired into the existing `AgentActionPreviewer` and `AgentDiffView`. The action enum entry exists so the contract compiles end-to-end, but `LocalAgentActionExecutor` returns an explicit "designed but not executable yet" failure and asserts no `AppState` mutation. Backend, mock router, and eval suite remain unchanged; runtime execution, conflict handling, and provider routing are intentionally deferred to subsequent PRs.
+> Stage 3-1 frontend contract skeleton (historical): `moveWorkoutSession` added typed payload parsing (`parseMoveWorkoutSessionPayload`) and a deterministic weekday-level preview (`MovePreview`) wired into the existing `AgentActionPreviewer` and `AgentDiffView`. At that stage the action was still not executable; Stage 3-2 has since added local executor support.
 
 > Stage 3-2 local executor support: `LocalAgentActionExecutor` now executes `moveWorkoutSession` for the deterministic single-session-movement case. A confirmed action with a trusted `sourceContextHash` moves one planned workout from `fromDayOfWeek` to `toDayOfWeek`, preserves the full exercise content (sets/reps/rest), keeps deterministic 1..7 day ordering, and converts the source day to rest. Target-day conflicts are rejected without auto-merge, swap, or append; missing-source-day, missing/stale hash, and unconfirmed-action paths all reject without mutating `AppState`. Backend, mock router, and eval suite still do not emit this action — it is not yet reachable from normal Agent flows; routing and eval coverage will land in subsequent PRs.
 
@@ -343,7 +343,7 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
 
 18. **E-1C narrow recovery weekly reschedule routing** ✅ 已完成（PR #47）
     - 只有明确恢复语境 + 明确 weekly schedule / reschedule intent + 具体 weekday targets 的请求才路由到现有 `rescheduleWeek`
-    - `rescheduleWeek` 只表示 weekly `availableWeekdays`，不表示 true today-to-tomorrow session move；“把今天训练挪到明天”保持 non-mutating
+    - `rescheduleWeek` 只表示 weekly `availableWeekdays`，不表示 true today-to-tomorrow session move；“把今天训练挪到明天”在该阶段保持 non-mutating。后续 Stage 3-2 已实现 `moveWorkoutSession` 的 Flutter 本地 executor，但 backend / mock / provider routing 仍未接入。
     - 不新增 action type、不改 executor、不改 schema；`rescheduleWeek` 仍必须用户确认并携带 trusted `sourceContextHash`
     - 高风险症状仍优先 `safetyResponse`；不做医疗诊断，不编造恢复数据
 
