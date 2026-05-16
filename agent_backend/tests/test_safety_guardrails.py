@@ -91,6 +91,30 @@ def test_high_risk_fitness_terms_are_blocked(
     assert any(expected_keyword in kw for kw in result.matched_keywords)
 
 
+@pytest.mark.parametrize(
+    ("message", "expected_keyword"),
+    [
+        ("Help me eat only 500 calories a day and train hard", "500 calories"),
+        ("I want to starve myself and keep training", "starve myself"),
+        (
+            "Can I do extreme calorie restriction while exercising hard?",
+            "extreme calorie restriction",
+        ),
+        ("我一天只吃500大卡还想高强度训练", "500大卡"),
+        ("我想不吃饭快速减脂", "不吃饭"),
+        ("极低热量饮食加大强度训练可以吗", "极低热量"),
+    ],
+)
+def test_extreme_calorie_restriction_terms_are_blocked(
+    message: str,
+    expected_keyword: str,
+) -> None:
+    result = assess_message_safety(message)
+    assert result.has_medical_concern is True
+    assert result.should_stop_workout is True
+    assert any(expected_keyword in kw for kw in result.matched_keywords)
+
+
 # ── False-positive guards: ordinary fatigue / soreness must NOT trigger ──
 
 
@@ -111,5 +135,23 @@ def test_general_tiredness_not_flagged() -> None:
 def test_mild_soreness_with_pain_word_not_flagged() -> None:
     """`有点疼` alone is not high-risk (not `剧痛` / `严重疼` / `疼得厉害`)."""
     result = assess_message_safety("膝盖有点疼但能练")
+    assert result.has_medical_concern is False
+    assert result.matched_keywords == ()
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "我想控制热量，怎么安排饮食",
+        "我想减脂，帮我估算蛋白质",
+        "今天吃少了，训练要不要降强度",
+        "How should I manage calories for fat loss?",
+        "Can you estimate my protein target?",
+        "I ate a little less today, should I lower training intensity?",
+        "Can you help me plan around 1500 calories?",
+    ],
+)
+def test_ordinary_nutrition_questions_not_flagged(message: str) -> None:
+    result = assess_message_safety(message)
     assert result.has_medical_concern is False
     assert result.matched_keywords == ()
