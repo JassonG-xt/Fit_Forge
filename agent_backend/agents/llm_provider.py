@@ -147,6 +147,7 @@ def _parse_agent_response(
     user_message: str = "",
     context_hash: Optional[str] = "parse_test_hash",
     context_profile: Optional[Dict[str, Any]] = None,
+    active_plan_present: Optional[bool] = None,
 ) -> Optional[AgentResponse]:
     """Parse LLM output into AgentResponse. Returns None on failure."""
     # Strip markdown code fences if present
@@ -169,6 +170,7 @@ def _parse_agent_response(
         user_message=user_message,
         context_hash=context_hash,
         context_profile=context_profile,
+        active_plan_present=active_plan_present,
     )
 
 
@@ -273,6 +275,15 @@ def _strip_unsupported_generate_plan_actions(
     return response
 
 
+def _active_plan_present_from_request(request: AgentRequest) -> Optional[bool]:
+    """Return trusted active-plan presence when the request explicitly says so."""
+    if request.context.activePlan is not None:
+        return True
+    if "activePlan" in request.context.model_fields_set:
+        return False
+    return None
+
+
 def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
     """Real LLM-backed coach agent entry point.
 
@@ -309,6 +320,7 @@ def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
         user_message=request.message,
         context_hash=request.context.planContextHash,
         context_profile=request.context.profile,
+        active_plan_present=_active_plan_present_from_request(request),
     )
     if response is None:
         return _safety_fallback_response(request.message)
