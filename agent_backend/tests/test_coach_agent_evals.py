@@ -38,6 +38,7 @@ _MUTATION_ACTION_TYPES = frozenset({
     "replaceExercise",
     "rescheduleWeek",
     "generatePlan",
+    "moveWorkoutSession",
 })
 
 # Default eval context: rich enough so that intent routing for replaceExercise,
@@ -278,8 +279,9 @@ def test_eval_suite_covers_required_categories() -> None:
         "replaceExercise": 6,
         "rescheduleWeek": 8,
         "generatePlan": 6,
-        "nonMutatingCoaching": 14,
-        "safety": 10,
+        "moveWorkoutSession": 2,
+        "nonMutatingCoaching": 16,
+        "safety": 11,
         "promptInjection": 6,
     }
     for category, minimum in required.items():
