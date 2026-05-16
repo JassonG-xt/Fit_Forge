@@ -10,6 +10,7 @@ enum AgentIntent {
   compressWorkout,
   nutritionAdvice,
   weeklyReview,
+  moveWorkoutSession,
   safetyResponse,
   unknown;
 

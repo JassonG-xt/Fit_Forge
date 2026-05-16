@@ -51,6 +51,13 @@ class MockAgentClient implements AgentClient {
       return _replaceResponse(message, context);
     }
 
+    // moveWorkoutSession 必须在 reschedule 前截胡：双 weekday + "训练" 的句子
+    // (如 "把周一训练挪到周三") 否则会被 _isRescheduleIntent 的 dayRegex≥2
+    // fallback 当成 rescheduleWeek 处理，丢掉源/目标语义。
+    if (_isMoveSessionIntent(message)) {
+      return _moveSessionResponse(message, context);
+    }
+
     if (_isRescheduleIntent(message)) {
       final rescheduled = _rescheduleResponse(message, context);
       if (rescheduled.intent != AgentIntent.answerOnly) {
@@ -189,6 +196,71 @@ class MockAgentClient implements AgentClient {
     final hasToday = ['今天', '今日', '这次'].any(text.contains);
     if (!hasToday) return false;
     return ['挪到', '往后挪', '改到', '改在'].any(text.contains);
+  }
+
+  // 单次训练移动（Stage 3-3）：只接受 explicit weekday-to-weekday，且 source
+  // 在 move verb 前、target 在 move verb 后。"今天/明天"暂不支持——mock 没有
+  // 确定性当前日期源，若硬接入会让确定性测试随墙上时钟漂移。"安排到" 不在
+  // verb 列表里，因为它属于 weekly schedule 语义，归 _isRescheduleIntent。
+  bool _isMoveSessionIntent(String text) =>
+      _extractMoveSessionPair(text) != null;
+
+  ({int from, int to})? _extractMoveSessionPair(String text) {
+    const moveVerbs = ['挪到', '移到', '移动到', '改到', '调到', '换到'];
+    var verbStart = -1;
+    var verbEnd = -1;
+    for (final verb in moveVerbs) {
+      final idx = text.indexOf(verb);
+      if (idx >= 0 && (verbStart < 0 || idx < verbStart)) {
+        verbStart = idx;
+        verbEnd = idx + verb.length;
+      }
+    }
+    if (verbStart < 0) return null;
+
+    final dayRegex = RegExp(r'周[一二三四五六日天]|星期[一二三四五六日天]');
+    final matches = dayRegex.allMatches(text).toList();
+    if (matches.length != 2) return null;
+
+    final before = matches.where((m) => m.end <= verbStart).toList();
+    final after = matches.where((m) => m.start >= verbEnd).toList();
+    if (before.length != 1 || after.length != 1) return null;
+
+    const dayMap = {
+      '周一': 1,
+      '周二': 2,
+      '周三': 3,
+      '周四': 4,
+      '周五': 5,
+      '周六': 6,
+      '周日': 7,
+      '周天': 7,
+      '星期一': 1,
+      '星期二': 2,
+      '星期三': 3,
+      '星期四': 4,
+      '星期五': 5,
+      '星期六': 6,
+      '星期日': 7,
+      '星期天': 7,
+    };
+    final from = dayMap[before.first.group(0)!];
+    final to = dayMap[after.first.group(0)!];
+    if (from == null || to == null || from == to) return null;
+    return (from: from, to: to);
+  }
+
+  // Reason 仅当 message 以 "X，把/将 ..." 形式且 prefix 含明显恢复关键词时
+  // 才回填，避免把 "今天" 这种纯时间词当成 reason 回填给 UI。
+  // 长度上限 30 字符；超出说明 prefix 已经不是短 reason，弃用。
+  String? _extractMoveSessionReason(String message) {
+    final prefixMatch = RegExp(r'^([^把将]+?)[,，]').firstMatch(message);
+    if (prefixMatch == null) return null;
+    final prefix = prefixMatch.group(1)!.trim();
+    if (prefix.isEmpty || prefix.length > 30) return null;
+    const recoveryHints = ['累', '太密', '恢复', '不舒服', '想休息'];
+    if (!recoveryHints.any(prefix.contains)) return null;
+    return prefix;
   }
 
   bool _isGenerateIntent(String text) {
@@ -414,6 +486,42 @@ class MockAgentClient implements AgentClient {
           payload: {
             'availableWeekdays': weekdays,
             'preserveWorkoutOrder': true,
+          },
+        ),
+      ],
+    );
+  }
+
+  AgentResponse _moveSessionResponse(
+    String message,
+    AgentContextSnapshot context,
+  ) {
+    final pair = _extractMoveSessionPair(message);
+    // matcher 已保证非 null；此处仅作防御性 fallback。
+    if (pair == null) return _fallbackResponse();
+
+    final fromName = _weekdayName(pair.from);
+    final toName = _weekdayName(pair.to);
+    final reason = _extractMoveSessionReason(message);
+
+    return AgentResponse(
+      message:
+          '可以把 $fromName 的训练移到 $toName。'
+          '目标日如果已有训练会被拒绝，不会自动合并或交换。',
+      intent: AgentIntent.moveWorkoutSession,
+      confidence: 0.85,
+      actions: [
+        AgentAction(
+          id: _newId('move'),
+          type: AgentActionType.moveWorkoutSession,
+          title: '移动 $fromName 训练到 $toName',
+          summary: '把 $fromName 的训练完整移到 $toName，源日转为休息。',
+          requiresConfirmation: true,
+          sourceContextHash: context.planContextHash,
+          payload: {
+            'fromDayOfWeek': pair.from,
+            'toDayOfWeek': pair.to,
+            'reason': ?reason,
           },
         ),
       ],
