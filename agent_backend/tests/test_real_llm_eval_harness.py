@@ -159,7 +159,7 @@ def test_main_with_case_id_runs_exactly_that_case(tmp_path: Path) -> None:
         "--out", str(out_path),
     ])
     assert code == 0
-    report = json.loads(out_path.read_text())
+    report = json.loads(out_path.read_text(encoding="utf-8"))
     ids_run = [r["caseId"] for r in report["results"]]
     assert ids_run == [a]
 
@@ -173,7 +173,7 @@ def test_main_with_case_list_runs_multiple_cases(tmp_path: Path) -> None:
         "--out", str(out_path),
     ])
     assert code == 0
-    report = json.loads(out_path.read_text())
+    report = json.loads(out_path.read_text(encoding="utf-8"))
     ids_run = [r["caseId"] for r in report["results"]]
     assert ids_run == [a, b]
 
@@ -188,7 +188,7 @@ def test_main_combines_case_id_and_case_list_with_dedupe(tmp_path: Path) -> None
         "--out", str(out_path),
     ])
     assert code == 0
-    report = json.loads(out_path.read_text())
+    report = json.loads(out_path.read_text(encoding="utf-8"))
     ids_run = [r["caseId"] for r in report["results"]]
     assert ids_run == [a, b]  # de-duped, first-seen order
 
@@ -226,7 +226,7 @@ def test_main_filters_still_apply_after_exact_selection(
         "--out", str(out_path),
     ])
     assert code == 0
-    report = json.loads(out_path.read_text())
+    report = json.loads(out_path.read_text(encoding="utf-8"))
     ids_run = [r["caseId"] for r in report["results"]]
     assert ids_run == [active["id"]]  # gap filtered out
     err = capsys.readouterr().err
@@ -264,7 +264,7 @@ def test_main_default_behavior_unchanged_without_selection(tmp_path: Path) -> No
         "--out", str(out_path),
     ])
     assert code == 0
-    report = json.loads(out_path.read_text())
+    report = json.loads(out_path.read_text(encoding="utf-8"))
     assert len(report["results"]) == 2
     assert all(
         r["status"] == "active" for r in report["results"]
