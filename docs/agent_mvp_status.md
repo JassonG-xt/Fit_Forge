@@ -18,6 +18,8 @@
 
 > Stage 3-1 frontend contract skeleton: `moveWorkoutSession` now has typed payload parsing (`parseMoveWorkoutSessionPayload`) and a deterministic weekday-level preview (`MovePreview`) wired into the existing `AgentActionPreviewer` and `AgentDiffView`. The action enum entry exists so the contract compiles end-to-end, but `LocalAgentActionExecutor` returns an explicit "designed but not executable yet" failure and asserts no `AppState` mutation. Backend, mock router, and eval suite remain unchanged; runtime execution, conflict handling, and provider routing are intentionally deferred to subsequent PRs.
 
+> Stage 3-2 local executor support: `LocalAgentActionExecutor` now executes `moveWorkoutSession` for the deterministic single-session-movement case. A confirmed action with a trusted `sourceContextHash` moves one planned workout from `fromDayOfWeek` to `toDayOfWeek`, preserves the full exercise content (sets/reps/rest), keeps deterministic 1..7 day ordering, and converts the source day to rest. Target-day conflicts are rejected without auto-merge, swap, or append; missing-source-day, missing/stale hash, and unconfirmed-action paths all reject without mutating `AppState`. Backend, mock router, and eval suite still do not emit this action — it is not yet reachable from normal Agent flows; routing and eval coverage will land in subsequent PRs.
+
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
 ### 历史稳定点
