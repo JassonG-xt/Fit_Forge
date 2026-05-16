@@ -246,6 +246,7 @@ def _normalize_action(
     *,
     context_hash: Optional[str],
     context_profile: Optional[Dict[str, Any]],
+    active_plan_present: Optional[bool],
 ) -> Optional[AgentAction]:
     if not isinstance(raw_action, dict):
         return None
@@ -256,7 +257,12 @@ def _normalize_action(
         return None
 
     if action_type in MUTATION_ACTION_TYPES:
-        if not context_hash:
+        is_initial_generate_plan = (
+            action_type == GENERATE_PLAN
+            and context_hash is None
+            and active_plan_present is False
+        )
+        if not context_hash and not is_initial_generate_plan:
             logger.warning("Dropped mutation action without trusted context hash")
             return None
         if action_type == GENERATE_PLAN:
@@ -289,6 +295,7 @@ def normalize_agent_response(
     user_message: str,
     context_hash: Optional[str],
     context_profile: Optional[Dict[str, Any]],
+    active_plan_present: Optional[bool] = None,
 ) -> AgentResponse:
     """Convert parsed LLM JSON into a safe AgentResponse.
 
@@ -314,6 +321,7 @@ def normalize_agent_response(
                 raw_action,
                 context_hash=context_hash,
                 context_profile=context_profile,
+                active_plan_present=active_plan_present,
             )
             for raw_action in actions_raw[:MAX_ACTIONS]
         )

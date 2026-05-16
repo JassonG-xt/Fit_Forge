@@ -476,6 +476,68 @@ def test_generate_plan_without_trusted_hash_is_dropped_even_with_complete_profil
     assert "fake_llm_hash" not in response.model_dump_json()
 
 
+def test_generate_plan_without_hash_survives_when_context_proves_no_active_plan() -> None:
+    action = _generate_plan_action()
+    action["requiresConfirmation"] = False
+    action["riskLevel"] = "low"
+    action["sourceContextHash"] = "fake_llm_hash"
+
+    response = normalize_agent_response(
+        _base_response(action, intent="generatePlan"),
+        user_message="Please generate my first plan.",
+        context_hash=None,
+        context_profile=_complete_profile(),
+        active_plan_present=False,
+    )
+
+    assert len(response.actions) == 1
+    normalized_action = response.actions[0]
+    assert normalized_action.type == "generatePlan"
+    assert normalized_action.requiresConfirmation is True
+    assert normalized_action.riskLevel == "high"
+    assert normalized_action.sourceContextHash is None
+    assert "fake_llm_hash" not in response.model_dump_json()
+
+
+def test_generate_plan_with_active_plan_missing_hash_is_still_dropped() -> None:
+    response = normalize_agent_response(
+        _base_response(_generate_plan_action(), intent="generatePlan"),
+        user_message="Please replace my existing plan.",
+        context_hash=None,
+        context_profile=_complete_profile(),
+        active_plan_present=True,
+    )
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+
+
+def test_generate_plan_without_hash_requires_explicit_no_active_plan_signal() -> None:
+    response = normalize_agent_response(
+        _base_response(_generate_plan_action(), intent="generatePlan"),
+        user_message="Please generate my first plan.",
+        context_hash=None,
+        context_profile=_complete_profile(),
+        active_plan_present=None,
+    )
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+
+
+def test_generate_plan_without_hash_and_incomplete_profile_is_dropped() -> None:
+    response = normalize_agent_response(
+        _base_response(_generate_plan_action(), intent="generatePlan"),
+        user_message="Please generate my first plan.",
+        context_hash=None,
+        context_profile={"goal": "buildMuscle", "experienceLevel": "beginner"},
+        active_plan_present=False,
+    )
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+
+
 def test_generate_plan_with_trusted_hash_uses_backend_hash_and_recomputed_safety() -> None:
     action = _generate_plan_action()
     action["requiresConfirmation"] = False

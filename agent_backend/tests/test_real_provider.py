@@ -1032,6 +1032,67 @@ def test_real_provider_generate_plan_allowed_when_profile_complete(
     "LLM_API_KEY": "sk-test-key",
 })
 @patch("agents.llm_provider._call_llm")
+def test_real_provider_generate_plan_allowed_for_explicit_no_active_plan(
+    mock_call_llm: MagicMock,
+) -> None:
+    """Explicit activePlan=null means first-plan generation needs no plan hash."""
+    response_data = json.loads(_generate_plan_llm_response())
+    response_data["actions"][0]["requiresConfirmation"] = False
+    response_data["actions"][0]["riskLevel"] = "low"
+    response_data["actions"][0]["sourceContextHash"] = "fake_llm_hash"
+    mock_call_llm.return_value = json.dumps(response_data, ensure_ascii=False)
+    request = AgentRequest(
+        message="Please generate my first plan.",
+        context={
+            "profile": dict(_COMPLETE_PROFILE),
+            "activePlan": None,
+            "planContextHash": None,
+        },
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "generatePlan"
+    assert len(resp.actions) == 1
+    action = resp.actions[0]
+    assert action.type == "generatePlan"
+    assert action.requiresConfirmation is True
+    assert action.riskLevel == "high"
+    assert action.sourceContextHash is None
+    assert "fake_llm_hash" not in resp.model_dump_json()
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_generate_plan_omitted_active_plan_missing_hash_is_dropped(
+    mock_call_llm: MagicMock,
+) -> None:
+    """Omitted activePlan is unknown, not proof that no active plan exists."""
+    mock_call_llm.return_value = _generate_plan_llm_response()
+    request = AgentRequest(
+        message="Please generate my first plan.",
+        context={
+            "profile": dict(_COMPLETE_PROFILE),
+            "planContextHash": None,
+        },
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "answerOnly"
+    assert resp.actions == []
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
 def test_real_provider_generate_plan_injects_source_context_hash(
     mock_call_llm: MagicMock,
 ) -> None:

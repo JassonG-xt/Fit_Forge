@@ -92,9 +92,9 @@ AppState (lib/services/app_state.dart)
 
 - LLM **从不**直接修改 `AppState`。
 - 每个 mutation action（compressWorkout / replaceExercise / rescheduleWeek / generatePlan）都必须经过用户在 UI 上的显式确认。
-- `LocalAgentActionExecutor` 是 agent 路径下**唯一**的 AppState 写入入口；executor 内部也会拒绝 `requiresConfirmation=false`、缺少 `sourceContextHash` 或 stale hash 的 mutation action。
+- `LocalAgentActionExecutor` 是 agent 路径下**唯一**的 AppState 写入入口；executor 内部也会拒绝 `requiresConfirmation=false`、已有 active plan 时缺少 `sourceContextHash` 或 stale hash 的 mutation action。
 - `sourceContextHash` 总是从 trusted server context 注入，**不**信任 LLM 自己填的 hash。
-- real provider 的 LLM 输出必须经过 deterministic normalization；未知 action、非法 payload、payload extra fields、无 trusted context hash 的 mutation action 都不会透传给 Flutter。
+- real provider 的 LLM 输出必须经过 deterministic normalization；未知 action、非法 payload、payload extra fields、无 trusted context hash 的 mutation action 都不会透传给 Flutter。唯一例外是 profile 完整且 request context 明确给出 `activePlan: null` 的初始 `generatePlan`，它仍会被强制 `requiresConfirmation=true`，且不会信任 LLM 自填 hash。
 - `requiresConfirmation` / `riskLevel` / `sourceContextHash` 由 backend 重算，不信任模型输出。
 - `AgentService` 在调用 executor 前标记 action 为 processing，同一个 action id 不能并发重复执行。
 - `AgentEventLog` (`lib/agent/agent_event_log.dart`) 记录 agent 调用历史在本地，持久化前会做 retention、截断和基础脱敏，用户可在 Settings 里清除。

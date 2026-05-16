@@ -61,7 +61,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 
 ### Initial generatePlan boundary
 
-Local first-plan generation is supported through Flutter's `LocalAgentActionExecutor` when the user profile is complete. The HTTP / real-provider path still treats `generatePlan` as a mutation action: backend normalization requires a trusted `planContextHash` before the action can reach Flutter, and any LLM-supplied `sourceContextHash` is ignored. When no active plan means no trusted hash is available, initial no-active-plan real-provider generation remains a design follow-up rather than a silently supported production path.
+Local first-plan generation is supported through Flutter's `LocalAgentActionExecutor` when the user profile is complete. The HTTP / real-provider path still treats `generatePlan` as a mutation action: backend normalization requires either a trusted `planContextHash` or an explicit trusted `activePlan: null` request context before the action can reach Flutter, and any LLM-supplied `sourceContextHash` is ignored. If `activePlan` is present, missing, or unknown while `planContextHash` is absent, backend normalization drops the mutation action instead of assuming first-plan state.
 
 ### Planned / partial support
 
@@ -75,9 +75,9 @@ Local first-plan generation is supported through Flutter's `LocalAgentActionExec
 
 1. **Deterministic safety guardrail**（`agent_backend/safety/fitness_guardrails.py`）：胸痛 / 头晕 / 晕倒 / 呼吸困难 / 怀孕 / 急性损伤 / 饮食障碍等关键字命中后**在 LLM 调用前**短路返回 `safetyResponse`，不允许走到 mutation action。
 2. **`requiresConfirmation` 强制为 true**（`agent_backend/agents/action_safety.py`）：所有 mutation action 在 backend 出口被强制设为 `requiresConfirmation=true`，覆盖 LLM 自填值。
-3. **Trusted `sourceContextHash`**：mutation action 的 hash 在 backend 出口由 trusted server context 重算注入，**不**信任 LLM。Flutter 执行前再次比对当前 `planContextHash`，hash 不一致直接拒绝（stale action protection）。
+3. **Trusted `sourceContextHash`**：mutation action 的 hash 在 backend 出口由 trusted server context 重算注入，**不**信任 LLM。唯一无 hash mutation 例外是 `generatePlan` 且 backend request context 明确证明 `activePlan: null`；Flutter 执行前若已有 active plan，会再次比对当前 `planContextHash`，hash 不一致直接拒绝（stale action protection）。
 4. **LLM output validation**（`agent_backend/agents/output_validation.py`）：未知 action type、payload 多余字段、不合法 payload schema、`riskLevel` 越权都会被丢弃或降级成 `answerOnly`。
-5. **`LocalAgentActionExecutor` 是唯一写入入口**：拒绝 `requiresConfirmation=false`、缺 `sourceContextHash`、stale hash 或重复执行的 action。
+5. **`LocalAgentActionExecutor` 是唯一写入入口**：拒绝 `requiresConfirmation=false`、已有 active plan 时缺 `sourceContextHash`、stale hash 或重复执行的 action。
 6. **用户确认**：所有 mutation 必须用户在 `AgentActionCard` 上点「应用修改」才会触发 executor。
 
 > 详见 `docs/agent_mvp_status.md` 的「关键不变量」段、`docs/security.md`、`docs/generate_plan_agent_boundary.md`。
