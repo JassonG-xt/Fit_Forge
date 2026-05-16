@@ -27,6 +27,7 @@ COMPRESS_WORKOUT = "compressWorkout"
 RESCHEDULE_WEEK = "rescheduleWeek"
 NUTRITION_ADVICE = "nutritionAdvice"
 WEEKLY_REVIEW = "weeklyReview"
+MOVE_WORKOUT_SESSION = "moveWorkoutSession"
 
 ALLOWED_ACTION_TYPES = frozenset({
     ANSWER_ONLY,
@@ -37,6 +38,7 @@ ALLOWED_ACTION_TYPES = frozenset({
     RESCHEDULE_WEEK,
     NUTRITION_ADVICE,
     WEEKLY_REVIEW,
+    MOVE_WORKOUT_SESSION,
 })
 
 ACTION_RISK_LEVELS = {
@@ -48,6 +50,7 @@ ACTION_RISK_LEVELS = {
     RESCHEDULE_WEEK: "medium",
     NUTRITION_ADVICE: "low",
     WEEKLY_REVIEW: "low",
+    MOVE_WORKOUT_SESSION: "medium",
 }
 
 _GENERATE_PLAN_CLARIFICATION_MESSAGE = (
@@ -125,6 +128,20 @@ class _SafetyResponsePayload(_StrictPayload):
     matchedRisks: List[str] = Field(default_factory=list, max_length=20)
 
 
+class _MoveWorkoutSessionPayload(_StrictPayload):
+    """Mirror of Flutter `parseMoveWorkoutSessionPayload`.
+
+    Bounds: from/to ∈ [1,7]; from != to enforced post-parse in `_sanitize_payload`
+    so the validation message stays consistent with other strict mutation
+    payloads. `reason` is display-only and capped to 500 chars like other
+    mutation reasons.
+    """
+
+    fromDayOfWeek: int = Field(..., ge=1, le=7)
+    toDayOfWeek: int = Field(..., ge=1, le=7)
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+
 _PAYLOAD_MODELS = {
     REPLACE_EXERCISE: _ReplaceExercisePayload,
     COMPRESS_WORKOUT: _CompressWorkoutPayload,
@@ -133,6 +150,7 @@ _PAYLOAD_MODELS = {
     NUTRITION_ADVICE: _NutritionAdvicePayload,
     WEEKLY_REVIEW: _WeeklyReviewPayload,
     SAFETY_RESPONSE: _SafetyResponsePayload,
+    MOVE_WORKOUT_SESSION: _MoveWorkoutSessionPayload,
 }
 
 
@@ -228,6 +246,9 @@ def _sanitize_payload(action_type: str, payload: Any) -> Optional[Dict[str, Any]
                 return None
     if action_type == REPLACE_EXERCISE:
         if sanitized["fromExerciseId"] == sanitized["toExerciseId"]:
+            return None
+    if action_type == MOVE_WORKOUT_SESSION:
+        if sanitized["fromDayOfWeek"] == sanitized["toDayOfWeek"]:
             return None
 
     return sanitized

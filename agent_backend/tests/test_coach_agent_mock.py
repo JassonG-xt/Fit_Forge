@@ -1007,3 +1007,91 @@ def test_mock_weekly_review_alt_phrasing_practice_status() -> None:
     """'练得怎么样' should also route to weeklyReview."""
     response = _run_mock_coach_agent(_request_with_sessions("这周练得怎么样"))
     assert response.actions[0].type == "weeklyReview"
+
+
+# ──────────────────────────────────────────────
+# Stage 3-4: moveWorkoutSession backend mock routing
+# ──────────────────────────────────────────────
+
+
+def test_mock_explicit_weekday_move_routes_to_move_workout_session() -> None:
+    response = _run_mock_coach_agent(_request("把周一训练挪到周三"))
+    assert response.intent == "moveWorkoutSession"
+    assert len(response.actions) == 1
+    action = response.actions[0]
+    assert action.type == "moveWorkoutSession"
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+    assert action.payload["fromDayOfWeek"] == 1
+    assert action.payload["toDayOfWeek"] == 3
+
+
+def test_mock_move_session_payload_omits_reason_without_recovery_hint() -> None:
+    response = _run_mock_coach_agent(_request("把周一训练挪到周三"))
+    action = response.actions[0]
+    assert action.type == "moveWorkoutSession"
+    assert "reason" not in action.payload
+
+
+def test_mock_move_session_captures_recovery_prefix_as_reason() -> None:
+    response = _run_mock_coach_agent(_request("今天太累了，把周一训练挪到周三"))
+    action = response.actions[0]
+    assert action.type == "moveWorkoutSession"
+    assert action.payload["fromDayOfWeek"] == 1
+    assert action.payload["toDayOfWeek"] == 3
+    assert action.payload["reason"] == "今天太累了"
+
+
+def test_mock_move_session_accepts_alternative_move_verbs() -> None:
+    """Verbs 改到 / 移动到 are equivalent move semantics."""
+    for prompt, src, dst in (
+        ("把周二的训练改到周五", 2, 5),
+        ("把周一训练移动到周四", 1, 4),
+    ):
+        response = _run_mock_coach_agent(_request(prompt))
+        assert response.intent == "moveWorkoutSession", f"failed for {prompt!r}"
+        action = response.actions[0]
+        assert action.type == "moveWorkoutSession"
+        assert action.payload["fromDayOfWeek"] == src
+        assert action.payload["toDayOfWeek"] == dst
+
+
+def test_mock_vague_move_request_does_not_emit_move_session() -> None:
+    response = _run_mock_coach_agent(_request("把训练挪一下"))
+    assert all(a.type != "moveWorkoutSession" for a in response.actions)
+
+
+def test_mock_today_to_tomorrow_move_stays_non_mutating() -> None:
+    """Backend mock has no deterministic current-date source; defer today/tomorrow."""
+    response = _run_mock_coach_agent(_request("把今天训练挪到明天"))
+    assert all(a.type != "moveWorkoutSession" for a in response.actions)
+
+
+def test_mock_safety_symptom_wins_over_move_session() -> None:
+    response = _run_mock_coach_agent(_request("我胸口疼，但想把周一训练挪到周三"))
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    assert all(a.type != "moveWorkoutSession" for a in response.actions)
+
+
+def test_mock_multi_day_reschedule_does_not_steal_into_move_session() -> None:
+    """Regression guard: `把训练安排到周三和周六` must stay on rescheduleWeek.
+    The verb `安排到` is intentionally not in the move-verb list."""
+    response = _run_mock_coach_agent(
+        _request("这周练太密了，把训练安排到周三和周六")
+    )
+    assert response.intent == "rescheduleWeek"
+    assert all(a.type != "moveWorkoutSession" for a in response.actions)
+
+
+def test_mock_move_session_hash_omitted_when_plan_context_hash_missing() -> None:
+    """Legacy/missing planContextHash: action emitted but hash stays None
+    (Flutter stale-check treats None as 'no constraint')."""
+    response = _run_mock_coach_agent(
+        _request("把周一训练挪到周三", plan_hash=None)
+    )
+    assert response.intent == "moveWorkoutSession"
+    action = response.actions[0]
+    assert action.type == "moveWorkoutSession"
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash is None
