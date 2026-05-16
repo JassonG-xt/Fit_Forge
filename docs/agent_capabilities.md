@@ -63,7 +63,7 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 
 | Action | Stage | Status |
 |---|---|---|
-| `moveWorkoutSession` | Stage 3-1 — frontend contract skeleton | **设计 + 前端契约阶段**：`AgentActionType.moveWorkoutSession` 已加入枚举；`parseMoveWorkoutSessionPayload` 做严格 payload 校验（`fromDayOfWeek` / `toDayOfWeek` 必填 1-7、不能相同；可选 `reason` 字符串）；`AgentActionPreviewer.previewMoveWorkoutSession` 返回 weekday-level `MovePreview`（不读 active plan，避免在 runtime 缺位时伪造训练内容）。**Backend、mock router、`LocalAgentActionExecutor` 写入路径以及 eval 套件均未路由此 action**；executor 显式返回 `"暂未实现"` failure 并断言不修改 `AppState`。后续 PR 才会引入 executor 实现、mock / backend 路由和 eval cases；详见 `docs/move_workout_session_design.md`。 |
+| `moveWorkoutSession` | Stage 3-2 — local executor support | **本地 executor 已就位，但 mock/backend 未路由**：`AgentActionType.moveWorkoutSession` 已加入枚举；`parseMoveWorkoutSessionPayload` 做严格 payload 校验（`fromDayOfWeek` / `toDayOfWeek` 必填 1-7、不能相同；可选 `reason` 字符串）；`AgentActionPreviewer.previewMoveWorkoutSession` 返回 weekday-level `MovePreview`。`LocalAgentActionExecutor` 现在执行该 action：在用户确认 + trusted `sourceContextHash` 命中的前提下，把源日训练完整移到目标日（保留 sets/reps/rest 与确定性 1..7 排序），源日转为 rest；**目标日已有训练时拒绝执行**（不自动合并、不交换、不追加）；源日无训练、缺失 / stale `sourceContextHash`、未带用户确认的请求都不会修改 `AppState`。**Backend、mock router、eval 套件仍未路由此 action**——在正常 Agent 对话流程中不可达；routing + eval coverage 留给后续 PR。详见 `docs/move_workout_session_design.md`。 |
 
 ## Safety model
 

@@ -468,60 +468,139 @@ void main() {
       expect(state.activePlan, isNull);
     });
 
-    // ─── moveWorkoutSession: designed but not executable yet ───
+    // ─── moveWorkoutSession ───
     //
-    // The action is added to AgentActionType so the frontend contract
-    // (parser + preview) compiles, but the executor must explicitly refuse
-    // to mutate state. These tests guard the no-mutation invariant in case
-    // an upstream path emits the action before the runtime PR lands.
+    // Stage 3-2: local executor support. The action moves one planned workout
+    // session from `fromDayOfWeek` to `toDayOfWeek` and clears the source day
+    // to rest. Target-day conflicts are rejected with no auto-merge/swap.
+    // Confirmation + trusted sourceContextHash boundaries still apply.
 
     test(
-      'moveWorkoutSession is rejected as unsupported and does not mutate plan',
+      'moveWorkoutSession moves workout from source to target day',
       () async {
         final state = await primedAppStateWithProfile();
         state.adoptPlan(_seedPlan());
         final beforePlan = state.activePlan!;
-        final beforeHash = computePlanContextHash(beforePlan);
+        final beforeExercises = beforePlan.days
+            .firstWhere((d) => d.dayOfWeek == 1)
+            .exercises
+            .map((e) => e.exerciseId)
+            .toList();
+        final beforeDayType = beforePlan.days
+            .firstWhere((d) => d.dayOfWeek == 1)
+            .dayType;
+        final hash = computePlanContextHash(beforePlan);
         final executor = LocalAgentActionExecutor(state);
+
         final result = await executor.execute(
           makeAction(AgentActionType.moveWorkoutSession, const {
             'fromDayOfWeek': 1,
             'toDayOfWeek': 2,
-          }, sourceContextHash: beforeHash),
+          }, sourceContextHash: hash),
         );
-        expect(result.success, false);
-        expect(result.message, contains('暂未实现'));
-        expect(state.activePlan, same(beforePlan));
-        expect(computePlanContextHash(state.activePlan!), beforeHash);
+
+        expect(result.success, true);
+        final plan = state.activePlan!;
+        final source = plan.days.firstWhere((d) => d.dayOfWeek == 1);
+        final target = plan.days.firstWhere((d) => d.dayOfWeek == 2);
+        expect(source.dayType, WorkoutDayType.rest);
+        expect(source.exercises, isEmpty);
+        expect(target.dayType, beforeDayType);
+        // Content preservation: full exercise list + identical ordering.
+        expect(
+          target.exercises.map((e) => e.exerciseId).toList(),
+          beforeExercises,
+        );
+        // Unrelated workout day (day 3 lower) must stay untouched.
+        final lower = plan.days.firstWhere((d) => d.dayOfWeek == 3);
+        expect(lower.dayType, WorkoutDayType.lower);
+        expect(lower.exercises.single.exerciseId, 'squat');
       },
     );
 
     test(
-      'moveWorkoutSession still enforces mutation boundary (no hash)',
+      'moveWorkoutSession preserves full exercise content (sets/reps/rest)',
       () async {
         final state = await primedAppStateWithProfile();
         state.adoptPlan(_seedPlan());
         final beforePlan = state.activePlan!;
+        final beforeJson = beforePlan.days
+            .firstWhere((d) => d.dayOfWeek == 1)
+            .exercises
+            .map((e) => e.toJson())
+            .toList();
+        final hash = computePlanContextHash(beforePlan);
         final executor = LocalAgentActionExecutor(state);
+
         final result = await executor.execute(
           makeAction(AgentActionType.moveWorkoutSession, const {
             'fromDayOfWeek': 1,
-            'toDayOfWeek': 2,
-          }),
+            'toDayOfWeek': 4,
+          }, sourceContextHash: hash),
         );
-        expect(result.success, false);
-        expect(state.activePlan, same(beforePlan));
+
+        expect(result.success, true);
+        final target = state.activePlan!.days.firstWhere(
+          (d) => d.dayOfWeek == 4,
+        );
+        expect(target.exercises.map((e) => e.toJson()).toList(), beforeJson);
       },
     );
 
     test(
-      'moveWorkoutSession still enforces mutation boundary (no confirmation)',
+      'moveWorkoutSession rejects when target day already has a workout',
+      () async {
+        final state = await primedAppStateWithProfile();
+        state.adoptPlan(_seedPlan());
+        final beforePlan = state.activePlan!;
+        final beforeJson = beforePlan.toJson();
+        final hash = computePlanContextHash(beforePlan);
+        final executor = LocalAgentActionExecutor(state);
+
+        final result = await executor.execute(
+          makeAction(AgentActionType.moveWorkoutSession, const {
+            'fromDayOfWeek': 1,
+            'toDayOfWeek': 3,
+          }, sourceContextHash: hash),
+        );
+
+        expect(result.success, false);
+        expect(result.message, contains('已有训练'));
+        // No mutation, no merge, no swap.
+        expect(state.activePlan!.toJson(), beforeJson);
+      },
+    );
+
+    test('moveWorkoutSession rejects when source day has no workout', () async {
+      final state = await primedAppStateWithProfile();
+      state.adoptPlan(_seedPlan());
+      final beforePlan = state.activePlan!;
+      final beforeJson = beforePlan.toJson();
+      final hash = computePlanContextHash(beforePlan);
+      final executor = LocalAgentActionExecutor(state);
+
+      final result = await executor.execute(
+        makeAction(AgentActionType.moveWorkoutSession, const {
+          // Day 5 is rest in the seed plan.
+          'fromDayOfWeek': 5,
+          'toDayOfWeek': 6,
+        }, sourceContextHash: hash),
+      );
+
+      expect(result.success, false);
+      expect(result.message, contains('没有训练'));
+      expect(state.activePlan!.toJson(), beforeJson);
+    });
+
+    test(
+      'moveWorkoutSession rejects without confirmation and does not mutate',
       () async {
         final state = await primedAppStateWithProfile();
         state.adoptPlan(_seedPlan());
         final beforePlan = state.activePlan!;
         final hash = computePlanContextHash(beforePlan);
         final executor = LocalAgentActionExecutor(state);
+
         final result = await executor.execute(
           makeAction(
             AgentActionType.moveWorkoutSession,
@@ -530,8 +609,97 @@ void main() {
             sourceContextHash: hash,
           ),
         );
+
         expect(result.success, false);
         expect(state.activePlan, same(beforePlan));
+      },
+    );
+
+    test(
+      'moveWorkoutSession rejects when sourceContextHash is missing',
+      () async {
+        final state = await primedAppStateWithProfile();
+        state.adoptPlan(_seedPlan());
+        final beforePlan = state.activePlan!;
+        final executor = LocalAgentActionExecutor(state);
+
+        final result = await executor.execute(
+          makeAction(AgentActionType.moveWorkoutSession, const {
+            'fromDayOfWeek': 1,
+            'toDayOfWeek': 2,
+          }),
+        );
+
+        expect(result.success, false);
+        expect(state.activePlan, same(beforePlan));
+      },
+    );
+
+    test(
+      'moveWorkoutSession rejects when sourceContextHash is stale',
+      () async {
+        final state = await primedAppStateWithProfile();
+        state.adoptPlan(_seedPlan());
+        final beforePlan = state.activePlan!;
+        final beforeJson = beforePlan.toJson();
+        final executor = LocalAgentActionExecutor(state);
+
+        final result = await executor.execute(
+          makeAction(
+            AgentActionType.moveWorkoutSession,
+            const {'fromDayOfWeek': 1, 'toDayOfWeek': 2},
+            sourceContextHash: 'hash-from-an-older-plan',
+          ),
+        );
+
+        expect(result.success, false);
+        expect(state.activePlan!.toJson(), beforeJson);
+      },
+    );
+
+    test(
+      'moveWorkoutSession rejects same fromDayOfWeek/toDayOfWeek (parser guard)',
+      () async {
+        final state = await primedAppStateWithProfile();
+        state.adoptPlan(_seedPlan());
+        final beforePlan = state.activePlan!;
+        final hash = computePlanContextHash(beforePlan);
+        final executor = LocalAgentActionExecutor(state);
+
+        final result = await executor.execute(
+          makeAction(AgentActionType.moveWorkoutSession, const {
+            'fromDayOfWeek': 1,
+            'toDayOfWeek': 1,
+          }, sourceContextHash: hash),
+        );
+
+        expect(result.success, false);
+        expect(result.message, contains('必须不同'));
+        expect(state.activePlan, same(beforePlan));
+      },
+    );
+
+    test(
+      'moveWorkoutSession preserves deterministic 1..7 day ordering',
+      () async {
+        final state = await primedAppStateWithProfile();
+        state.adoptPlan(_seedPlan());
+        final beforePlan = state.activePlan!;
+        final hash = computePlanContextHash(beforePlan);
+        final executor = LocalAgentActionExecutor(state);
+
+        final result = await executor.execute(
+          makeAction(AgentActionType.moveWorkoutSession, const {
+            'fromDayOfWeek': 1,
+            'toDayOfWeek': 7,
+          }, sourceContextHash: hash),
+        );
+
+        expect(result.success, true);
+        final dayOfWeeks = state.activePlan!.days
+            .map((d) => d.dayOfWeek)
+            .toList();
+        expect(dayOfWeeks, [1, 2, 3, 4, 5, 6, 7]);
       },
     );
   });

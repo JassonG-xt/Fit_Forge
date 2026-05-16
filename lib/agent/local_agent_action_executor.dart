@@ -3,6 +3,7 @@ import '../models/workout_plan.dart';
 import '../services/app_state.dart';
 import 'action_helpers/exercise_replacer.dart';
 import 'action_helpers/workout_compressor.dart';
+import 'action_helpers/workout_mover.dart';
 import 'action_helpers/workout_rescheduler.dart';
 import 'action_payload_parser.dart';
 import 'models/agent_action.dart';
@@ -33,12 +34,7 @@ class LocalAgentActionExecutor {
       case AgentActionType.compressWorkout:
         return _compressWorkout(action);
       case AgentActionType.moveWorkoutSession:
-        // moveWorkoutSession 已设计（docs/move_workout_session_design.md）但
-        // runtime executor 尚未实现。即便 boundary check 通过，也必须显式拒绝，
-        // 防止 enum 加上后某条上游路径偷偷把 action 走到 AppState 写入。
-        return AgentActionResult.failure(
-          'moveWorkoutSession 已设计但暂未实现，将在后续 PR 中支持。',
-        );
+        return _moveWorkoutSession(action);
       case AgentActionType.answerOnly:
       case AgentActionType.nutritionAdvice:
       case AgentActionType.weeklyReview:
@@ -290,6 +286,65 @@ class LocalAgentActionExecutor {
     return AgentActionResult.success(
       title: '已压缩训练',
       message: '今日训练已压缩到约 ${payload.targetMinutes} 分钟。',
+    );
+  }
+
+  // ─── moveWorkoutSession ───
+  // 把一个已计划的训练从源日完整移到目标日。冲突规则：目标日已有训练时拒绝，
+  // 不自动合并、不交换、不追加。源日转为 rest。详见
+  // docs/move_workout_session_design.md。
+  Future<AgentActionResult> _moveWorkoutSession(AgentAction action) async {
+    final plan = appState.activePlan;
+    final planErr = _requireActivePlan(plan);
+    if (planErr != null) return planErr;
+    final staleErr = _checkStale(action);
+    if (staleErr != null) return staleErr;
+
+    final parsed = parseMoveWorkoutSessionPayload(action.payload);
+    if (parsed is PayloadParseFailure) {
+      return AgentActionResult.failure(parsed.message!);
+    }
+    final payload =
+        (parsed as PayloadParseSuccess<MoveWorkoutSessionPayload>).value;
+
+    final source = plan!.days
+        .where((d) => d.dayOfWeek == payload.fromDayOfWeek)
+        .firstOrNull;
+    final sourceHasWorkout =
+        source != null &&
+        source.dayType != WorkoutDayType.rest &&
+        source.exercises.isNotEmpty;
+    if (!sourceHasWorkout) {
+      return AgentActionResult.failure(
+        '${_weekdayName(payload.fromDayOfWeek)}没有训练，无法移动。',
+      );
+    }
+
+    final target = plan.days
+        .where((d) => d.dayOfWeek == payload.toDayOfWeek)
+        .firstOrNull;
+    final targetOccupied =
+        target != null &&
+        target.dayType != WorkoutDayType.rest &&
+        target.exercises.isNotEmpty;
+    if (targetOccupied) {
+      return AgentActionResult.failure(
+        '${_weekdayName(payload.toDayOfWeek)}已有训练，'
+        '请先调整目标日；不会自动合并或交换。',
+      );
+    }
+
+    final newPlan = moveWorkoutSessionInPlan(
+      plan: plan,
+      fromDayOfWeek: payload.fromDayOfWeek,
+      toDayOfWeek: payload.toDayOfWeek,
+    );
+    appState.adoptPlan(newPlan);
+    return AgentActionResult.success(
+      title: '已移动训练',
+      message:
+          '已将${_weekdayName(payload.fromDayOfWeek)}的训练'
+          '移到${_weekdayName(payload.toDayOfWeek)}。',
     );
   }
 
