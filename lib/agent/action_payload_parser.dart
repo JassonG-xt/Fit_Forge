@@ -333,9 +333,10 @@ PayloadParseResult<List<String>> _parseStringList(
   return PayloadParseSuccess(result);
 }
 
-// ─── moveWorkoutSession（前端契约阶段，runtime 尚未实现） ─────────────
+// ─── moveWorkoutSession（Flutter 本地执行已就位，routing 尚未接入） ────────
 //
-// 仅校验 payload 形状，不进入 executor。详见 docs/move_workout_session_design.md。
+// 校验 payload 形状；执行仍必须经用户确认、trusted sourceContextHash 与
+// LocalAgentActionExecutor。详见 docs/move_workout_session_design.md。
 // 复用 parseDayOfWeek 的范围/类型规则，但区分 fromDayOfWeek / toDayOfWeek
 // 的错误消息以便用户定位字段。
 

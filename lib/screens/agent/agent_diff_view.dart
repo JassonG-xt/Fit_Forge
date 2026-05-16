@@ -443,8 +443,9 @@ class _PlanSummary extends StatelessWidget {
 
 // ─── moveWorkoutSession ──────────────────────────────────────────────
 //
-// Stage 3-1 weekday-level diff. Runtime executor is not yet wired, so we
-// only render generic 原训练 / 休息 labels — never fabricated exercise names.
+// Weekday-level diff for moveWorkoutSession. The local executor is implemented,
+// but this preview still avoids fabricated exercise names and renders generic
+// 原训练 / 休息 labels from the local move preview.
 
 class _MoveDiff extends StatelessWidget {
   const _MoveDiff({required this.preview});
