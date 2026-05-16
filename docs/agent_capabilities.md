@@ -126,6 +126,7 @@ Local first-plan generation is supported through Flutter's `LocalAgentActionExec
 - `docs/coach_agent_demo_script.md` — 录屏 / demo 脚本（4 个核心场景）
 - `docs/agent_mvp_status.md` — MVP 稳定点 / 架构 / 质量门禁
 - `docs/recovery_routing_phase_summary.md` — recovery-routing 阶段最终汇总（PRs #43–#52：能力、安全边界、eval 覆盖、real-provider scorecard 证据链、里程碑 tag、experimental 状态）
+- `docs/move_workout_session_phase_summary.md` — `moveWorkoutSession` Stage 3 阶段最终汇总（PRs #62/#63/#64/#71/#72/#73/#75/#76：design、executor、mock/backend routing、eval 覆盖、real-provider prompt support、manual smoke scorecard、里程碑 tag、experimental 状态）
 - `docs/agent_architecture_diagram.md` — Mermaid 数据流 / 安全边界图
 - `docs/coach_agent_evals.md` — eval suite 字段含义
 - `docs/generate_plan_agent_boundary.md` — generatePlan 产品边界

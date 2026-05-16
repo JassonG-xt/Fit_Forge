@@ -22,5 +22,6 @@ This directory holds repository-grounded documentation for the current Flutter a
 - [real_llm_scorecards/](real_llm_scorecards/) — sanitized summaries of manual real-provider smoke runs (raw JSON outputs are gitignored; only scrubbed Markdown lives here)
 - [recovery_routing_phase_summary.md](recovery_routing_phase_summary.md) — consolidates PRs #43–#52: recovery-aware coaching capabilities, mutation/safety boundaries, eval coverage, real-provider scorecard chain, milestone tags, and current experimental status
 - [move_workout_session_design.md](move_workout_session_design.md) - moveWorkoutSession design proposal for true single-session movement; docs-only, runtime deferred
+- [move_workout_session_phase_summary.md](move_workout_session_phase_summary.md) — Stage 3 closure summary for `moveWorkoutSession`: design, executor, mock/backend routing, eval coverage, real-provider prompt support, and manual smoke scorecard; provider remains experimental
 
 If the code and docs disagree, the code in `lib/`, `test/`, and `.github/workflows/` is the source of truth and the docs should be updated.
