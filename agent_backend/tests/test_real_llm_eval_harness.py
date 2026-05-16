@@ -806,3 +806,213 @@ def test_today_has_squat_and_profile_override_coexist() -> None:
     exercise_ids = [e["exerciseId"] for e in ctx["todayWorkout"]["exercises"]]
     assert "barbell_squat" in exercise_ids
     assert ctx["profile"]["goal"] == "loseFat"
+
+
+# ── transient provider signal metadata (reporting-only) ──
+
+
+def _benign_compress_case() -> Dict[str, Any]:
+    """A stable active compressWorkout case whose userMessage does NOT trip the
+    safety guardrail (so the provider's _call_llm path actually runs)."""
+    for c in load_cases(_EVALS_FILE):
+        if (
+            c.get("category") == "compressWorkout"
+            and c.get("status") == "active"
+        ):
+            return c
+    raise AssertionError("no active compressWorkout case for transient tests")
+
+
+def _real_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_BASE_URL", "http://fake-host")
+    monkeypatch.setenv("LLM_API_KEY", "fake-key")
+    monkeypatch.setenv("LLM_MODEL", "fake-model")
+
+
+def test_transient_signals_zero_on_clean_dry_run() -> None:
+    """Successful dry-run: zero transient counts and all per-case flags False."""
+    case = _benign_compress_case()
+    result = _run_one_case(case, dry_run=True)
+    ts = result.transientSignals
+    assert ts.requestError is False
+    assert ts.timeout is False
+    assert ts.nonJson is False
+    assert ts.emptyContent is False
+    assert ts.otherProviderError is False
+
+
+def test_transient_signals_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A TimeoutError surfaces as requestError + timeout."""
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    with patch(
+        "agents.llm_provider._call_llm",
+        side_effect=TimeoutError("The read operation timed out"),
+    ):
+        result = _run_one_case(case, dry_run=False)
+    ts = result.transientSignals
+    assert ts.requestError is True
+    assert ts.timeout is True
+    assert ts.otherProviderError is False
+    assert ts.nonJson is False
+    assert ts.emptyContent is False
+
+
+def test_transient_signals_request_error_non_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-timeout URLError surfaces as requestError + otherProviderError."""
+    import urllib.error
+
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    with patch(
+        "agents.llm_provider._call_llm",
+        side_effect=urllib.error.URLError("connection refused"),
+    ):
+        result = _run_one_case(case, dry_run=False)
+    ts = result.transientSignals
+    assert ts.requestError is True
+    assert ts.timeout is False
+    assert ts.otherProviderError is True
+    assert ts.nonJson is False
+    assert ts.emptyContent is False
+
+
+def test_transient_signals_non_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A non-JSON provider response surfaces nonJson without emptyContent."""
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    # Length > 0, deliberately not valid JSON.
+    garbage = "not json {{ broken response from provider" * 5
+    with patch(
+        "agents.llm_provider._call_llm",
+        return_value=garbage,
+    ):
+        result = _run_one_case(case, dry_run=False)
+    ts = result.transientSignals
+    assert ts.nonJson is True
+    assert ts.emptyContent is False
+    assert ts.requestError is False
+    assert ts.timeout is False
+
+
+def test_transient_signals_empty_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty provider response surfaces nonJson + emptyContent."""
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    with patch(
+        "agents.llm_provider._call_llm",
+        return_value="",
+    ):
+        result = _run_one_case(case, dry_run=False)
+    ts = result.transientSignals
+    assert ts.nonJson is True
+    assert ts.emptyContent is True
+    assert ts.requestError is False
+    assert ts.timeout is False
+
+
+def test_transient_signals_do_not_change_pass_fail_semantics() -> None:
+    """A clean dry-run still passes — transient capture must not alter outcome."""
+    case = _benign_compress_case()
+    result = _run_one_case(case, dry_run=True)
+    assert result.outcome in {"pass", "expectedGapConverted"}
+    assert result.transientSignals.to_dict() == {
+        "requestError": False,
+        "timeout": False,
+        "nonJson": False,
+        "emptyContent": False,
+        "otherProviderError": False,
+    }
+
+
+def test_top_level_transient_signals_summary_present(tmp_path: Path) -> None:
+    """The harness report must include a top-level transientSignals object."""
+    cases = filter_cases(load_cases(_EVALS_FILE), only_status="active", limit=2)
+    report = run_eval(
+        cases=cases,
+        dry_run=True,
+        model="dry-test-model",
+        provider="openai-compatible",
+    )
+    assert "transientSignals" in report
+    ts = report["transientSignals"]
+    for key in (
+        "requestErrorCount",
+        "timeoutCount",
+        "nonJsonCount",
+        "emptyContentCount",
+        "otherProviderErrorCount",
+    ):
+        assert key in ts, f"top-level transientSignals missing {key}"
+        assert ts[key] == 0, (
+            f"clean dry-run should produce zero {key}, got {ts[key]}"
+        )
+
+
+def test_per_case_transient_signals_in_json_report(tmp_path: Path) -> None:
+    """Each case in the JSON report carries a transientSignals block."""
+    cases = filter_cases(load_cases(_EVALS_FILE), only_status="active", limit=2)
+    report = run_eval(cases=cases, dry_run=True, model=None, provider="x")
+    for r in report["results"]:
+        assert "transientSignals" in r, f"{r['caseId']} missing transientSignals"
+        for key in (
+            "requestError",
+            "timeout",
+            "nonJson",
+            "emptyContent",
+            "otherProviderError",
+        ):
+            assert key in r["transientSignals"], (
+                f"{r['caseId']} transientSignals missing {key}"
+            )
+
+
+def test_run_eval_aggregates_transient_signals_from_cases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When a case triggers a timeout, summary counts reflect it."""
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    with patch(
+        "agents.llm_provider._call_llm",
+        side_effect=TimeoutError("The read operation timed out"),
+    ):
+        report = run_eval(
+            cases=[case], dry_run=False, model=None, provider="x"
+        )
+    ts = report["transientSignals"]
+    assert ts["requestErrorCount"] == 1
+    assert ts["timeoutCount"] == 1
+    assert ts["nonJsonCount"] == 0
+    assert ts["emptyContentCount"] == 0
+    assert ts["otherProviderErrorCount"] == 0
+
+
+def test_markdown_report_includes_transient_signals_section(tmp_path: Path) -> None:
+    """The Markdown report surfaces the transient signals counts."""
+    cases = filter_cases(load_cases(_EVALS_FILE), only_status="active", limit=2)
+    report = run_eval(cases=cases, dry_run=True, model=None, provider="x")
+    out = tmp_path / "report.md"
+    write_markdown_report(report, out)
+    text = out.read_text(encoding="utf-8")
+    assert "## Transient provider signals" in text
+    assert "requestErrorCount: 0" in text
+    assert "timeoutCount: 0" in text
+    assert "nonJsonCount: 0" in text
+    assert "emptyContentCount: 0" in text
+
+
+def test_transient_capture_handler_is_removed_after_case() -> None:
+    """The capture handler must not leak onto the provider logger between cases."""
+    import logging as _logging
+
+    provider_logger = _logging.getLogger("agents.llm_provider")
+    before = list(provider_logger.handlers)
+    case = _benign_compress_case()
+    _run_one_case(case, dry_run=True)
+    after = list(provider_logger.handlers)
+    assert after == before, (
+        "transient capture handler leaked onto agents.llm_provider logger"
+    )
