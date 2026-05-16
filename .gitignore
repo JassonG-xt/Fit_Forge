@@ -89,3 +89,4 @@ agent_backend/evals/results/*.md
 
 # Local agent instruction files
 AGENTS.md
+CLAUDE.md
