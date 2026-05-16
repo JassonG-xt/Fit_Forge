@@ -25,6 +25,7 @@ MUTATION_ACTION_TYPES = frozenset({
     "rescheduleWeek",
     "replaceExercise",
     "compressWorkout",
+    "moveWorkoutSession",
 })
 
 

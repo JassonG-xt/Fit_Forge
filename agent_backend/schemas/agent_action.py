@@ -13,6 +13,7 @@ AgentActionTypeLiteral = Literal[
     "compressWorkout",
     "nutritionAdvice",
     "weeklyReview",
+    "moveWorkoutSession",
     "safetyResponse",
 ]
 

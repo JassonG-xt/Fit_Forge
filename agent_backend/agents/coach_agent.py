@@ -207,6 +207,99 @@ def _looks_like_single_session_move(message: str) -> bool:
     return any(k in message for k in ("挪到", "往后挪", "改到", "改在"))
 
 
+# Stage 3-4 — single-session move routing (mirrors Flutter mock Stage 3-3).
+# Explicit weekday-to-weekday only; "今天/明天" deliberately not supported
+# because backend mock has no deterministic current-date source. "安排到" is
+# excluded — that's weekly schedule semantics, not single-session move.
+_MOVE_VERBS = ("挪到", "移到", "移动到", "改到", "调到", "换到")
+
+
+def _extract_move_session_pair(message: str) -> tuple[int, int] | None:
+    """Return (from, to) weekday pair iff exactly one weekday lies before an
+    explicit move verb and exactly one weekday lies after. None otherwise.
+    """
+    verb_start = -1
+    verb_end = -1
+    for verb in _MOVE_VERBS:
+        idx = message.find(verb)
+        if idx >= 0 and (verb_start < 0 or idx < verb_start):
+            verb_start = idx
+            verb_end = idx + len(verb)
+    if verb_start < 0:
+        return None
+
+    matches = [
+        m for m in re.finditer(r"周[一二三四五六日天]|星期[一二三四五六日天]", message)
+    ]
+    if len(matches) != 2:
+        return None
+
+    before = [m for m in matches if m.end() <= verb_start]
+    after = [m for m in matches if m.start() >= verb_end]
+    if len(before) != 1 or len(after) != 1:
+        return None
+
+    src = _DAY_LOOKUP.get(before[0].group(0))
+    dst = _DAY_LOOKUP.get(after[0].group(0))
+    if src is None or dst is None or src == dst:
+        return None
+    return src, dst
+
+
+def _extract_move_session_reason(message: str) -> str | None:
+    """Capture the user's prefix clause only when it ends in a comma and
+    explicitly mentions a recovery signal. No free-form NLU: avoids echoing
+    arbitrary user text (e.g. bare time words) back as a payload field.
+    """
+    prefix_match = re.match(r"^([^把将]+?)[,，]", message)
+    if not prefix_match:
+        return None
+    prefix = prefix_match.group(1).strip()
+    if not prefix or len(prefix) > 30:
+        return None
+    if not any(hint in prefix for hint in ("累", "太密", "恢复", "不舒服", "想休息")):
+        return None
+    return prefix
+
+
+def _is_move_session(message: str) -> bool:
+    return _extract_move_session_pair(message) is not None
+
+
+def _move_session_response(message: str) -> AgentResponse:
+    pair = _extract_move_session_pair(message)
+    # matcher guarantees non-None; defensive fallback only.
+    if pair is None:
+        return _fallback_response()
+    src, dst = pair
+    from_name = _WEEKDAY_NAMES[src]
+    to_name = _WEEKDAY_NAMES[dst]
+    reason = _extract_move_session_reason(message)
+
+    payload: dict = {"fromDayOfWeek": src, "toDayOfWeek": dst}
+    if reason is not None:
+        payload["reason"] = reason
+
+    return AgentResponse(
+        message=(
+            f"可以把 {from_name} 的训练移到 {to_name}。"
+            "目标日如果已有训练会被拒绝，不会自动合并或交换。"
+        ),
+        intent="moveWorkoutSession",
+        confidence=0.85,
+        actions=[
+            AgentAction(
+                id=_action_id("move"),
+                type="moveWorkoutSession",
+                title=f"移动 {from_name} 训练到 {to_name}",
+                summary=f"把 {from_name} 的训练完整移到 {to_name}，源日转为休息。",
+                requiresConfirmation=True,
+                payload=payload,
+            )
+        ],
+    )
+
+
 def _is_recovery_weekly_reschedule(message: str) -> bool:
     """Detect recovery-scoped weekly availability changes, not session moves."""
     return (
@@ -656,6 +749,12 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
     replace = _replace_response(message, request)
     if replace is not None:
         return replace
+
+    # moveWorkoutSession must win before _is_reschedule: a sentence like
+    # `把周一训练挪到周三` has two weekday tokens + "训练", which would
+    # otherwise be misrouted into `rescheduleWeek availableWeekdays:[1,3]`.
+    if _is_move_session(message):
+        return _move_session_response(message)
 
     if _is_reschedule(message):
         rescheduled = _reschedule_response(message)
