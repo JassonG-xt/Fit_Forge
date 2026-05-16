@@ -565,5 +565,173 @@ void main() {
         );
       },
     );
+
+    group('moveWorkoutSession routing', () {
+      test(
+        'explicit weekday-to-weekday routes to moveWorkoutSession',
+        () async {
+          final state = await primedAppStateWithProfile();
+          final context = const AgentContextBuilder().build(state);
+          final response = await client.sendMessage(
+            message: '把周一训练挪到周三',
+            context: context,
+            history: const [],
+          );
+
+          expect(response.intent, AgentIntent.moveWorkoutSession);
+          expect(response.actions, hasLength(1));
+          final action = response.actions.single;
+          expect(action.type, AgentActionType.moveWorkoutSession);
+          expect(action.payload['fromDayOfWeek'], 1);
+          expect(action.payload['toDayOfWeek'], 3);
+          expect(action.requiresConfirmation, true);
+        },
+      );
+
+      test(
+        'sourceContextHash matches the active plan context, not mock-fabricated',
+        () async {
+          final state = await primedAppStateWithProfile();
+          state.adoptPlan(_seedMovePlan());
+          final context = const AgentContextBuilder().build(state);
+          expect(context.planContextHash, isNotEmpty);
+
+          final response = await client.sendMessage(
+            message: '把周一训练挪到周五',
+            context: context,
+            history: const [],
+          );
+
+          final action = response.actions.single;
+          expect(action.type, AgentActionType.moveWorkoutSession);
+          expect(action.sourceContextHash, context.planContextHash);
+          expect(action.sourceContextHash, isNotEmpty);
+        },
+      );
+
+      test('recovery prefix is captured as reason when present', () async {
+        final state = await primedAppStateWithProfile();
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '今天太累了，把周一训练挪到周三',
+          context: context,
+          history: const [],
+        );
+
+        final action = response.actions.single;
+        expect(action.type, AgentActionType.moveWorkoutSession);
+        expect(action.payload['fromDayOfWeek'], 1);
+        expect(action.payload['toDayOfWeek'], 3);
+        expect(action.payload['reason'], '今天太累了');
+      });
+
+      test('payload omits reason when prefix lacks recovery hint', () async {
+        final state = await primedAppStateWithProfile();
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '把周一训练挪到周三',
+          context: context,
+          history: const [],
+        );
+
+        final payload = response.actions.single.payload;
+        expect(payload.containsKey('reason'), false);
+      });
+
+      test('vague "调整一下训练" does not emit moveWorkoutSession', () async {
+        final state = await primedAppStateWithProfile();
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '帮我调整一下训练',
+          context: context,
+          history: const [],
+        );
+
+        expect(
+          response.actions.map((a) => a.type),
+          isNot(contains(AgentActionType.moveWorkoutSession)),
+        );
+      });
+
+      test('safety symptom + move request routes to safetyResponse', () async {
+        final state = await primedAppStateWithProfile();
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '我胸口疼，但想把周一训练挪到周三',
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.safetyResponse);
+        expect(response.safety.shouldStopWorkout, true);
+        expect(
+          response.actions.map((a) => a.type),
+          isNot(contains(AgentActionType.moveWorkoutSession)),
+        );
+      });
+
+      test('today-to-tomorrow move stays non-mutating in this PR', () async {
+        final state = await primedAppStateWithProfile();
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '把今天训练挪到明天',
+          context: context,
+          history: const [],
+        );
+
+        expect(
+          response.actions.map((a) => a.type),
+          isNot(contains(AgentActionType.moveWorkoutSession)),
+        );
+        for (final action in response.actions) {
+          expect(action.requiresConfirmation, false);
+          expect(action.sourceContextHash, isNull);
+        }
+      });
+
+      test(
+        'multi-day weekly reschedule still routes to rescheduleWeek',
+        () async {
+          final state = await primedAppStateWithProfile();
+          final context = const AgentContextBuilder().build(state);
+          final response = await client.sendMessage(
+            message: '这周练太密了，把训练安排到周三和周六',
+            context: context,
+            history: const [],
+          );
+
+          expect(response.intent, AgentIntent.rescheduleWeek);
+          expect(
+            response.actions.map((a) => a.type),
+            isNot(contains(AgentActionType.moveWorkoutSession)),
+          );
+        },
+      );
+    });
   });
 }
+
+WorkoutPlan _seedMovePlan() => WorkoutPlan(
+  id: 'move_seed',
+  name: 'Move Seed',
+  goal: FitnessGoal.buildMuscle,
+  split: TrainingSplit.upperLower,
+  weeklyFrequency: 1,
+  days: [
+    WorkoutDay(
+      dayOfWeek: 1,
+      dayType: WorkoutDayType.upper,
+      exercises: [
+        PlannedExercise(
+          exerciseId: 'bench',
+          exerciseName: 'Bench',
+          targetSets: 3,
+          targetReps: 8,
+          restSeconds: 90,
+        ),
+      ],
+    ),
+    for (var d = 2; d <= 7; d++)
+      WorkoutDay(dayOfWeek: d, dayType: WorkoutDayType.rest),
+  ],
+);
