@@ -451,6 +451,65 @@ def _complete_profile() -> dict:
     }
 
 
+def _generate_plan_action() -> dict:
+    return _mutation_action("generatePlan", {"usePreviewPlan": True})
+
+
+def test_generate_plan_without_trusted_hash_is_dropped_even_with_complete_profile() -> None:
+    action = _generate_plan_action()
+    action["sourceContextHash"] = "fake_llm_hash"
+
+    response = normalize_agent_response(
+        _base_response(
+            action,
+            intent="generatePlan",
+            message="I can generate a training plan.",
+            confidence=0.9,
+        ),
+        user_message="Please generate a beginner plan.",
+        context_hash=None,
+        context_profile=_complete_profile(),
+    )
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert "fake_llm_hash" not in response.model_dump_json()
+
+
+def test_generate_plan_with_trusted_hash_uses_backend_hash_and_recomputed_safety() -> None:
+    action = _generate_plan_action()
+    action["requiresConfirmation"] = False
+    action["riskLevel"] = "low"
+    action["sourceContextHash"] = "fake_llm_hash"
+
+    response = normalize_agent_response(
+        _base_response(action, intent="generatePlan"),
+        user_message="Please generate a beginner plan.",
+        context_hash="trusted_hash",
+        context_profile=_complete_profile(),
+    )
+
+    assert len(response.actions) == 1
+    normalized_action = response.actions[0]
+    assert normalized_action.type == "generatePlan"
+    assert normalized_action.requiresConfirmation is True
+    assert normalized_action.sourceContextHash == "trusted_hash"
+    assert normalized_action.riskLevel == "high"
+    assert "fake_llm_hash" not in response.model_dump_json()
+
+
+def test_generate_plan_with_trusted_hash_still_requires_complete_profile() -> None:
+    response = normalize_agent_response(
+        _base_response(_generate_plan_action(), intent="generatePlan"),
+        user_message="Please generate a beginner plan.",
+        context_hash="trusted_hash",
+        context_profile={"goal": "buildMuscle", "experienceLevel": "beginner"},
+    )
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+
+
 def test_generate_plan_payload_accepts_optional_preferences() -> None:
     raw = _base_response(
         _mutation_action(
