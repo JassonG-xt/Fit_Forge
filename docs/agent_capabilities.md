@@ -59,6 +59,10 @@ Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 
 
 > Source: `lib/agent/models/agent_action.dart` 的 `AgentActionType` 枚举与 `lib/agent/local_agent_action_executor.dart` 的 `_isMutationAction` / `execute` switch。
 
+### Initial generatePlan boundary
+
+Local first-plan generation is supported through Flutter's `LocalAgentActionExecutor` when the user profile is complete. The HTTP / real-provider path still treats `generatePlan` as a mutation action: backend normalization requires a trusted `planContextHash` before the action can reach Flutter, and any LLM-supplied `sourceContextHash` is ignored. When no active plan means no trusted hash is available, initial no-active-plan real-provider generation remains a design follow-up rather than a silently supported production path.
+
 ### Planned / partial support
 
 | Action | Stage | Status |
