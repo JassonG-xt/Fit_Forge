@@ -38,7 +38,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
+import re
 import sys
 import time
 import traceback
@@ -84,6 +86,27 @@ _MUTATION_ACTION_TYPES = frozenset({
 _VALID_OUTCOMES = {"pass", "fail", "gap", "expectedGapConverted", "error", "skipped"}
 
 
+# Transient provider signals. Reporting-only — never alter pass/fail and never
+# trigger retries. Detected from sanitized `agents.llm_provider` log records;
+# raw provider text is not stored.
+@dataclass
+class TransientSignals:
+    requestError: bool = False
+    timeout: bool = False
+    nonJson: bool = False
+    emptyContent: bool = False
+    otherProviderError: bool = False
+
+    def to_dict(self) -> Dict[str, bool]:
+        return {
+            "requestError": self.requestError,
+            "timeout": self.timeout,
+            "nonJson": self.nonJson,
+            "emptyContent": self.emptyContent,
+            "otherProviderError": self.otherProviderError,
+        }
+
+
 @dataclass
 class CaseResult:
     caseId: str
@@ -99,6 +122,7 @@ class CaseResult:
     safetyOk: Optional[bool] = None
     promptInjectionOk: Optional[bool] = None
     failureReason: Optional[str] = None
+    transientSignals: TransientSignals = field(default_factory=TransientSignals)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -115,6 +139,7 @@ class CaseResult:
             "safetyOk": self.safetyOk,
             "promptInjectionOk": self.promptInjectionOk,
             "failureReason": self.failureReason,
+            "transientSignals": self.transientSignals.to_dict(),
         }
 
 
@@ -506,6 +531,61 @@ def _expected_trusted_hash(case: Dict[str, Any]) -> str:
 # ── Runner ──────────────────────────────────────────────────────────
 
 
+# Provider log records are emitted by `agents.llm_provider`. The harness
+# attaches a temporary handler to that logger during each case to derive
+# sanitized transient signals. We never store raw provider text — only the
+# log record message format, which already excludes provider payloads and
+# credentials. See `agent_backend/agents/llm_provider.py` for the emit sites:
+#   - "LLM returned non-JSON output length=%s"   (parse failure)
+#   - "LLM request failed: %s"                   (urllib / TimeoutError)
+#   - "Unexpected LLM error: %s"                 (catch-all)
+_PROVIDER_LOGGER_NAME = "agents.llm_provider"
+_NON_JSON_RE = re.compile(r"non-JSON output length=(\d+)")
+_TIMEOUT_MARKERS = ("timed out", "timeout", "TimeoutError")
+
+
+class _TransientSignalCapture(logging.Handler):
+    """Attached to `agents.llm_provider` for the duration of one case.
+
+    Records sanitized signals — only the log-record message format text is
+    inspected. Raw provider responses, headers, URLs, and credentials never
+    reach this handler because the provider does not log them.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+        self.signals = TransientSignals()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 — defensive; never crash the run
+            return
+
+        non_json_match = _NON_JSON_RE.search(message)
+        if non_json_match:
+            self.signals.nonJson = True
+            try:
+                length = int(non_json_match.group(1))
+            except ValueError:
+                length = -1
+            if length == 0:
+                self.signals.emptyContent = True
+            return
+
+        if "LLM request failed" in message:
+            self.signals.requestError = True
+            if any(marker in message for marker in _TIMEOUT_MARKERS):
+                self.signals.timeout = True
+            else:
+                self.signals.otherProviderError = True
+            return
+
+        if "Unexpected LLM error" in message:
+            self.signals.requestError = True
+            self.signals.otherProviderError = True
+
+
 def _check_real_env() -> Optional[str]:
     """Return None if env is configured for a real run, else a short error."""
     missing = [
@@ -547,6 +627,14 @@ def _run_one_case(
         env_overlay.setdefault("LLM_API_KEY", "dry-run-fake")
         env_overlay.setdefault("LLM_MODEL", "dry-run-fake-model")
 
+    capture = _TransientSignalCapture()
+    provider_logger = logging.getLogger(_PROVIDER_LOGGER_NAME)
+    saved_level = provider_logger.level
+    provider_logger.addHandler(capture)
+    # Ensure WARNING-level records (non-JSON, request failed) reach the handler
+    # even if some outer configuration raised the logger's level above WARNING.
+    if saved_level == logging.NOTSET or saved_level > logging.WARNING:
+        provider_logger.setLevel(logging.WARNING)
     try:
         with patch.dict(os.environ, env_overlay):
             if dry_run:
@@ -559,7 +647,9 @@ def _run_one_case(
             else:
                 response = run_coach_agent(request)
     except Exception as exc:  # noqa: BLE001 — eval must not crash on bad output
-        return CaseResult(
+        provider_logger.removeHandler(capture)
+        provider_logger.setLevel(saved_level)
+        result = CaseResult(
             caseId=case["id"],
             category=case.get("category", "unknown"),
             status=case.get("status", "unknown"),
@@ -568,8 +658,15 @@ def _run_one_case(
             expectedActionType=case.get("expected", {}).get("actionType"),
             failureReason=f"{type(exc).__name__}: {exc}"[:500],
         )
+        result.transientSignals = capture.signals
+        return result
+    else:
+        provider_logger.removeHandler(capture)
+        provider_logger.setLevel(saved_level)
 
-    return _evaluate_response(case, response)
+    result = _evaluate_response(case, response)
+    result.transientSignals = capture.signals
+    return result
 
 
 def run_eval(
@@ -611,6 +708,26 @@ def run_eval(
         "skipped": sum(1 for r in results if r.outcome == "skipped"),
     }
 
+    # Reporting-only transient signal totals derived from per-case captures.
+    # These counts never alter pass/fail and never trigger retries.
+    transient_signals_summary = {
+        "requestErrorCount": sum(
+            1 for r in results if r.transientSignals.requestError
+        ),
+        "timeoutCount": sum(
+            1 for r in results if r.transientSignals.timeout
+        ),
+        "nonJsonCount": sum(
+            1 for r in results if r.transientSignals.nonJson
+        ),
+        "emptyContentCount": sum(
+            1 for r in results if r.transientSignals.emptyContent
+        ),
+        "otherProviderErrorCount": sum(
+            1 for r in results if r.transientSignals.otherProviderError
+        ),
+    }
+
     return {
         "runId": run_id,
         "createdAt": datetime.now(timezone.utc).isoformat(),
@@ -619,6 +736,7 @@ def run_eval(
         "mode": "dry-run" if dry_run else "real",
         "durationSeconds": round(time.time() - started, 3),
         "summary": summary,
+        "transientSignals": transient_signals_summary,
         "results": [r.to_dict() for r in results],
     }
 
@@ -666,6 +784,27 @@ def write_markdown_report(report: Dict[str, Any], path: Path) -> None:
         f"- errors: {summary['errors']}",
         f"- skipped: {summary['skipped']}",
         "",
+    ]
+
+    # Reporting-only transient signals — never affect pass/fail.
+    transient = report.get("transientSignals") or {}
+    if transient:
+        lines += [
+            "## Transient provider signals",
+            "",
+            "Reporting-only — these counts do not alter pass/fail and do not "
+            "trigger retries.",
+            "",
+            f"- requestErrorCount: {transient.get('requestErrorCount', 0)}",
+            f"- timeoutCount: {transient.get('timeoutCount', 0)}",
+            f"- nonJsonCount: {transient.get('nonJsonCount', 0)}",
+            f"- emptyContentCount: {transient.get('emptyContentCount', 0)}",
+            f"- otherProviderErrorCount: "
+            f"{transient.get('otherProviderErrorCount', 0)}",
+            "",
+        ]
+
+    lines += [
         "## By category",
         "",
         "| category | pass | fail | gap | converted | error | skipped |",

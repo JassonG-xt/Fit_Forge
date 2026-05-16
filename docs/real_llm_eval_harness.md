@@ -238,6 +238,85 @@ message asks for fat loss), the LLM may return a clarification instead of a
 plan action, making the eval result uninformative about the model's actual
 capability.
 
+## Transient provider signal metadata
+
+Real-provider runs occasionally surface transient transport / parsing issues
+that are absorbed by the provider's safety fallback path but that operators
+still want to be aware of (e.g. the timeout + non-JSON event noted in the
+`moveWorkoutSession` Stage 3-6B smoke). The harness now records sanitized
+counts in the JSON report so future scorecards can quote structured
+metadata instead of stderr notes.
+
+### What is recorded
+
+Top-level summary block:
+
+```json
+{
+  "transientSignals": {
+    "requestErrorCount": 0,
+    "timeoutCount": 0,
+    "nonJsonCount": 0,
+    "emptyContentCount": 0,
+    "otherProviderErrorCount": 0
+  }
+}
+```
+
+Per case, each `results[].transientSignals` block carries:
+
+```json
+{
+  "requestError": false,
+  "timeout": false,
+  "nonJson": false,
+  "emptyContent": false,
+  "otherProviderError": false
+}
+```
+
+The optional Markdown report adds a short *Transient provider signals*
+section under the summary header with the same counts.
+
+### How signals are derived
+
+Signals are derived from the `agents.llm_provider` logger records emitted
+during each case:
+
+| Log message format                           | Signal                                              |
+|----------------------------------------------|-----------------------------------------------------|
+| `LLM returned non-JSON output length=<N>`    | `nonJson=true`; `emptyContent=true` when `N == 0`   |
+| `LLM request failed: ...`                    | `requestError=true`; `timeout=true` when the formatted text contains `timed out`/`timeout`/`TimeoutError`, else `otherProviderError=true` |
+| `Unexpected LLM error: ...`                  | `requestError=true`, `otherProviderError=true`      |
+
+Detection is text-based on the log record format, which already excludes
+raw provider responses, headers, URLs, and credentials. The harness never
+stores the original LLM body or stack traces alongside this metadata.
+
+### What it does NOT do
+
+- It does **not** retry failed provider calls. The provider still returns
+  a safety fallback response on failure; the eval still records the case
+  outcome from that response.
+- It does **not** change pass/fail semantics. A case whose provider call
+  timed out can still be `pass`, `fail`, `gap`, or `error` according to
+  the same boundary checks as before — the transient flags only annotate.
+- It does **not** make real-provider runs a CI gate. The harness remains
+  manual and observational.
+- It does **not** suppress the existing stderr log lines. Operators who
+  prefer to read stderr still see the same warnings; the JSON metadata is
+  additive.
+- It does **not** expose credentials, base URLs, model names, or raw
+  provider bodies — only sanitized counts and booleans.
+
+### Using it in scorecards
+
+When summarizing a manual smoke run, prefer quoting the JSON
+`transientSignals` block over excerpting stderr. The counts let a
+scorecard say *"run 1 saw 1 timeout and 1 non-JSON response, run 2 saw
+none"* without leaking transport-level detail. Treat any non-zero count
+as a diagnostic signal to investigate, not as a pass/fail change.
+
 ## Reading the report
 
 ### Outcome categories
