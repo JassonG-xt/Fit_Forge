@@ -455,3 +455,76 @@ def test_real_provider_does_not_inject_when_trusted_hash_missing(mock_call_llm) 
     response = run_real_coach_agent(request)
     assert response.intent == "answerOnly"
     assert response.actions == []
+
+
+# ── Stage 3-6A: real-provider path drops malformed moveWorkoutSession ──
+
+
+@patch.dict(os.environ, _REAL_ENV)
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_move_workout_session_missing_from_day_falls_back(
+    mock_call_llm,
+) -> None:
+    """A moveWorkoutSession payload missing fromDayOfWeek must be dropped by
+    output validation, with the real provider falling back to answerOnly.
+    Asserts the end-to-end behavior, not just the schema layer.
+    """
+    mock_call_llm.return_value = json.dumps({
+        "message": "好的。",
+        "intent": "moveWorkoutSession",
+        "confidence": 0.85,
+        "actions": [
+            {
+                "id": "move_missing_from",
+                "type": "moveWorkoutSession",
+                "title": "move",
+                "summary": "move summary",
+                "requiresConfirmation": True,
+                "riskLevel": "medium",
+                "payload": {"toDayOfWeek": 3},
+            }
+        ],
+        "safety": {"hasMedicalConcern": False, "shouldStopWorkout": False},
+    })
+    request = AgentRequest(
+        message="把周一训练挪到周三",
+        context=_trusted_context(),
+    )
+    response = run_real_coach_agent(request)
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+
+
+@patch.dict(os.environ, _REAL_ENV)
+@patch("agents.llm_provider._call_llm")
+def test_real_provider_move_workout_session_same_day_falls_back(
+    mock_call_llm,
+) -> None:
+    """A moveWorkoutSession payload with fromDayOfWeek == toDayOfWeek must be
+    dropped by output validation (a same-day move is meaningless), with the
+    real provider falling back to answerOnly.
+    """
+    mock_call_llm.return_value = json.dumps({
+        "message": "好的。",
+        "intent": "moveWorkoutSession",
+        "confidence": 0.85,
+        "actions": [
+            {
+                "id": "move_same_day",
+                "type": "moveWorkoutSession",
+                "title": "move",
+                "summary": "move summary",
+                "requiresConfirmation": True,
+                "riskLevel": "medium",
+                "payload": {"fromDayOfWeek": 3, "toDayOfWeek": 3},
+            }
+        ],
+        "safety": {"hasMedicalConcern": False, "shouldStopWorkout": False},
+    })
+    request = AgentRequest(
+        message="把周三训练挪到周三",
+        context=_trusted_context(),
+    )
+    response = run_real_coach_agent(request)
+    assert response.intent == "answerOnly"
+    assert response.actions == []

@@ -158,6 +158,23 @@ LLM_TIMEOUT_SECONDS=90 \
 Real-provider runs remain manual; they are not a per-PR CI gate, not a
 provider-promotion signal, and not production-readiness evidence.
 
+#### Future: moveWorkoutSession smoke
+
+Stage 3-6A added real-provider prompt support for `moveWorkoutSession` (see `coach_agent_system.md`) and Stage 3-5 added eval cases for it. The next manual smoke for this action should target the existing case IDs via `--case-list` rather than a one-off JSON, e.g.:
+
+```bash
+# pseudocode — fill creds via env vars; never commit them
+.venv/bin/python -m evals.run_real_llm_eval \
+  --case-list move_workout_session_weekday_to_weekday_zh_001,move_workout_session_reason_weekday_to_weekday_zh_002,move_workout_session_vague_request_no_mutation_zh_003,move_workout_session_today_tomorrow_no_mutation_zh_004,safety_over_move_workout_session_zh_005 \
+  --only-status active \
+  --provider "<provider>" \
+  --model "<model>" \
+  --out evals/results/move_workout_session_smoke.json \
+  --markdown-out evals/results/move_workout_session_smoke.md
+```
+
+Raw output paths stay gitignored. A scorecard would only land after manual cross-run verification; this section does NOT claim real-provider readiness, scorecard evidence, or CI integration.
+
 ### All flags
 
 | Flag | Description |
