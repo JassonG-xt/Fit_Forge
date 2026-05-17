@@ -30,8 +30,12 @@ from evals.run_real_llm_eval import (
     _check_real_env,
     _evaluate_response,
     _expected_trusted_hash,
+    _has_markdown_wrapper,
     _run_one_case,
     _trusted_context,
+    _validate_base_url_shape,
+    _validate_model_shape,
+    _validate_real_provider_env,
     filter_cases,
     load_cases,
     main,
@@ -298,6 +302,245 @@ def test_main_without_dry_run_and_missing_env_returns_2(
     assert code == 2
     err = capsys.readouterr().err
     assert "Missing required environment variables" in err
+
+
+# ── Provider config preflight (Stage 4-6) ──
+#
+# Fake values used here (never the real provider's values):
+#   base URL: https://example.invalid/v1
+#   model:    fake-model
+#   key:      fake-key
+# example.invalid is reserved by RFC 6761; no real DNS resolves it.
+
+_VALID_BASE_URL = "https://example.invalid/v1"
+_VALID_MODEL = "fake-model"
+_VALID_KEY = "fake-key"
+
+
+def _set_valid_provider_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_BASE_URL", _VALID_BASE_URL)
+    monkeypatch.setenv("LLM_API_KEY", _VALID_KEY)
+    monkeypatch.setenv("LLM_MODEL", _VALID_MODEL)
+
+
+def test_has_markdown_wrapper_detects_backticks() -> None:
+    assert _has_markdown_wrapper("`https://example.invalid/v1`")
+    assert _has_markdown_wrapper("`https://example.invalid/v1")
+    assert _has_markdown_wrapper("https://example.invalid/v1`")
+
+
+def test_has_markdown_wrapper_detects_quotes() -> None:
+    assert _has_markdown_wrapper('"https://example.invalid/v1"')
+    assert _has_markdown_wrapper("'fake-model'")
+
+
+def test_has_markdown_wrapper_passes_clean_value() -> None:
+    assert not _has_markdown_wrapper("https://example.invalid/v1")
+    assert not _has_markdown_wrapper("fake-model")
+    assert not _has_markdown_wrapper("")
+
+
+def test_validate_base_url_shape_accepts_valid_https() -> None:
+    assert _validate_base_url_shape("https://example.invalid/v1") is None
+
+
+def test_validate_base_url_shape_accepts_valid_http() -> None:
+    assert _validate_base_url_shape("http://localhost:8080") is None
+
+
+def test_validate_base_url_shape_rejects_backtick_wrapper() -> None:
+    err = _validate_base_url_shape("`https://example.invalid/v1`")
+    assert err is not None
+    assert "Markdown" in err or "wrapper" in err
+    # Sanitization: error must not echo the raw value back.
+    assert "example.invalid" not in err
+
+
+def test_validate_base_url_shape_rejects_missing_scheme() -> None:
+    err = _validate_base_url_shape("example.invalid/v1")
+    assert err is not None
+    assert "scheme" in err
+    assert "example.invalid" not in err
+
+
+def test_validate_base_url_shape_rejects_non_http_scheme() -> None:
+    err = _validate_base_url_shape("ftp://example.invalid/v1")
+    assert err is not None
+    assert "scheme" in err
+    assert "example.invalid" not in err
+
+
+def test_validate_base_url_shape_rejects_missing_host() -> None:
+    err = _validate_base_url_shape("https:///v1")
+    assert err is not None
+    assert "host" in err
+
+
+def test_validate_base_url_shape_rejects_edge_whitespace() -> None:
+    err = _validate_base_url_shape(" https://example.invalid/v1 ")
+    assert err is not None
+    assert "whitespace" in err or "control" in err
+    assert "example.invalid" not in err
+
+
+def test_validate_model_shape_accepts_valid_model() -> None:
+    assert _validate_model_shape("fake-model") is None
+
+
+def test_validate_model_shape_rejects_backtick_wrapper() -> None:
+    err = _validate_model_shape("`fake-model`")
+    assert err is not None
+    assert "Markdown" in err or "wrapper" in err
+    assert "fake-model" not in err
+
+
+def test_validate_model_shape_rejects_empty_after_strip() -> None:
+    err = _validate_model_shape("   ")
+    assert err is not None
+    # Edge-whitespace check fires first for whitespace-only strings.
+    assert "whitespace" in err or "empty" in err
+
+
+def test_validate_real_provider_env_passes_on_valid_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_valid_provider_env(monkeypatch)
+    assert _validate_real_provider_env() is None
+
+
+def test_validate_real_provider_env_rejects_backtick_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_valid_provider_env(monkeypatch)
+    monkeypatch.setenv("LLM_BASE_URL", "`https://example.invalid/v1`")
+    err = _validate_real_provider_env()
+    assert err is not None
+    assert err.startswith("Provider configuration error: ")
+    assert "LLM_BASE_URL" in err
+    assert "example.invalid" not in err
+
+
+def test_validate_real_provider_env_rejects_backtick_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_valid_provider_env(monkeypatch)
+    monkeypatch.setenv("LLM_MODEL", "`fake-model`")
+    err = _validate_real_provider_env()
+    assert err is not None
+    assert err.startswith("Provider configuration error: ")
+    assert "LLM_MODEL" in err
+    assert "fake-model" not in err
+
+
+def test_validate_real_provider_env_rejects_whitespace_only_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_valid_provider_env(monkeypatch)
+    monkeypatch.setenv("LLM_API_KEY", "   ")
+    err = _validate_real_provider_env()
+    assert err is not None
+    assert err.startswith("Provider configuration error: ")
+    assert "LLM_API_KEY" in err
+    # Never echo the raw key, even when it's "just whitespace".
+    assert "   " not in err.replace("LLM_API_KEY", "").replace("Provider configuration error: ", "")
+
+
+def test_validate_real_provider_env_never_includes_raw_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-trip every documented failure mode and confirm the error string
+    never contains the raw env value the user set."""
+    raw_url = "`https://secret-host.example.invalid/private-path`"
+    raw_model = "`super-secret-model-name`"
+    raw_key = "tp-not-a-real-key-but-looks-sensitive"
+    monkeypatch.setenv("LLM_BASE_URL", raw_url)
+    monkeypatch.setenv("LLM_API_KEY", raw_key)
+    monkeypatch.setenv("LLM_MODEL", raw_model)
+    err = _validate_real_provider_env()
+    assert err is not None
+    assert raw_url not in err
+    assert raw_model not in err
+    assert raw_key not in err
+    assert "secret-host" not in err
+    assert "super-secret-model-name" not in err
+    assert "tp-not-a-real-key-but-looks-sensitive" not in err
+
+
+def test_main_real_run_with_backtick_base_url_returns_2_and_does_not_call_provider(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _set_valid_provider_env(monkeypatch)
+    monkeypatch.setenv("LLM_BASE_URL", "`https://example.invalid/v1`")
+
+    # Sentinel: preflight failure must short-circuit before any provider
+    # plumbing is touched. If `_run_one_case` is reached, the test fails.
+    with patch(
+        "evals.run_real_llm_eval._run_one_case",
+        side_effect=AssertionError("preflight leaked into _run_one_case"),
+    ):
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=AssertionError("preflight leaked into urlopen"),
+        ):
+            code = main(["--limit", "1"])
+
+    assert code == 2
+    err_text = capsys.readouterr().err
+    assert "Provider configuration error" in err_text
+    assert "LLM_BASE_URL" in err_text
+    assert "example.invalid" not in err_text
+
+
+def test_main_real_run_with_missing_scheme_returns_2(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _set_valid_provider_env(monkeypatch)
+    monkeypatch.setenv("LLM_BASE_URL", "example.invalid/v1")
+    with patch(
+        "evals.run_real_llm_eval._run_one_case",
+        side_effect=AssertionError("preflight leaked into _run_one_case"),
+    ):
+        code = main(["--limit", "1"])
+    assert code == 2
+    err_text = capsys.readouterr().err
+    assert "Provider configuration error" in err_text
+    assert "scheme" in err_text
+
+
+def test_main_real_run_with_backtick_model_returns_2(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _set_valid_provider_env(monkeypatch)
+    monkeypatch.setenv("LLM_MODEL", "`fake-model`")
+    with patch(
+        "evals.run_real_llm_eval._run_one_case",
+        side_effect=AssertionError("preflight leaked into _run_one_case"),
+    ):
+        code = main(["--limit", "1"])
+    assert code == 2
+    err_text = capsys.readouterr().err
+    assert "Provider configuration error" in err_text
+    assert "LLM_MODEL" in err_text
+
+
+def test_main_dry_run_bypasses_preflight(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Dry-run must not run the preflight: the harness injects fake env values
+    via `env_overlay` inside `_run_one_case` and never makes a real call."""
+    # Set deliberately-broken values: backticks everywhere. Preflight, if it
+    # ran, would reject these. Dry-run must skip it entirely.
+    monkeypatch.setenv("LLM_BASE_URL", "`https://example.invalid/v1`")
+    monkeypatch.setenv("LLM_API_KEY", "`fake-key`")
+    monkeypatch.setenv("LLM_MODEL", "`fake-model`")
+    out_path = tmp_path / "report.json"
+    code = main([
+        "--dry-run",
+        "--limit", "1",
+        "--out", str(out_path),
+    ])
+    assert code == 0
+    assert out_path.exists()
 
 
 # ── dry-run isolation ──

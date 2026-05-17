@@ -60,6 +60,56 @@ it exits non-zero with a clear message — it does **not** crash silently.
 timeout. It has no effect on mock mode, the Flutter client, or CI (CI does
 not run real LLM calls).
 
+### Real-provider config preflight
+
+In addition to the presence check above, the harness performs a sanitized
+**shape preflight** on `LLM_BASE_URL` and `LLM_MODEL` before any real
+provider call. The preflight runs only in real-provider mode — `--dry-run`
+skips it entirely, because dry-run injects fake env values internally and
+never talks to the network.
+
+The preflight rejects, with `exit 2` and a sanitized error message on
+stderr:
+
+- `LLM_BASE_URL` or `LLM_MODEL` wrapped in Markdown / quote characters
+  (leading or trailing `` ` ``, `'`, or `"`) — common artifact of a config
+  parser that reads a Markdown-formatted local config and fails to strip
+  the wrappers.
+- `LLM_BASE_URL` or `LLM_MODEL` with leading/trailing whitespace or any
+  Unicode control characters.
+- `LLM_BASE_URL` whose scheme is not `http` or `https`, or that has no
+  host component.
+- `LLM_MODEL` that is empty after trimming whitespace.
+- `LLM_API_KEY` that is whitespace-only (presence is checked separately;
+  the key is never inspected for Markdown wrappers and is never echoed in
+  any error message).
+
+Error messages name the variable and the failure category only — they
+never include the raw value of `LLM_BASE_URL`, `LLM_MODEL`, or
+`LLM_API_KEY`. The preflight does not silently sanitize values; a
+malformed local launcher is expected to fail loudly so future scorecards
+stay auditable.
+
+Motivation: a Stage 4-5 local diagnostic found that a previous smoke run's
+`providerErrorKinds.network = 4` signal was caused by a local launcher that
+parsed env values from a Markdown-formatted local config and did not strip
+Markdown backticks; the backtick-contaminated values then caused
+`urllib.URLError` at request construction, which the Stage 4-3 classifier
+correctly bucketed as `network` — but the surface symptom looked
+indistinguishable from an unreachable endpoint. This preflight catches
+that class of mistake before any provider call is attempted, so future
+runs cannot produce the same false-positive `network` signal.
+
+Non-claims:
+
+- This preflight is **not** a provider readiness claim, **not** a credential
+  validity claim, and **not** a network reachability claim.
+- It does **not** add retries.
+- It does **not** change pass/fail / gap / error / skipped semantics for
+  cases that do run.
+- It does **not** change CI policy; real-provider evals remain manual and
+  outside per-PR CI.
+
 ## Running
 
 ```bash

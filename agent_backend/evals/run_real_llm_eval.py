@@ -44,12 +44,14 @@ import re
 import sys
 import time
 import traceback
+import unicodedata
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 
 # ── Layout ──────────────────────────────────────────────────────────
@@ -661,6 +663,130 @@ def _check_real_env() -> Optional[str]:
     return None
 
 
+# ── Real-provider config preflight (Stage 4-6) ──────────────────────
+#
+# Shape-validate provider env values BEFORE any real provider call. Motivated
+# by the Stage 4-5 diagnostic, where a local smoke launcher passed Markdown-
+# wrapped values (leading/trailing backticks from a Markdown-formatted local
+# config) into the subprocess environment; `urllib` then raised `URLError`
+# at request construction time, which the Stage 4-3 classifier (correctly)
+# bucketed as `network`. That false-positive `network` signal made the
+# scorecard ambiguous about whether the provider endpoint was actually
+# unreachable.
+#
+# Properties of this preflight:
+#   - Runs only in real-provider mode (gated on `not args.dry_run`).
+#   - Never prints or returns the raw value of LLM_BASE_URL, LLM_MODEL,
+#     or LLM_API_KEY. Error strings name the variable and the failure
+#     category only.
+#   - Fails fast with exit 2 (matches existing config-error convention
+#     for missing-env / unknown-case-id / missing-cases-file).
+#   - Does NOT silently sanitize the values — a broken launcher should
+#     fail loudly so the scorecard stays auditable.
+#   - Does NOT add retries, does NOT change pass/fail semantics, does
+#     NOT change CI policy.
+
+_WRAPPER_CHARS = ("`", "'", '"')
+
+
+def _has_markdown_wrapper(value: str) -> bool:
+    """True if `value` starts or ends with a Markdown / quote wrapper char.
+
+    Catches the Stage 4-5 root cause (leading/trailing backticks from a
+    Markdown-formatted local config) plus the closely-related single/double
+    quote wrappers, which are also common artifacts of shell / Markdown
+    config parsing.
+    """
+    if not value:
+        return False
+    return value.startswith(_WRAPPER_CHARS) or value.endswith(_WRAPPER_CHARS)
+
+
+def _has_edge_whitespace_or_control(value: str) -> bool:
+    """True if `value` has edge whitespace or any Unicode control character.
+
+    Edge whitespace and embedded `Cc` / `Cf` characters are not legitimate in
+    a base URL or model identifier and almost always indicate a config
+    extraction bug rather than user intent.
+    """
+    if not value:
+        return False
+    if value != value.strip():
+        return True
+    return any(unicodedata.category(ch) in ("Cc", "Cf") for ch in value)
+
+
+def _validate_base_url_shape(value: str) -> Optional[str]:
+    """Validate `LLM_BASE_URL`. Returns sanitized error or None."""
+    if _has_markdown_wrapper(value):
+        return (
+            "LLM_BASE_URL appears to contain Markdown or quote wrapper "
+            "characters (e.g. leading or trailing backticks)"
+        )
+    if _has_edge_whitespace_or_control(value):
+        return (
+            "LLM_BASE_URL contains leading/trailing whitespace or control "
+            "characters"
+        )
+    try:
+        parsed = urlparse(value)
+    except Exception:  # noqa: BLE001 — defensive; urlparse rarely raises
+        return "LLM_BASE_URL is not a parseable URL"
+    if parsed.scheme not in ("http", "https"):
+        return "LLM_BASE_URL must use an http or https scheme"
+    if not parsed.hostname:
+        return "LLM_BASE_URL is missing a host component"
+    return None
+
+
+def _validate_model_shape(value: str) -> Optional[str]:
+    """Validate `LLM_MODEL`. Returns sanitized error or None."""
+    if _has_markdown_wrapper(value):
+        return (
+            "LLM_MODEL appears to contain Markdown or quote wrapper "
+            "characters (e.g. leading or trailing backticks)"
+        )
+    if _has_edge_whitespace_or_control(value):
+        return (
+            "LLM_MODEL contains leading/trailing whitespace or control "
+            "characters"
+        )
+    if not value.strip():
+        return "LLM_MODEL is empty after trimming whitespace"
+    return None
+
+
+def _validate_real_provider_env() -> Optional[str]:
+    """Shape-validate provider env values. Presence is checked separately.
+
+    Returns a sanitized error string ready for stderr, or None when all
+    values pass. Never includes the raw value of any variable in the
+    returned error. Callers are expected to have already verified presence
+    via `_check_real_env()`.
+    """
+    base_url = os.environ.get("LLM_BASE_URL", "")
+    model = os.environ.get("LLM_MODEL", "")
+    api_key = os.environ.get("LLM_API_KEY", "")
+
+    err = _validate_base_url_shape(base_url)
+    if err:
+        return f"Provider configuration error: {err}"
+
+    err = _validate_model_shape(model)
+    if err:
+        return f"Provider configuration error: {err}"
+
+    # LLM_API_KEY: presence is checked by `_check_real_env`; we only catch
+    # the "set to whitespace" edge case here. We intentionally do NOT inspect
+    # the key for Markdown wrappers — silent sanitizing of credentials is a
+    # bad pattern (the launcher should be fixed instead), and surfacing
+    # specifics about a key value risks leaking it.
+    if not api_key.strip():
+        return "Provider configuration error: LLM_API_KEY is empty after trimming whitespace"
+
+    return None
+
+
 def _run_one_case(
     case: Dict[str, Any],
     *,
@@ -985,6 +1111,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         env_err = _check_real_env()
         if env_err:
             print(f"error: {env_err}", file=sys.stderr)
+            return 2
+        shape_err = _validate_real_provider_env()
+        if shape_err:
+            print(f"error: {shape_err}", file=sys.stderr)
             return 2
 
     requested_case_ids: List[str] = list(args.case_id or [])
