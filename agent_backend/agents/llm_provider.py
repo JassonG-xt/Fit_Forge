@@ -284,6 +284,35 @@ def _active_plan_present_from_request(request: AgentRequest) -> Optional[bool]:
     return None
 
 
+def _classify_provider_exception(
+    exc: BaseException,
+) -> tuple[str, Optional[int]]:
+    """Map a provider-side exception to a sanitized (kind, http_status) pair.
+
+    Used only for sanitized diagnostic logging — never stored as raw text.
+    The mapping reads stdlib exception types and `HTTPError.code` (an int);
+    response bodies, headers, URLs, and credentials are never inspected.
+
+    Returns a tuple of (kind, http_status). `http_status` is None when the
+    exception does not carry one.
+    """
+    # HTTPError is a subclass of URLError — check it first.
+    if isinstance(exc, urllib.error.HTTPError):
+        code = getattr(exc, "code", None)
+        if code in (401, 403):
+            return "auth", code
+        if code == 429:
+            return "rateLimit", code
+        if code == 402:
+            return "quota", code
+        return "http", code
+    if isinstance(exc, TimeoutError):
+        return "timeout", None
+    if isinstance(exc, urllib.error.URLError):
+        return "network", None
+    return "unknown", None
+
+
 def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
     """Real LLM-backed coach agent entry point.
 
@@ -309,10 +338,28 @@ def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
         messages = _build_messages(request)
         raw = _call_llm(messages, base_url, api_key, model)
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
-        logger.error("LLM request failed: %s", exc)
+        kind, http_status = _classify_provider_exception(exc)
+        logger.error(
+            "LLM request failed: %s",
+            exc,
+            extra={
+                "providerErrorKind": kind,
+                "httpStatus": http_status,
+                "exceptionClass": exc.__class__.__name__,
+            },
+        )
         return _safety_fallback_response(request.message)
     except Exception as exc:
-        logger.error("Unexpected LLM error: %s", exc)
+        kind, http_status = _classify_provider_exception(exc)
+        logger.error(
+            "Unexpected LLM error: %s",
+            exc,
+            extra={
+                "providerErrorKind": kind,
+                "httpStatus": http_status,
+                "exceptionClass": exc.__class__.__name__,
+            },
+        )
         return _safety_fallback_response(request.message)
 
     response = _parse_agent_response(

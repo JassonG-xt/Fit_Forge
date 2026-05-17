@@ -924,6 +924,7 @@ def test_transient_signals_do_not_change_pass_fail_semantics() -> None:
         "nonJson": False,
         "emptyContent": False,
         "otherProviderError": False,
+        "providerErrorKind": None,
     }
 
 
@@ -1016,3 +1017,232 @@ def test_transient_capture_handler_is_removed_after_case() -> None:
     assert after == before, (
         "transient capture handler leaked onto agents.llm_provider logger"
     )
+
+
+# ── Stage 4-3: sanitized provider error classification ──
+
+
+def _http_error(code: int, msg: str = "fake") -> "urllib.error.HTTPError":
+    """Build a stdlib HTTPError with no response body. The url, msg, and code
+    are sanitized fixtures; nothing from the real provider is referenced."""
+    import urllib.error
+    return urllib.error.HTTPError(
+        url="http://fake-host",
+        code=code,
+        msg=msg,
+        hdrs=None,  # type: ignore[arg-type]
+        fp=None,
+    )
+
+
+def _run_one_case_with_provider_error(
+    monkeypatch: pytest.MonkeyPatch,
+    exc: BaseException,
+) -> "CaseResult":
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    with patch("agents.llm_provider._call_llm", side_effect=exc):
+        return _run_one_case(case, dry_run=False)
+
+
+def test_provider_error_kind_auth_401(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP 401 → providerErrorKind=auth, requestError + otherProviderError."""
+    result = _run_one_case_with_provider_error(monkeypatch, _http_error(401))
+    ts = result.transientSignals
+    assert ts.providerErrorKind == "auth"
+    assert ts.requestError is True
+    assert ts.otherProviderError is True
+    assert ts.timeout is False
+
+
+def test_provider_error_kind_auth_403(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP 403 → providerErrorKind=auth (same bucket as 401)."""
+    result = _run_one_case_with_provider_error(monkeypatch, _http_error(403))
+    assert result.transientSignals.providerErrorKind == "auth"
+
+
+def test_provider_error_kind_rate_limit_429(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HTTP 429 → providerErrorKind=rateLimit."""
+    result = _run_one_case_with_provider_error(monkeypatch, _http_error(429))
+    ts = result.transientSignals
+    assert ts.providerErrorKind == "rateLimit"
+    assert ts.requestError is True
+
+
+def test_provider_error_kind_quota_402(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP 402 → providerErrorKind=quota (rare but standard)."""
+    result = _run_one_case_with_provider_error(monkeypatch, _http_error(402))
+    assert result.transientSignals.providerErrorKind == "quota"
+
+
+def test_provider_error_kind_http_500(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP 500 → providerErrorKind=http (generic server error bucket)."""
+    result = _run_one_case_with_provider_error(monkeypatch, _http_error(500))
+    assert result.transientSignals.providerErrorKind == "http"
+
+
+def test_provider_error_kind_network_urlerror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """URLError (no HTTP status) → providerErrorKind=network."""
+    import urllib.error
+    result = _run_one_case_with_provider_error(
+        monkeypatch, urllib.error.URLError("connection refused")
+    )
+    ts = result.transientSignals
+    assert ts.providerErrorKind == "network"
+    assert ts.requestError is True
+    assert ts.otherProviderError is True
+    assert ts.timeout is False
+
+
+def test_provider_error_kind_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TimeoutError → providerErrorKind=timeout, timeout flag also true."""
+    result = _run_one_case_with_provider_error(
+        monkeypatch, TimeoutError("The read operation timed out")
+    )
+    ts = result.transientSignals
+    assert ts.providerErrorKind == "timeout"
+    assert ts.timeout is True
+    assert ts.requestError is True
+    assert ts.otherProviderError is False
+
+
+def test_provider_error_kind_unknown_catch_all(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A generic Exception reaching the catch-all → providerErrorKind=unknown."""
+    result = _run_one_case_with_provider_error(
+        monkeypatch, RuntimeError("something else went wrong")
+    )
+    ts = result.transientSignals
+    assert ts.providerErrorKind == "unknown"
+    assert ts.requestError is True
+    assert ts.otherProviderError is True
+
+
+def test_provider_error_kind_non_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-JSON response → providerErrorKind=nonJson (not requestError)."""
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    garbage = "not json {{ broken response from provider" * 5
+    with patch("agents.llm_provider._call_llm", return_value=garbage):
+        result = _run_one_case(case, dry_run=False)
+    ts = result.transientSignals
+    assert ts.providerErrorKind == "nonJson"
+    assert ts.nonJson is True
+    assert ts.emptyContent is False
+    assert ts.requestError is False
+
+
+def test_provider_error_kind_empty_content(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Empty response → providerErrorKind=emptyContent (also sets nonJson)."""
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    with patch("agents.llm_provider._call_llm", return_value=""):
+        result = _run_one_case(case, dry_run=False)
+    ts = result.transientSignals
+    assert ts.providerErrorKind == "emptyContent"
+    assert ts.emptyContent is True
+    assert ts.nonJson is True
+
+
+def test_per_case_provider_error_kind_in_json_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each case's transientSignals block includes providerErrorKind."""
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    with patch("agents.llm_provider._call_llm", side_effect=_http_error(401)):
+        report = run_eval(
+            cases=[case], dry_run=False, model=None, provider="x"
+        )
+    assert len(report["results"]) == 1
+    ts_dict = report["results"][0]["transientSignals"]
+    assert "providerErrorKind" in ts_dict
+    assert ts_dict["providerErrorKind"] == "auth"
+
+
+def test_top_level_provider_error_kinds_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Top-level transientSignals carries providerErrorKinds with all keys."""
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    with patch("agents.llm_provider._call_llm", side_effect=_http_error(429)):
+        report = run_eval(
+            cases=[case], dry_run=False, model=None, provider="x"
+        )
+    kinds = report["transientSignals"]["providerErrorKinds"]
+    expected = {
+        "auth", "quota", "rateLimit", "http", "network",
+        "timeout", "nonJson", "emptyContent", "unknown",
+    }
+    assert set(kinds.keys()) == expected
+    assert kinds["rateLimit"] == 1
+    assert kinds["auth"] == 0
+    assert kinds["timeout"] == 0
+
+
+def test_provider_error_kind_does_not_store_raw_exception_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The harness must never store raw provider error text in any field."""
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    secret_marker = "SECRET-RAW-PROVIDER-BODY-MUST-NOT-LEAK"
+    exc = RuntimeError(secret_marker)
+    with patch("agents.llm_provider._call_llm", side_effect=exc):
+        result = _run_one_case(case, dry_run=False)
+    # The classification fields are sanitized — only categories live there.
+    ts_dict = result.transientSignals.to_dict()
+    serialized = json.dumps(ts_dict)
+    assert secret_marker not in serialized, (
+        "raw exception text leaked into transientSignals serialization"
+    )
+    # `failureReason` is allowed to carry sanitized failure summaries from
+    # boundary checks, but should not include the raw exception text since
+    # the provider safety-fallback path returns answerOnly (no exception
+    # bubbles up to the harness's outer try/except in this scenario).
+    assert result.failureReason is None or secret_marker not in result.failureReason
+
+
+def test_classification_does_not_change_pass_fail_semantics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A classified provider error must not alter the case's pass/fail
+    outcome — semantics are still computed from the expected boundaries."""
+    _real_env(monkeypatch)
+    case = _benign_compress_case()
+    # Provider returns 401. Provider falls back to answerOnly (no actions);
+    # the case expected compressWorkout, so outcome should be 'fail' — exactly
+    # as it would have been before classification was added.
+    with patch("agents.llm_provider._call_llm", side_effect=_http_error(401)):
+        result = _run_one_case(case, dry_run=False)
+    assert result.outcome == "fail"
+    # And the kind is correctly recorded as a side-channel diagnostic.
+    assert result.transientSignals.providerErrorKind == "auth"
+
+
+def test_classifier_helper_directly() -> None:
+    """Direct unit test for _classify_provider_exception."""
+    import urllib.error
+    from agents.llm_provider import _classify_provider_exception
+
+    assert _classify_provider_exception(_http_error(401)) == ("auth", 401)
+    assert _classify_provider_exception(_http_error(403)) == ("auth", 403)
+    assert _classify_provider_exception(_http_error(402)) == ("quota", 402)
+    assert _classify_provider_exception(_http_error(429)) == ("rateLimit", 429)
+    assert _classify_provider_exception(_http_error(500)) == ("http", 500)
+    assert _classify_provider_exception(_http_error(503)) == ("http", 503)
+    assert _classify_provider_exception(
+        urllib.error.URLError("x")
+    ) == ("network", None)
+    assert _classify_provider_exception(TimeoutError("x")) == ("timeout", None)
+    assert _classify_provider_exception(RuntimeError("x")) == ("unknown", None)

@@ -89,6 +89,32 @@ _VALID_OUTCOMES = {"pass", "fail", "gap", "expectedGapConverted", "error", "skip
 # Transient provider signals. Reporting-only — never alter pass/fail and never
 # trigger retries. Detected from sanitized `agents.llm_provider` log records;
 # raw provider text is not stored.
+#
+# `providerErrorKind` is a sanitized classification of the underlying failure.
+# Values come from a closed set so future scorecards can aggregate cleanly:
+#   - auth          (HTTP 401 / 403)
+#   - quota         (HTTP 402)
+#   - rateLimit     (HTTP 429)
+#   - http          (any other HTTPError status — server-side error)
+#   - network       (URLError that is not an HTTPError)
+#   - timeout       (TimeoutError / socket.timeout)
+#   - nonJson       (provider returned non-JSON content with non-zero length)
+#   - emptyContent  (provider returned an empty body, also classified as nonJson)
+#   - unknown       (any other Exception reaching the provider catch-all)
+# It is None when the case produced no provider error.
+_PROVIDER_ERROR_KINDS = (
+    "auth",
+    "quota",
+    "rateLimit",
+    "http",
+    "network",
+    "timeout",
+    "nonJson",
+    "emptyContent",
+    "unknown",
+)
+
+
 @dataclass
 class TransientSignals:
     requestError: bool = False
@@ -96,14 +122,16 @@ class TransientSignals:
     nonJson: bool = False
     emptyContent: bool = False
     otherProviderError: bool = False
+    providerErrorKind: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, bool]:
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "requestError": self.requestError,
             "timeout": self.timeout,
             "nonJson": self.nonJson,
             "emptyContent": self.emptyContent,
             "otherProviderError": self.otherProviderError,
+            "providerErrorKind": self.providerErrorKind,
         }
 
 
@@ -547,20 +575,37 @@ _TIMEOUT_MARKERS = ("timed out", "timeout", "TimeoutError")
 class _TransientSignalCapture(logging.Handler):
     """Attached to `agents.llm_provider` for the duration of one case.
 
-    Records sanitized signals — only the log-record message format text is
-    inspected. Raw provider responses, headers, URLs, and credentials never
-    reach this handler because the provider does not log them.
+    Records sanitized signals — only the log-record message format text and
+    structured `extra=` fields are inspected. Raw provider responses, headers,
+    URLs, and credentials never reach this handler because the provider does
+    not log them.
     """
 
     def __init__(self) -> None:
         super().__init__(level=logging.WARNING)
         self.signals = TransientSignals()
 
+    def _record_kind(self, kind: str) -> None:
+        """Set providerErrorKind, preferring the first kind seen per case.
+
+        We don't override an already-set kind because each case is expected to
+        produce at most one provider error; if multiple records arrive, the
+        first one is the most informative (later ones may be downstream
+        fallout from the original failure).
+        """
+        if self.signals.providerErrorKind is None and kind in _PROVIDER_ERROR_KINDS:
+            self.signals.providerErrorKind = kind
+
     def emit(self, record: logging.LogRecord) -> None:
         try:
             message = record.getMessage()
         except Exception:  # noqa: BLE001 — defensive; never crash the run
             return
+
+        # Stage 4-3: prefer structured `extra={"providerErrorKind": ...}` over
+        # text matching when the provider attached one. The provider only sets
+        # this for request-failure / catch-all branches, not for parse failures.
+        structured_kind = getattr(record, "providerErrorKind", None)
 
         non_json_match = _NON_JSON_RE.search(message)
         if non_json_match:
@@ -571,19 +616,34 @@ class _TransientSignalCapture(logging.Handler):
                 length = -1
             if length == 0:
                 self.signals.emptyContent = True
+                self._record_kind("emptyContent")
+            else:
+                self._record_kind("nonJson")
             return
 
         if "LLM request failed" in message:
             self.signals.requestError = True
-            if any(marker in message for marker in _TIMEOUT_MARKERS):
-                self.signals.timeout = True
+            if structured_kind:
+                self._record_kind(structured_kind)
+                if structured_kind == "timeout":
+                    self.signals.timeout = True
+                else:
+                    self.signals.otherProviderError = True
             else:
-                self.signals.otherProviderError = True
+                # Backward-compat text fallback: used when older provider code
+                # logs without the structured extra (or when tests bypass it).
+                if any(marker in message for marker in _TIMEOUT_MARKERS):
+                    self.signals.timeout = True
+                    self._record_kind("timeout")
+                else:
+                    self.signals.otherProviderError = True
+                    self._record_kind("unknown")
             return
 
         if "Unexpected LLM error" in message:
             self.signals.requestError = True
             self.signals.otherProviderError = True
+            self._record_kind(structured_kind or "unknown")
 
 
 def _check_real_env() -> Optional[str]:
@@ -726,6 +786,17 @@ def run_eval(
         "otherProviderErrorCount": sum(
             1 for r in results if r.transientSignals.otherProviderError
         ),
+        # Sanitized provider error classification (Stage 4-3). Each kind
+        # counts cases whose per-case providerErrorKind equals that kind.
+        # The categories are stdlib exception types plus HTTP status buckets;
+        # raw exception messages and response bodies are never aggregated.
+        "providerErrorKinds": {
+            kind: sum(
+                1 for r in results
+                if r.transientSignals.providerErrorKind == kind
+            )
+            for kind in _PROVIDER_ERROR_KINDS
+        },
     }
 
     return {
@@ -801,8 +872,18 @@ def write_markdown_report(report: Dict[str, Any], path: Path) -> None:
             f"- emptyContentCount: {transient.get('emptyContentCount', 0)}",
             f"- otherProviderErrorCount: "
             f"{transient.get('otherProviderErrorCount', 0)}",
-            "",
         ]
+        kinds = transient.get("providerErrorKinds") or {}
+        nonzero_kinds = {k: v for k, v in kinds.items() if v}
+        if nonzero_kinds:
+            lines.append("")
+            lines.append(
+                "Provider error kinds (sanitized — categories only, no raw "
+                "exception text):"
+            )
+            for kind, count in nonzero_kinds.items():
+                lines.append(f"- {kind}: {count}")
+        lines.append("")
 
     lines += [
         "## By category",
