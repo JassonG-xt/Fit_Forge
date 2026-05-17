@@ -126,6 +126,25 @@ Concrete follow-ups before any further real-provider claim:
 
 The runtime agent code, prompts, eval contract, and harness logic are not implicated by this scorecard. No code change is recommended on the basis of this run.
 
+## Addendum: local network diagnostic
+
+A later local diagnostic checked DNS / TCP / TLS / HTTP reachability to the configured-provider endpoint from the same WSL smoke host used for run 1 and run 2 above. DNS resolution, TCP reachability, TLS handshake, and HTTP reachability were each confirmed during that diagnostic. HTTP reachability was specifically confirmed by observing a 4xx response when the endpoint was probed without an `Authorization` header — the 4xx status class proves the request reached the provider and the provider returned an HTTP response, not that credentials were validated. Reachability was confirmed from this local host during the diagnostic; this is not a production-grade health claim.
+
+Given that reachability result, the prior `providerErrorKinds.network = 4` signal in runs 1 and 2 above is now understood as an artifact of a local transient launcher, not as evidence that the provider endpoint itself was unreachable. The chain was:
+
+- the smoke launcher read provider env values from a Markdown-formatted local config (an ignored, untracked, local-only memory/config file);
+- the parser used to extract those values from that Markdown-formatted local config did not strip Markdown backticks;
+- backtick-contaminated values were passed into the harness subprocess environment;
+- `urllib` then raised `URLError` while constructing the request — before any provider HTTP status code could come back;
+- the Stage 4-3 classifier correctly bucketed that as `providerErrorKind = network`, because `urllib.error.URLError` is exactly the stdlib type the `network` category is defined against.
+
+Two clarifications follow from this:
+
+- The Stage 4-3 classifier is not implicated. It saw a real `URLError` and classified it into the only category that matches. That is the intended behavior of a reporting-only stdlib-type classifier; it cannot distinguish a transport-layer network failure from a local request-construction failure that also surfaces as `URLError`, and it was never claimed to.
+- This scorecard remains diagnostically useful. The runs above demonstrate end-to-end that the classifier can take a previously opaque `otherProviderErrorCount = 4` signal and resolve it into a concrete category that a later diagnostic can chase down without code-level changes — which is exactly what happened.
+
+The original Stage 4-4 run results stand unchanged (3/5 pass + 2/5 fail, identical per-case outcomes across runs 1 and 2). They remain **diagnostic evidence about the smoke pipeline**, not provider-promotion evidence and not LLM-level prompt-adherence evidence. The two vague / today-to-tomorrow cases still passed only because empty actions trivially satisfy `noMutationAction`; the two explicit-move boundary failures still hold as boundary failures. The Decision above is unchanged: **do not promote provider**, provider remains **experimental**, and no further smoke was run on the basis of this diagnostic.
+
 ## Caveats
 
 - Not production readiness.
