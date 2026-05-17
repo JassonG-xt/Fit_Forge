@@ -317,6 +317,125 @@ scorecard say *"run 1 saw 1 timeout and 1 non-JSON response, run 2 saw
 none"* without leaking transport-level detail. Treat any non-zero count
 as a diagnostic signal to investigate, not as a pass/fail change.
 
+## Provider error classification
+
+Stage 4-3 added sanitized provider-error classification on top of the
+Stage 4-1 transient counts. The motivation is operational: when
+`otherProviderErrorCount` is non-zero, the operator wants to know
+*which* kind of provider error fired (auth vs rate-limit vs network
+vs catch-all unknown) so the follow-up investigation has a starting
+point.
+
+### Categories
+
+Each case carries a single sanitized `providerErrorKind` (or `null`
+when the case produced no provider error). Values are drawn from a
+closed set:
+
+| Kind           | Triggered by                                                   |
+|----------------|----------------------------------------------------------------|
+| `auth`         | `urllib.error.HTTPError` with status `401` or `403`            |
+| `quota`        | `urllib.error.HTTPError` with status `402`                     |
+| `rateLimit`    | `urllib.error.HTTPError` with status `429`                     |
+| `http`         | Any other `urllib.error.HTTPError` status (typically `5xx`)    |
+| `network`      | `urllib.error.URLError` that is not an `HTTPError` subclass    |
+| `timeout`      | `TimeoutError` / `socket.timeout` raised by the urllib call    |
+| `nonJson`      | Parse failure with a non-empty response body                   |
+| `emptyContent` | Parse failure with an empty response body (subset of `nonJson`)|
+| `unknown`      | Any other `Exception` reaching the provider catch-all branch   |
+
+`http` is the catch-all bucket for HTTP responses that are neither
+auth-related (`401` / `403`), neither quota (`402`), nor rate-limit
+(`429`). `5xx` server errors fall here; `4xx` client errors that aren't
+classified above fall here too.
+
+### Report shape
+
+Top-level summary, per JSON report:
+
+```json
+{
+  "transientSignals": {
+    "requestErrorCount": 0,
+    "timeoutCount": 0,
+    "nonJsonCount": 0,
+    "emptyContentCount": 0,
+    "otherProviderErrorCount": 0,
+    "providerErrorKinds": {
+      "auth": 0,
+      "quota": 0,
+      "rateLimit": 0,
+      "http": 0,
+      "network": 0,
+      "timeout": 0,
+      "nonJson": 0,
+      "emptyContent": 0,
+      "unknown": 0
+    }
+  }
+}
+```
+
+Per case, the existing `transientSignals` block gains
+`providerErrorKind`:
+
+```json
+{
+  "transientSignals": {
+    "requestError": false,
+    "timeout": false,
+    "nonJson": false,
+    "emptyContent": false,
+    "otherProviderError": false,
+    "providerErrorKind": null
+  }
+}
+```
+
+The optional Markdown report surfaces the non-zero kinds inline under
+the transient-signals section.
+
+### How it stays sanitized
+
+The provider (`agent_backend/agents/llm_provider.py`) classifies the
+exception at catch time using stdlib types and `HTTPError.code` (an
+integer). The structured classification is attached to the log record
+via `extra={"providerErrorKind": ..., "httpStatus": ...,
+"exceptionClass": ...}`. The harness handler reads these
+attributes via `getattr` and never inspects the full exception text.
+Response bodies, URLs, headers, and credentials are never recorded.
+
+If a future provider edit logs an error without the structured `extra`,
+the harness falls back to its pre-Stage-4-3 text path: it still
+classifies `timeout` from the message text and otherwise records the
+event as `unknown`. So older logs degrade gracefully rather than crash.
+
+### What it does NOT do
+
+- It does **not** retry on any kind. `auth` / `rateLimit` are
+  particularly tempting candidates for an automatic backoff loop;
+  Stage 4-3 deliberately does not add that. Retry would mask provider
+  instability from the eval signal, and the harness's whole point is
+  to surface that signal.
+- It does **not** alter pass/fail / gap / error / skipped outcomes.
+  A case whose provider call returned `auth` still has its outcome
+  determined by the same boundary checks as before.
+- It does **not** make real-provider runs a CI gate.
+- It does **not** record raw exception text. Tests pin this invariant
+  (`test_provider_error_kind_does_not_store_raw_exception_text`).
+- It does **not** record URLs, headers, response bodies, or credentials.
+- It does **not** add new failure modes — the categories describe
+  failures the provider was already producing.
+
+### Using it in scorecards
+
+When the previous scorecard reported `otherProviderErrorCount=4`, the
+operator could not tell whether that was auth, rate-limit, or
+something else without re-reading stderr or repeating the run. With
+classification, the same situation now reports e.g.
+`providerErrorKinds = {auth: 4, rateLimit: 0, ...}` directly in the
+JSON, and the scorecard can quote that.
+
 ## Reading the report
 
 ### Outcome categories
