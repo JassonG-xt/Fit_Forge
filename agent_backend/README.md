@@ -26,8 +26,9 @@ User message
 | `FITFORGE_AGENT_ORCHESTRATOR` | `native`, `langgraph` | `native` |
 
 `native` uses the existing FitForge mock/real provider behavior. `langgraph`
-is optional and experimental; it is currently a safe placeholder and does not
-make LangGraph a required dependency. Unknown values fall back to `native`.
+is optional and experimental; when the optional dependency is installed, it
+builds a minimal LangGraph wrapper around the native provider. Unknown values
+fall back to `native`.
 
 `FITFORGE_AGENT_MODE` is unchanged inside the native provider and still
 defaults to `mock`.
@@ -36,6 +37,34 @@ All providers must return the existing `AgentResponse` / `AgentAction`
 contract. No provider, including a future LangGraph adapter, may directly
 mutate plans or bypass deterministic validation, user confirmation,
 `sourceContextHash` protection, or `LocalAgentActionExecutor`.
+
+To try the experimental LangGraph wrapper:
+
+```bash
+cd agent_backend
+pip install -r requirements.txt
+pip install -r requirements-agent-optional.txt
+export FITFORGE_AGENT_ORCHESTRATOR=langgraph
+export FITFORGE_AGENT_MODE=mock
+uvicorn main:app --reload --port 8000
+```
+
+Windows PowerShell:
+
+```powershell
+cd agent_backend
+pip install -r requirements.txt
+pip install -r requirements-agent-optional.txt
+$env:FITFORGE_AGENT_ORCHESTRATOR="langgraph"
+$env:FITFORGE_AGENT_MODE="mock"
+uvicorn main:app --reload --port 8000
+```
+
+If LangGraph is not installed, `FITFORGE_AGENT_ORCHESTRATOR=langgraph`
+returns a safe `answerOnly` response instead of crashing the FastAPI service.
+This is not a full migration to LangGraph; the graph currently delegates to
+the native provider and returns the same `AgentResponse` schema.
+
 ## Current implementation status
 
 | Capability | Status |

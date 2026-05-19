@@ -1,0 +1,3 @@
+# Optional dependencies for experimental Coach Agent orchestration modes.
+# Normal backend CI and native mode do not install or require these packages.
+langgraph
