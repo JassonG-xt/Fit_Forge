@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_radius.dart';
+import '../../theme/app_shadows.dart';
 import '../../widgets/brand/glow_button.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -342,26 +344,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: height,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary.withValues(alpha: 0.12)
-              : (isDark ? AppColors.bgElevated : AppColors.bgBaseLight),
-          borderRadius: AppRadius.brMd,
-          border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
-            width: isSelected ? 2 : 0.5,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadius.brMd,
+        child: Container(
+          height: height,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.primary.withValues(alpha: isDark ? 0.16 : 0.10)
+                : (isDark ? AppColors.bgElevated : AppColors.bgElevatedLight),
+            borderRadius: AppRadius.brMd,
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.primary.withValues(alpha: 0.85)
+                  : (isDark ? AppColors.border : AppColors.borderLight),
+              width: isSelected ? 1.4 : 0.6,
+            ),
+            boxShadow: isSelected || isDark ? null : AppShadows.cardElevation,
           ),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? AppColors.primary : null,
+          child: Text(
+            text,
+            style: GoogleFonts.notoSansSc(
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected
+                  ? AppColors.primary
+                  : (isDark
+                        ? AppColors.textPrimary
+                        : AppColors.textPrimaryLight),
+            ),
           ),
         ),
       ),

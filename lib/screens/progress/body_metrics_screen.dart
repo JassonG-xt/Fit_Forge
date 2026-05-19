@@ -7,6 +7,7 @@ import '../../services/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_radius.dart';
+import '../../widgets/brand/brand_empty_state.dart';
 import '../../widgets/cards/section_card.dart';
 
 class BodyMetricsScreen extends StatefulWidget {
@@ -109,14 +110,11 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
         .toList();
 
     if (points.isEmpty) {
-      return SectionCard(
-        padding: const EdgeInsets.symmetric(
-          vertical: AppSpacing.xxl,
-          horizontal: AppSpacing.md,
-        ),
-        child: Center(
-          child: Text('暂无数据，请先记录', style: theme.textTheme.bodySmall),
-        ),
+      return const BrandEmptyState(
+        icon: Icons.show_chart_rounded,
+        title: '暂无数据，请先记录',
+        description: '点击右上角加号添加体重、体脂、围度等指标。',
+        accent: AppColors.accent,
       );
     }
 

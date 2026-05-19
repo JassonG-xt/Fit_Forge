@@ -201,7 +201,7 @@ class MealPlanScreen extends StatelessWidget {
             const Divider(height: AppSpacing.lg),
             ...meal.foods.map(
               (f) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
                 child: Row(
                   children: [
                     Expanded(
