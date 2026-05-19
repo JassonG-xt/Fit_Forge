@@ -44,4 +44,27 @@ class AppShadows {
       offset: const Offset(0, 8),
     ),
   ];
+
+  /// Hero 浮起阴影：浅色用，比 cardElevation 更柔更宽，撑住大面板。
+  static List<BoxShadow> heroElevation = [
+    BoxShadow(
+      color: const Color(0xFF0E5A3F).withValues(alpha: 0.10),
+      blurRadius: 30,
+      offset: const Offset(0, 14),
+    ),
+    BoxShadow(
+      color: AppColors.primary.withValues(alpha: 0.06),
+      blurRadius: 60,
+      offset: const Offset(0, 22),
+    ),
+  ];
+
+  /// Mission（今日训练）头条阴影：让主 CTA 区域"浮"出来。
+  static List<BoxShadow> missionElevation = [
+    BoxShadow(
+      color: AppColors.primary.withValues(alpha: 0.22),
+      blurRadius: 24,
+      offset: const Offset(0, 12),
+    ),
+  ];
 }
