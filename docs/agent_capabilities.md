@@ -17,6 +17,28 @@ FitForge Coach Agent 是一个 **user-confirmed agentic coaching MVP**：
 
 LLM / backend 永不直接修改 `AppState`。
 
+
+## Orchestration Adapter
+
+FitForge's core architecture remains a provider-agnostic structured-action
+agent. The backend now selects a `CoachAgentProvider` through
+`FITFORGE_AGENT_ORCHESTRATOR`:
+
+| Value | Behavior |
+|---|---|
+| `native` | Default. Uses the existing mock/real FitForge provider behavior. |
+| `langgraph` | Optional experimental placeholder for future LangGraph orchestration. |
+
+This is not a full LangGraph migration. LangGraph is not a mandatory
+dependency, and normal backend tests must pass without it installed. If the
+experimental adapter is selected but unavailable, the backend returns a valid
+`answerOnly` response instead of crashing.
+
+All providers must return the existing `AgentResponse` / `AgentAction`
+contract. A provider cannot directly mutate plans, skip the Flutter preview,
+bypass user confirmation, trust model-generated `sourceContextHash`, or write
+state outside `LocalAgentActionExecutor`. Deterministic validation, safety
+guards, source-context protection, and user confirmation remain the authority.
 ## Supported modes
 
 Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 端选择 provider。

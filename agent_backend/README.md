@@ -2,6 +2,40 @@
 
 FastAPI 服务，负责接收 Flutter 客户端的自然语言请求并返回结构化的 `AgentResponse`。
 
+
+## Orchestration boundary
+
+FitForge remains a structured-action agent system:
+
+```text
+User message
+-> backend Coach Agent provider
+-> AgentResponse
+-> structured AgentAction
+-> deterministic validation / safety checks
+-> Flutter preview
+-> user confirmation
+-> LocalAgentActionExecutor
+-> AppState mutation
+```
+
+`FITFORGE_AGENT_ORCHESTRATOR` selects the backend orchestration boundary:
+
+| Variable | Values | Default |
+|---|---|---|
+| `FITFORGE_AGENT_ORCHESTRATOR` | `native`, `langgraph` | `native` |
+
+`native` uses the existing FitForge mock/real provider behavior. `langgraph`
+is optional and experimental; it is currently a safe placeholder and does not
+make LangGraph a required dependency. Unknown values fall back to `native`.
+
+`FITFORGE_AGENT_MODE` is unchanged inside the native provider and still
+defaults to `mock`.
+
+All providers must return the existing `AgentResponse` / `AgentAction`
+contract. No provider, including a future LangGraph adapter, may directly
+mutate plans or bypass deterministic validation, user confirmation,
+`sourceContextHash` protection, or `LocalAgentActionExecutor`.
 ## Current implementation status
 
 | Capability | Status |
