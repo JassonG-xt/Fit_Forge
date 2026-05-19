@@ -5,8 +5,9 @@ import '../../services/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_radius.dart';
-import '../../widgets/brand/stat_number.dart';
 import '../../widgets/brand/heat_strip.dart';
+import '../../widgets/brand/metric_tile.dart';
+import '../../widgets/brand/nav_card.dart';
 import '../../widgets/cards/section_card.dart';
 import 'body_metrics_screen.dart';
 import 'calendar_screen.dart';
@@ -22,71 +23,88 @@ class ProgressTabScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('进度追踪')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: AppSpacing.sm),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1080),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenH),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: AppSpacing.sm),
 
-            // ─── 本月总览 ───
-            _monthlySummary(context, state),
-            const SizedBox(height: AppSpacing.lg),
+                // ─── 本月总览 ───
+                _monthlySummary(context, state),
+                const SizedBox(height: AppSpacing.lg),
 
-            // ─── 体重趋势图 ───
-            _weightTrendCard(context, state),
-            const SizedBox(height: AppSpacing.lg),
+                // ─── 体重趋势图 ───
+                _weightTrendCard(context, state),
+                const SizedBox(height: AppSpacing.lg),
 
-            // ─── 本周热图 ───
-            _weekHeatSection(context, state),
-            const SizedBox(height: AppSpacing.lg),
+                // ─── 本周热图 ───
+                _weekHeatSection(context, state),
+                const SizedBox(height: AppSpacing.lg),
 
-            // ─── 最近训练 ───
-            _recentWorkouts(context, state),
-            const SizedBox(height: AppSpacing.lg),
+                // ─── 最近训练 ───
+                _recentWorkouts(context, state),
+                const SizedBox(height: AppSpacing.lg),
 
-            // ─── 成就精选 ───
-            _achievementHighlights(context, state),
-            const SizedBox(height: AppSpacing.lg),
+                // ─── 成就精选 ───
+                _achievementHighlights(context, state),
+                const SizedBox(height: AppSpacing.lg),
 
-            // ─── 导航入口 ───
-            Text('详细数据', style: theme.textTheme.titleSmall),
-            const SizedBox(height: AppSpacing.sm),
-            _navCard(
-              context,
-              '身体数据',
-              '记录体重、体脂、围度变化',
-              Icons.show_chart,
-              AppColors.arms,
-              const BodyMetricsScreen(),
+                // ─── 导航入口 ───
+                Text('详细数据', style: theme.textTheme.titleSmall),
+                const SizedBox(height: AppSpacing.sm),
+                NavCard(
+                  title: '身体数据',
+                  subtitle: '记录体重、体脂、围度变化',
+                  icon: Icons.show_chart,
+                  color: AppColors.arms,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const BodyMetricsScreen(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.cardGap),
+                NavCard(
+                  title: '训练日历',
+                  subtitle: '查看训练历史和安排',
+                  icon: Icons.calendar_month,
+                  color: AppColors.back,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const CalendarScreen(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.cardGap),
+                NavCard(
+                  title: '全部成就',
+                  subtitle: '你的健身里程碑',
+                  icon: Icons.emoji_events,
+                  color: AppColors.primary,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AchievementsScreen(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
             ),
-            const SizedBox(height: AppSpacing.cardGap),
-            _navCard(
-              context,
-              '训练日历',
-              '查看训练历史和安排',
-              Icons.calendar_month,
-              AppColors.back,
-              const CalendarScreen(),
-            ),
-            const SizedBox(height: AppSpacing.cardGap),
-            _navCard(
-              context,
-              '全部成就',
-              '你的健身里程碑',
-              Icons.emoji_events,
-              AppColors.primary,
-              const AchievementsScreen(),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-          ],
+          ),
         ),
       ),
     );
   }
 
   // ════════════════════════════════════════════
-  //  本月总览
+  //  本月总览 —— 复用 MetricTile，与首页 dashboard 视觉一致
   // ════════════════════════════════════════════
   Widget _monthlySummary(BuildContext context, AppState state) {
     final now = DateTime.now();
@@ -101,40 +119,53 @@ class ProgressTabScreen extends StatelessWidget {
           s.exerciseRecords.fold<double>(0, (rs, r) => rs + r.totalVolume),
     );
 
-    return Row(
-      children: [
-        Expanded(
-          child: SectionCard(
-            child: StatNumber(
-              value: '$totalWorkouts',
-              label: '本月训练',
-              fontSize: 28,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.cardGap),
-        Expanded(
-          child: SectionCard(
-            child: StatNumber(
-              value: '${totalVolume ~/ 1000}',
-              label: '总容量(吨)',
-              fontSize: 28,
-              valueColor: AppColors.accent,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.cardGap),
-        Expanded(
-          child: SectionCard(
-            child: StatNumber(
-              value: '${state.streakDays}',
-              label: '连续天数',
-              fontSize: 28,
-              valueColor: AppColors.warning,
-            ),
-          ),
-        ),
-      ],
+    final tiles = <Widget>[
+      MetricTile(
+        icon: Icons.fitness_center_rounded,
+        value: '$totalWorkouts',
+        label: '本月训练',
+        unit: '次',
+        accentColor: AppColors.primary,
+      ),
+      MetricTile(
+        icon: Icons.scale_outlined,
+        value: '${totalVolume ~/ 1000}',
+        label: '总容量',
+        unit: '吨',
+        accentColor: AppColors.accent,
+      ),
+      MetricTile(
+        icon: Icons.local_fire_department_outlined,
+        value: '${state.streakDays}',
+        label: '连续天数',
+        unit: '天',
+        accentColor: AppColors.warning,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 420) {
+          return Column(
+            children: [
+              for (var i = 0; i < tiles.length; i++) ...[
+                SizedBox(width: double.infinity, child: tiles[i]),
+                if (i != tiles.length - 1)
+                  const SizedBox(height: AppSpacing.cardGap),
+              ],
+            ],
+          );
+        }
+        return Row(
+          children: [
+            for (var i = 0; i < tiles.length; i++) ...[
+              Expanded(child: tiles[i]),
+              if (i != tiles.length - 1)
+                const SizedBox(width: AppSpacing.cardGap),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -435,49 +466,6 @@ class ProgressTabScreen extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  // ════════════════════════════════════════════
-  //  导航卡片
-  // ════════════════════════════════════════════
-  Widget _navCard(
-    BuildContext ctx,
-    String title,
-    String subtitle,
-    IconData icon,
-    Color color,
-    Widget screen,
-  ) {
-    final theme = Theme.of(ctx);
-    return SectionCard(
-      padding: EdgeInsets.zero,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.xs,
-        ),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.15),
-            borderRadius: AppRadius.brMd,
-          ),
-          child: Icon(icon, color: color, size: 20),
-        ),
-        title: Text(title, style: theme.textTheme.titleSmall),
-        subtitle: Text(subtitle, style: theme.textTheme.bodySmall),
-        trailing: const Icon(
-          Icons.chevron_right,
-          color: AppColors.textTertiary,
-          size: 20,
-        ),
-        onTap: () => Navigator.push(
-          ctx,
-          MaterialPageRoute<void>(builder: (_) => screen),
-        ),
-      ),
     );
   }
 }

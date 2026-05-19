@@ -3,8 +3,9 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/app_state.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_spacing.dart';
 import '../../theme/app_radius.dart';
+import '../../theme/app_shadows.dart';
+import '../../theme/app_spacing.dart';
 import '../../widgets/brand/progress_ring.dart';
 
 class AchievementsScreen extends StatelessWidget {
@@ -15,40 +16,55 @@ class AchievementsScreen extends StatelessWidget {
     final achievements = context.watch<AppState>().achievements;
     return Scaffold(
       appBar: AppBar(title: const Text('成就')),
-      body: GridView.count(
-        crossAxisCount: 2,
-        padding: const EdgeInsets.all(AppSpacing.screenH),
-        mainAxisSpacing: AppSpacing.cardGap,
-        crossAxisSpacing: AppSpacing.cardGap,
-        childAspectRatio: 0.85,
-        children: achievements.map((a) => _card(context, a)).toList(),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 920),
+          child: GridView.count(
+            crossAxisCount: 2,
+            padding: const EdgeInsets.all(AppSpacing.screenH),
+            mainAxisSpacing: AppSpacing.cardGap,
+            crossAxisSpacing: AppSpacing.cardGap,
+            childAspectRatio: 0.85,
+            children: achievements.map((a) => _Card(achievement: a)).toList(),
+          ),
+        ),
       ),
     );
   }
+}
 
-  Widget _card(BuildContext context, Achievement achievement) {
+class _Card extends StatelessWidget {
+  const _Card({required this.achievement});
+  final Achievement achievement;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isUnlocked = achievement.isUnlocked;
 
+    // Unlocked 用 accent 强调（accent + accent glow）；
+    // Locked 走 SectionCard 同款边框/阴影，让两态在视觉重量上有差异但不脱节。
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color: AppColors.bgElevated,
+        color: isDark ? AppColors.bgElevated : AppColors.bgElevatedLight,
         borderRadius: AppRadius.brLg,
         border: Border.all(
           color: isUnlocked
               ? AppColors.accent.withValues(alpha: 0.5)
-              : AppColors.border,
+              : (isDark ? AppColors.border : AppColors.borderLight),
           width: isUnlocked ? 1.5 : 0.5,
         ),
         boxShadow: isUnlocked
             ? [
                 BoxShadow(
-                  color: AppColors.accent.withValues(alpha: 0.15),
+                  color: AppColors.accent.withValues(alpha: 0.18),
                   blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
               ]
-            : null,
+            : (isDark ? null : AppShadows.cardElevation),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

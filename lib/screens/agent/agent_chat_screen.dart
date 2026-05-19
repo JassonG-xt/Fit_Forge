@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../agent/agent_event_log.dart';
@@ -8,12 +9,15 @@ import '../../agent/models/agent_action.dart';
 import '../../agent/models/agent_message.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_radius.dart';
+import '../../theme/app_shadows.dart';
 import '../../theme/app_spacing.dart';
 import 'agent_action_card.dart';
 import 'agent_message_bubble.dart';
 import 'agent_privacy_banner.dart';
 import 'agent_safety_banner.dart';
 import 'suggested_prompt_bar.dart';
+import 'widgets/coach_avatar.dart';
+import 'widgets/coach_thinking_dots.dart';
 
 const _suggestedPrompts = <String>[
   '帮我总结这周训练',
@@ -71,18 +75,11 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final runtime = context.watch<AgentRuntime>();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('FitForge Coach'),
-        actions: [
-          IconButton(
-            tooltip: '隐私和安全提示',
-            icon: const Icon(Icons.privacy_tip_outlined),
-            onPressed: () => _showPrivacyDialog(context, runtime),
-          ),
-        ],
+      appBar: _CoachAppBar(
+        runtime: runtime,
+        onShowPrivacy: () => _showPrivacyDialog(context, runtime),
       ),
       body: Consumer<AgentService>(
         builder: (context, service, _) {
@@ -117,7 +114,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
                 ),
               Expanded(
                 child: messages.isEmpty
-                    ? _EmptyState(theme: theme)
+                    ? const _EmptyState()
                     : ListView.builder(
                         controller: _scroll,
                         padding: const EdgeInsets.symmetric(
@@ -136,11 +133,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
                         },
                       ),
               ),
-              if (service.isSending)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                  child: _ThinkingIndicator(),
-                ),
+              if (service.isSending) const CoachThinkingDots(),
               const Divider(height: 1),
               const SizedBox(height: AppSpacing.sm),
               SuggestedPromptBar(
@@ -205,6 +198,93 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
   }
 }
 
+// ════════════════════════════════════════════
+//  AppBar —— Coach 头像 + 标题 + 模式徽章 + 隐私入口
+// ════════════════════════════════════════════
+class _CoachAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const _CoachAppBar({required this.runtime, required this.onShowPrivacy});
+
+  final AgentRuntime runtime;
+  final VoidCallback onShowPrivacy;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final isHttp = runtime.isHttp;
+    final modeAccent = isHttp ? AppColors.accent : AppColors.primary;
+
+    return AppBar(
+      titleSpacing: AppSpacing.screenH,
+      title: Row(
+        children: [
+          const CoachAvatar(size: 36),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'FitForge Coach',
+                  style: GoogleFonts.manrope(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: isDark
+                        ? AppColors.textPrimary
+                        : AppColors.textPrimaryLight,
+                    height: 1.1,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: modeAccent,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: modeAccent.withValues(alpha: 0.5),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isHttp ? 'AI 教练 · 在线' : 'AI 教练 · 本地',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: isDark
+                            ? AppColors.textTertiary
+                            : AppColors.textTertiaryLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        IconButton(
+          tooltip: '隐私和安全提示',
+          icon: const Icon(Icons.privacy_tip_outlined),
+          onPressed: onShowPrivacy,
+        ),
+        const SizedBox(width: AppSpacing.xs),
+      ],
+    );
+  }
+}
+
 class _MessageItem extends StatelessWidget {
   const _MessageItem({
     required this.message,
@@ -236,58 +316,220 @@ class _MessageItem extends StatelessWidget {
   }
 }
 
+// ════════════════════════════════════════════
+//  Empty state —— Coach 能力展示
+// ════════════════════════════════════════════
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.theme});
-  final ThemeData theme;
+  const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.fitness_center,
-              size: 48,
-              color: AppColors.primary.withValues(alpha: 0.6),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text('和你的 FitForge Coach 聊聊', style: theme.textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '可以问训练计划、动作替换、压缩训练，或直接选下面的常用问题。',
-              style: theme.textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
-          ],
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final mutedText = isDark
+        ? AppColors.textSecondary
+        : AppColors.textSecondaryLight;
+
+    final capabilities = <_Capability>[
+      const _Capability(
+        icon: Icons.auto_awesome_rounded,
+        title: '训练计划生成',
+        color: AppColors.primary,
+      ),
+      const _Capability(
+        icon: Icons.swap_horiz_rounded,
+        title: '动作替换',
+        color: AppColors.shoulders,
+      ),
+      const _Capability(
+        icon: Icons.compress_rounded,
+        title: '训练压缩',
+        color: AppColors.cardio,
+      ),
+      const _Capability(
+        icon: Icons.insights_rounded,
+        title: '周训练复盘',
+        color: AppColors.accent,
+      ),
+      const _Capability(
+        icon: Icons.restaurant_rounded,
+        title: '饮食建议',
+        color: AppColors.legs,
+      ),
+      const _Capability(
+        icon: Icons.health_and_safety_rounded,
+        title: '安全提醒',
+        color: AppColors.danger,
+      ),
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screenH,
+        AppSpacing.xl,
+        AppSpacing.screenH,
+        AppSpacing.lg,
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Column(
+                  children: [
+                    const CoachAvatar(size: 80, haloOpacity: 0.28),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'FitForge Coach',
+                      style: GoogleFonts.manrope(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: isDark
+                            ? AppColors.textPrimary
+                            : AppColors.textPrimaryLight,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '和你的 FitForge Coach 聊聊',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: mutedText,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '可以问训练计划、动作替换、压缩训练，或直接选下面的常用问题。',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: mutedText,
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    '能帮你做什么',
+                    style: GoogleFonts.notoSansSc(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? AppColors.textPrimary
+                          : AppColors.textPrimaryLight,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final cols = constraints.maxWidth >= 460 ? 3 : 2;
+                  const gap = AppSpacing.cardGap;
+                  final itemWidth =
+                      (constraints.maxWidth - gap * (cols - 1)) / cols;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: capabilities
+                        .map(
+                          (c) => SizedBox(
+                            width: itemWidth,
+                            child: _CapabilityTile(capability: c),
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _ThinkingIndicator extends StatelessWidget {
-  const _ThinkingIndicator();
+class _Capability {
+  const _Capability({
+    required this.icon,
+    required this.title,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String title;
+  final Color color;
+}
+
+class _CapabilityTile extends StatelessWidget {
+  const _CapabilityTile({required this.capability});
+  final _Capability capability;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        SizedBox(
-          width: 14,
-          height: 14,
-          child: CircularProgressIndicator(strokeWidth: 2),
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.bgElevated : AppColors.bgElevatedLight,
+        borderRadius: AppRadius.brMd,
+        border: Border.all(
+          color: isDark ? AppColors.border : AppColors.borderLight,
+          width: 0.5,
         ),
-        SizedBox(width: AppSpacing.sm),
-        Text('Coach 正在思考…'),
-      ],
+        boxShadow: isDark ? null : AppShadows.cardElevation,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: capability.color.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(capability.icon, color: capability.color, size: 18),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            capability.title,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 }
 
+// ════════════════════════════════════════════
+//  Input bar
+// ════════════════════════════════════════════
 class _InputBar extends StatelessWidget {
   const _InputBar({
     required this.controller,
@@ -301,6 +543,10 @@ class _InputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bg = isDark ? AppColors.bgSurface : AppColors.bgSurfaceLight;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.screenH,
@@ -308,33 +554,101 @@ class _InputBar extends StatelessWidget {
         AppSpacing.screenH,
         AppSpacing.md,
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: controller,
-              minLines: 1,
-              maxLines: 4,
-              enabled: !disabled,
-              textInputAction: TextInputAction.send,
-              decoration: InputDecoration(
-                hintText: '问 FitForge Coach…',
-                border: OutlineInputBorder(borderRadius: AppRadius.brMd),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
+      child: Container(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: AppRadius.brXl,
+          border: Border.all(
+            color: isDark ? AppColors.border : AppColors.borderLight,
+            width: 0.6,
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.xs,
+          AppSpacing.xs,
+          AppSpacing.xs,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                minLines: 1,
+                maxLines: 5,
+                enabled: !disabled,
+                textInputAction: TextInputAction.send,
+                style: theme.textTheme.bodyMedium,
+                decoration: InputDecoration(
+                  hintText: '问 FitForge Coach…',
+                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                    color: isDark
+                        ? AppColors.textTertiary
+                        : AppColors.textTertiaryLight,
+                  ),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 ),
+                onSubmitted: disabled ? null : onSend,
               ),
-              onSubmitted: disabled ? null : onSend,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            _SendButton(
+              disabled: disabled,
+              onTap: disabled ? null : () => onSend(controller.text),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SendButton extends StatelessWidget {
+  const _SendButton({required this.disabled, required this.onTap});
+
+  final bool disabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Tooltip(
+          message: '发送',
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: disabled ? null : AppColors.missionGradient,
+              color: disabled
+                  ? AppColors.textTertiary.withValues(alpha: 0.3)
+                  : null,
+              shape: BoxShape.circle,
+              boxShadow: disabled
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.30),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+            ),
+            child: const Icon(
+              Icons.arrow_upward_rounded,
+              color: Colors.white,
+              size: 20,
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          IconButton.filled(
-            onPressed: disabled ? null : () => onSend(controller.text),
-            icon: const Icon(Icons.send),
-            tooltip: '发送',
-          ),
-        ],
+        ),
       ),
     );
   }
