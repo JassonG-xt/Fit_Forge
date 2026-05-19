@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_radius.dart';
+import '../../theme/app_shadows.dart';
 import '../../theme/app_spacing.dart';
-import '../cards/section_card.dart';
 
 /// 标准导航条目 —— "更多"/"进度"/"设置" 等 Tab 顶级入口共用。
 ///
@@ -31,30 +31,65 @@ class NavCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SectionCard(
-      padding: EdgeInsets.zero,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.xs,
+    final isDark = theme.brightness == Brightness.dark;
+    final bg = isDark ? AppColors.bgElevated : AppColors.bgElevatedLight;
+    final border = isDark ? AppColors.border : AppColors.borderLight;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: AppRadius.brLg,
+        boxShadow: isDark ? null : AppShadows.cardElevation,
+      ),
+      child: Material(
+        color: bg,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.brLg,
+          side: BorderSide(color: border, width: 0.5),
         ),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.15),
-            borderRadius: AppRadius.brMd,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: AppRadius.brLg,
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 72),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      borderRadius: AppRadius.brMd,
+                    ),
+                    child: Icon(icon, color: color, size: 20),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(title, style: theme.textTheme.titleSmall),
+                        Text(subtitle, style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: AppColors.textTertiary,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
           ),
-          child: Icon(icon, color: color, size: 20),
         ),
-        title: Text(title, style: theme.textTheme.titleSmall),
-        subtitle: Text(subtitle, style: theme.textTheme.bodySmall),
-        trailing: const Icon(
-          Icons.chevron_right,
-          color: AppColors.textTertiary,
-          size: 20,
-        ),
-        onTap: onTap,
       ),
     );
   }
