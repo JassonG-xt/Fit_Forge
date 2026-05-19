@@ -27,18 +27,46 @@ agent. The backend now selects a `CoachAgentProvider` through
 | Value | Behavior |
 |---|---|
 | `native` | Default. Uses the existing mock/real FitForge provider behavior. |
-| `langgraph` | Optional experimental placeholder for future LangGraph orchestration. |
+| `langgraph` | Optional experimental LangGraph wrapper around native behavior. |
 
 This is not a full LangGraph migration. LangGraph is not a mandatory
 dependency, and normal backend tests must pass without it installed. If the
 experimental adapter is selected but unavailable, the backend returns a valid
-`answerOnly` response instead of crashing.
+`answerOnly` response instead of crashing. When LangGraph is installed, the
+current graph delegates response generation to the native provider and returns
+the existing `AgentResponse` schema.
+
+To try the optional path:
+
+```bash
+cd agent_backend
+pip install -r requirements.txt
+pip install -r requirements-agent-optional.txt
+export FITFORGE_AGENT_ORCHESTRATOR=langgraph
+export FITFORGE_AGENT_MODE=mock
+uvicorn main:app --reload --port 8000
+```
+
+Windows PowerShell:
+
+```powershell
+cd agent_backend
+pip install -r requirements.txt
+pip install -r requirements-agent-optional.txt
+$env:FITFORGE_AGENT_ORCHESTRATOR="langgraph"
+$env:FITFORGE_AGENT_MODE="mock"
+uvicorn main:app --reload --port 8000
+```
 
 All providers must return the existing `AgentResponse` / `AgentAction`
 contract. A provider cannot directly mutate plans, skip the Flutter preview,
 bypass user confirmation, trust model-generated `sourceContextHash`, or write
 state outside `LocalAgentActionExecutor`. Deterministic validation, safety
 guards, source-context protection, and user confirmation remain the authority.
+
+Future phases may split graph nodes into Safety, Intent Routing, Planner,
+Recovery, Nutrition, and Response Validator responsibilities. Those nodes are
+not implemented in this phase.
 ## Supported modes
 
 Coach Agent 有两层独立的 mode 切换：Flutter 端选择 client，backend 端选择 provider。

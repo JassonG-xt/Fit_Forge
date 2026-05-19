@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import sys
 
 import pytest
 
@@ -67,6 +68,16 @@ def test_langgraph_orchestrator_does_not_crash_without_langgraph(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("FITFORGE_AGENT_ORCHESTRATOR", "langgraph")
+    monkeypatch.delitem(sys.modules, "langgraph", raising=False)
+    monkeypatch.delitem(sys.modules, "langgraph.graph", raising=False)
+    real_import = builtins.__import__
+
+    def blocked_import(name: str, *args, **kwargs):
+        if name.startswith("langgraph"):
+            raise ImportError("langgraph intentionally unavailable")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocked_import)
 
     response = run_coach_agent(_request())
 
