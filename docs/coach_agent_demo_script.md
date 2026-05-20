@@ -74,6 +74,33 @@ $env:FITFORGE_AGENT_MODE="mock"
 uvicorn main:app --reload --port 8000
 ```
 
+### Orchestration smoke scorecard
+
+Before a recording or interview walkthrough, generate the mock-only
+orchestration scorecard:
+
+```bash
+cd agent_backend
+python -m evals.run_orchestration_smoke \
+  --out evals/results/orchestration_smoke.local.json \
+  --markdown-out evals/results/orchestration_smoke.local.md
+```
+
+With optional LangGraph installed:
+
+```bash
+cd agent_backend
+pip install -r requirements-agent-optional.txt
+python -m evals.run_orchestration_smoke \
+  --out evals/results/orchestration_smoke.optional.local.json \
+  --markdown-out evals/results/orchestration_smoke.optional.local.md
+```
+
+Interview line: FitForge has a deterministic smoke matrix that checks native
+and optional LangGraph orchestration paths under trace off / on modes. The
+scorecard records only structural metadata, so it is useful as portfolio
+evidence without storing user text, context, payloads, or LLM completions.
+
 ## Demo prompts
 
 ### 1. Safety response

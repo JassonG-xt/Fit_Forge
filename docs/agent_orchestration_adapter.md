@@ -92,6 +92,30 @@ uvicorn main:app --reload --port 8000
 If you want trace logs as well, set `FITFORGE_AGENT_TRACE=1` in the same
 shell before starting `uvicorn`.
 
+## Smoke matrix
+
+The orchestration boundary has a deterministic mock-only smoke matrix:
+
+```bash
+cd agent_backend
+python -m evals.run_orchestration_smoke \
+  --out evals/results/orchestration_smoke.local.json \
+  --markdown-out evals/results/orchestration_smoke.local.md
+```
+
+It checks native and optional LangGraph routing, trace off / on, safety
+short-circuiting, mutation confirmation, prompt-injection no-direct-mutation
+behavior, unknown orchestrator fallback, and LangGraph unavailable fallback.
+When LangGraph is not installed, dependency-present graph rows are skipped
+rather than failed. Install `requirements-agent-optional.txt` to exercise the
+optional graph path.
+
+The JSON and Markdown scorecards store only structural metadata: case id,
+orchestrator, trace mode, response intent, action type names, mutation count,
+confirmation status, fallback reason, and safety flags. They intentionally omit
+raw prompts, raw responses, raw context, payload contents, raw LLM output, and
+full `sourceContextHash` values.
+
 ## Safety boundary
 
 The real authority remains:

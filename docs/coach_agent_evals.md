@@ -142,6 +142,41 @@ still asserts the structured `AgentResponse` / `AgentAction` contract only;
 privacy-safe trace logging is backend observability and is covered by unit
 tests, not by eval JSON.
 
+## Orchestration smoke matrix
+
+For a quick, repeatable architecture check, run the mock-only smoke matrix:
+
+```bash
+cd agent_backend
+python -m evals.run_orchestration_smoke \
+  --out evals/results/orchestration_smoke.local.json \
+  --markdown-out evals/results/orchestration_smoke.local.md
+```
+
+The smoke matrix is separate from `coach_agent_eval_cases.json`. It checks the
+current provider boundary across native / optional LangGraph orchestration,
+trace off / on, and `FITFORGE_AGENT_MODE=mock`. It covers answer-only fallback,
+`compressWorkout`, `replaceExercise`, deterministic `generatePlan`,
+structured `weeklyReview`, `safetyResponse`, prompt-injection no-direct
+mutation, unknown-orchestrator fallback, and LangGraph unavailable fallback.
+
+If the optional dependency is not installed, normal LangGraph graph rows are
+reported as `skip`, while the safe unavailable fallback remains testable:
+
+```bash
+cd agent_backend
+pip install -r requirements-agent-optional.txt
+python -m evals.run_orchestration_smoke \
+  --out evals/results/orchestration_smoke.optional.local.json \
+  --markdown-out evals/results/orchestration_smoke.optional.local.md
+```
+
+The scorecard records only structural metadata: case id, category,
+orchestrator, trace mode, intent, action type names, mutation action count,
+confirmation status, fallback reason, and safety flags. It does not store raw
+prompts, raw responses, raw context JSON, payload contents, raw LLM output, or
+full `sourceContextHash` values.
+
 ### Cross-run promotion of three paraphrases (history)
 
 Three Chinese paraphrases were promoted from `expectedGap` to `active` after
