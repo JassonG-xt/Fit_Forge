@@ -30,13 +30,17 @@ then verifies behavior boundaries against the case's `expected` block:
 - `expectedWeekdays` for `rescheduleWeek`
 - safety stop-workout intent + no mutation actions
 - prompt-injection probes do not bypass confirmation or plant a hash
+- orchestration-boundary cases keep provider output inside the existing
+  `AgentResponse` / `AgentAction` contract
 
 The harness **does not** evaluate writing quality, phrasing, or single-answer
 correctness. That is out of scope.
 
 It also does not execute `LocalAgentActionExecutor`, mutate `AppState`, or
 touch Flutter. The agent's response is just a structured suggestion; the
-harness inspects it and stops there.
+harness inspects it and stops there. This remains true whether the backend is
+using the native provider path or an optional experimental orchestration
+adapter.
 
 ## Configuration
 

@@ -130,6 +130,10 @@ Milestone tag lineage:
 
 `agent-mvp-eval-v2` remains the MVP-level stability snapshot; subsequent tags are showcase / eval-contract / smoke / recovery-routing milestones rather than new stability snapshots. Provider status remains **experimental** throughout.
 
+The Coach Agent is still a provider-agnostic structured-action layer with a
+native default path and an optional experimental LangGraph orchestration
+adapter.
+
 ### Running Coach Agent
 
 默认即 mock 模式，无需后端：
