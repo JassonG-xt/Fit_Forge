@@ -142,6 +142,10 @@ still asserts the structured `AgentResponse` / `AgentAction` contract only;
 privacy-safe trace logging is backend observability and is covered by unit
 tests, not by eval JSON.
 
+## Release scorecard
+
+The release-ready summary of this orchestration stack lives in [`docs/agent_orchestration_release_scorecard.md`](agent_orchestration_release_scorecard.md).
+
 ## Orchestration smoke matrix
 
 For a quick, repeatable architecture check, run the mock-only smoke matrix:

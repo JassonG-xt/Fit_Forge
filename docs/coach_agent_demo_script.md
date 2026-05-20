@@ -179,6 +179,10 @@ that:
 - `LocalAgentActionExecutor` remains the only mutation boundary
 - the optional LangGraph graph only wraps these rules; it does not replace them
 
+## Interview-ready summary
+
+FitForge Coach Agent is a provider-agnostic structured-action agent layer for a Flutter fitness app. It turns natural-language coaching requests into typed `AgentAction` proposals, but never lets the LLM mutate plan state directly. Mutation actions are previewed, require user confirmation, and are executed by deterministic local engines. The backend supports a native provider and an optional experimental LangGraph orchestration path with explicit safety, routing, and validation nodes, privacy-safe tracing, eval coverage, and a CI-enforced mock smoke matrix.
+
 ## Short closing line
 
 “FitForge Coach Agent is not an auto-executing bot. It is a provider-agnostic

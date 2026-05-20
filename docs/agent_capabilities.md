@@ -116,6 +116,10 @@ Unknown orchestrator values fall back to native behavior.
 - not direct backend state mutation
 - not a multi-agent graph yet
 
+## Release scorecard
+
+For a concise release-ready summary of the current orchestration architecture, validation evidence, limitations, and interview framing, see [`docs/agent_orchestration_release_scorecard.md`](agent_orchestration_release_scorecard.md).
+
 ## References
 
 - `docs/agent_orchestration_adapter.md`

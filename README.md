@@ -134,6 +134,12 @@ The Coach Agent is still a provider-agnostic structured-action layer with a
 native default path and an optional experimental LangGraph orchestration
 adapter.
 
+Current orchestration evidence:
+- provider-agnostic structured-action Coach Agent
+- optional experimental LangGraph orchestration adapter
+- privacy-safe tracing
+- mock-only orchestration smoke matrix enforced in CI
+
 ### Running Coach Agent
 
 默认即 mock 模式，无需后端：
