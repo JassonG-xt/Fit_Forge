@@ -283,6 +283,7 @@ def test_eval_suite_covers_required_categories() -> None:
         "nonMutatingCoaching": 16,
         "safety": 11,
         "promptInjection": 6,
+        "orchestrationBoundary": 4,
     }
     for category, minimum in required.items():
         assert counts.get(category, 0) >= minimum, (

@@ -1,9 +1,9 @@
 # Agent Orchestration Adapter
 
-FitForge remains a provider-agnostic structured-action agent system. This
-adapter boundary is not a full LangGraph migration.
+FitForge remains a provider-agnostic structured-action agent system.
+This adapter boundary is not a full LangGraph migration.
 
-## Request Flow
+## Current architecture
 
 ```text
 Flutter AgentChatScreen
@@ -20,35 +20,28 @@ Flutter AgentChatScreen
 -> AppState / PlanEngine / NutritionEngine
 ```
 
-## Orchestrators
+All provider output stays inside the existing `AgentResponse` /
+`AgentAction` contract. No provider may mutate app state directly, skip
+preview, or bypass confirmation.
+
+## Provider modes
 
 `FITFORGE_AGENT_ORCHESTRATOR` selects the backend orchestration boundary.
 
 | Value | Behavior |
 |---|---|
 | `native` | Default. Uses the existing FitForge provider behavior. |
-| `langgraph` | Experimental optional wrapper. LangGraph is imported lazily and is not required for normal backend CI. |
+| `langgraph` | Optional experimental wrapper around native behavior. LangGraph is imported lazily and is not required for normal backend CI. |
 
-Unknown values fall back to `native` so a bad deployment setting does not take
-the service out of the existing safe path.
+Unknown values fall back to `native` so a bad deployment setting does not
+knock the service off the safe path.
 
-`FITFORGE_AGENT_MODE` is unchanged. When the orchestrator is `native`,
-`FITFORGE_AGENT_MODE=mock` remains the default and `FITFORGE_AGENT_MODE=real`
-uses the existing real LLM provider.
+`FITFORGE_AGENT_MODE` is unchanged:
 
-The current LangGraph mode is intentionally small:
-
-```text
-input
--> deterministic_safety_check
--> native_agent_response
--> response_validation
--> output
-```
-
-The graph delegates actual response generation to the native provider, then
-returns the same `AgentResponse` schema. It does not add new action types,
-memory, streaming, autonomous mutation, or multi-agent routing.
+| Value | Behavior |
+|---|---|
+| `mock` | Default backend behavior used in local demo and CI. |
+| `real` | Existing real LLM provider behavior. |
 
 To run the optional path locally:
 
@@ -72,35 +65,46 @@ $env:FITFORGE_AGENT_MODE="mock"
 uvicorn main:app --reload --port 8000
 ```
 
-## Safety Contract
+## Safety boundary
 
-Every provider must return the existing `AgentResponse` / `AgentAction`
-contract. No provider may directly mutate Flutter state or backend state.
+The real authority remains:
 
-LLM and orchestration output is always untrusted. The real authority remains:
+```text
+AgentResponse / AgentAction
+→ deterministic validation / normalization
+→ requiresConfirmation
+→ sourceContextHash guard
+→ Flutter preview
+→ user confirmation
+→ LocalAgentActionExecutor
+→ AppState / PlanEngine / NutritionEngine
+```
 
-- deterministic high-risk fitness and medical safety checks
-- strict action and payload validation
-- mutation actions requiring user confirmation
-- trusted `sourceContextHash` injection from request context
-- Flutter preview before execution
-- `LocalAgentActionExecutor` as the only AppState mutation boundary
+LangGraph cannot bypass this chain. It cannot directly mutate plans,
+cannot trust model-generated `riskLevel` or `sourceContextHash`, and
+cannot skip the user-confirmation boundary.
 
-LangGraph, when implemented later, cannot bypass confirmation, cannot write a
-plan directly, and cannot trust model-generated risk levels or
-`sourceContextHash` values.
+## Current LangGraph adapter
 
-## Current LangGraph Adapter
+`agents/providers/langgraph_provider.py` is intentionally small and safe.
+If LangGraph is unavailable, it returns a valid `answerOnly`
+`AgentResponse` explaining that the experimental orchestration adapter is
+unavailable in the current backend environment.
 
-`agents/providers/langgraph_provider.py` is intentionally safe and minimal. If
-LangGraph is unavailable, it returns a valid `answerOnly` `AgentResponse`
-explaining that experimental orchestration is unavailable. It does not crash
-FastAPI and it does not add LangGraph as a mandatory dependency.
+If LangGraph is installed, the current graph wraps the native provider
+and returns the same `AgentResponse` schema. It does not add new action
+types, streaming, memory, or autonomous mutation.
 
-High-risk safety messages still short-circuit to `safetyResponse` in the graph
-path. Mutation actions still come from the existing structured-action contract
-and must pass confirmation and trusted `sourceContextHash` checks downstream.
+## Non-goals
+
+- not a fully autonomous agent
+- not direct LLM state mutation
+- not long-term memory
+- not streaming
+- not cloud sync
+- not a UI redesign
+- not production observability
+- not a real multi-agent graph yet
 
 Future phases may split the graph into dedicated Safety, Intent Routing,
-Planner, Recovery, Nutrition, and Response Validator nodes. This PR does not
-implement those phases.
+Planner, Recovery, Nutrition, and Response Validator nodes.

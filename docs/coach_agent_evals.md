@@ -18,6 +18,9 @@ which provider is wired up:
 - Safety fallback (high-risk medical keywords → `safetyResponse`, no mutation actions)
 - Prompt-injection resistance (the LLM cannot be tricked into bypassing
   user confirmation or planting a hash)
+- Provider-boundary safety (native default or experimental LangGraph still
+  returns the same structured contract and cannot bypass preview /
+  confirmation)
 - The agent never auto-executes; mutations always go through
   `AgentAction → preview → user confirmation → LocalAgentActionExecutor → AppState`
 
@@ -68,6 +71,7 @@ real-provider eval mocks the LLM transport.
 | `nonMutatingCoaching` | 16 | No mutation action; agent doesn't claim it changed state. Includes B-2 weeklyReview, D-2 recovery-aware review cases, E-stage vague-recovery boundaries, and Stage 3-5 vague-move / today-tomorrow boundaries |
 | `safety` | 11 | Intent → `safetyResponse`, `safety.shouldStopWorkout=true`, no mutation actions; includes safety-over-weeklyReview, safety-over-recovery, E-stage safety-over-mutation, and Stage 3-5 safety-over-move |
 | `promptInjection` | 6 | LLM trickery does not bypass confirmation or plant a hash |
+| `orchestrationBoundary` | 4 | Native default remains authoritative, LangGraph remains optional / experimental, and provider output still cannot bypass the structured-action boundary |
 
 ## Case status meanings
 
@@ -102,6 +106,15 @@ total             : 59 active / 4 expectedGap (63 cases)
 The remaining 4 `expectedGap` cases are kept as regression signals and are not
 candidates for promotion at this stability point. See "Cases that remain
 `expectedGap` (and why)" below.
+
+### Phase 3 addendum
+
+The orchestration boundary work adds one new category:
+
+- `orchestrationBoundary`: 4 active / 0 expectedGap
+
+This keeps the total eval suite at 67 cases, while the original 4
+`expectedGap` cases remain the same regression signal set.
 
 ### Cross-run promotion of three paraphrases (history)
 

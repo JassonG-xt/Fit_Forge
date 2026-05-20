@@ -30,6 +30,9 @@ is optional and experimental; when the optional dependency is installed, it
 builds a minimal LangGraph wrapper around the native provider. Unknown values
 fall back to `native`.
 
+The optional package set lives in `requirements-agent-optional.txt`; normal
+backend CI and the default runtime do not need it.
+
 `FITFORGE_AGENT_MODE` is unchanged inside the native provider and still
 defaults to `mock`.
 
