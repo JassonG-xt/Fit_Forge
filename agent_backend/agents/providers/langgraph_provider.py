@@ -1,31 +1,89 @@
 """Experimental LangGraph orchestration adapter.
 
-This module deliberately does not depend on LangGraph at import time. Normal
-CI and the default native backend must work without installing LangGraph.
+The optional path stays small and safe:
+input -> safety_precheck_node -> intent_route_node -> native_response_node
+-> response_contract_validation_node -> output.
+
+LangGraph is imported lazily so normal backend CI does not require the
+optional dependency.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TypedDict
+from functools import partial
+from typing import Any, TypedDict
 
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
 from safety.fitness_guardrails import assess_message_safety
 
+from .base import CoachAgentProvider
 from .native_provider import NativeCoachAgentProvider
 
 logger = logging.getLogger(__name__)
 
 
-class _CoachGraphState(TypedDict, total=False):
+class LangGraphCoachState(TypedDict, total=False):
     request: AgentRequest
-    response: AgentResponse
+    response: Any
+    route: str
+    error: str
+
+
+def safety_precheck_node(state: LangGraphCoachState) -> LangGraphCoachState:
+    request = state["request"]
+    if assess_message_safety(request.message).has_medical_concern:
+        return {
+            "route": "safety",
+            "response": _safety_response(request.message),
+        }
+    return {"route": "native"}
+
+
+def intent_route_node(state: LangGraphCoachState) -> LangGraphCoachState:
+    if "response" in state:
+        return {}
+    message = state["request"].message.strip()
+    if not message:
+        return {"route": "fallback"}
+    return {"route": "native"}
+
+
+def native_response_node(
+    state: LangGraphCoachState,
+    native_provider: CoachAgentProvider | None = None,
+) -> LangGraphCoachState:
+    if "response" in state:
+        return {}
+
+    route = state.get("route", "native")
+    if route == "fallback":
+        return {"response": _langgraph_fallback_response()}
+
+    provider = native_provider or NativeCoachAgentProvider()
+    return {"response": provider.handle(state["request"])}
+
+
+def response_contract_validation_node(
+    state: LangGraphCoachState,
+) -> LangGraphCoachState:
+    response = _coerce_agent_response(state.get("response"))
+    if response is None:
+        return {"response": _langgraph_failure_response()}
+    if response.intent == "safetyResponse" and any(
+        action.type != "safetyResponse" for action in response.actions
+    ):
+        return {"response": _langgraph_failure_response()}
+    return {"response": response}
 
 
 class LangGraphCoachAgentProvider:
     """Optional LangGraph wrapper around the existing native provider."""
+
+    def __init__(self, native_provider: CoachAgentProvider | None = None) -> None:
+        self._native_provider = native_provider or NativeCoachAgentProvider()
 
     def handle(self, request: AgentRequest) -> AgentResponse:
         try:
@@ -35,15 +93,17 @@ class LangGraphCoachAgentProvider:
 
         try:
             result = graph.invoke({"request": request})
-        except Exception as exc:
+        except Exception as exc:  # pragma: no cover - defensive logging only
             logger.warning(
                 "LangGraph orchestration failed; returning safe fallback: %s",
                 exc.__class__.__name__,
             )
             return _langgraph_failure_response()
 
-        response = result.get("response") if isinstance(result, dict) else None
-        if isinstance(response, AgentResponse):
+        response = _coerce_agent_response(
+            result.get("response") if isinstance(result, dict) else None
+        )
+        if response is not None:
             return response
         return _langgraph_failure_response()
 
@@ -51,38 +111,35 @@ class LangGraphCoachAgentProvider:
         """Build the minimal graph lazily so LangGraph stays optional."""
         from langgraph.graph import END, START, StateGraph
 
-        native_provider = NativeCoachAgentProvider()
-        graph = StateGraph(_CoachGraphState)
+        graph = StateGraph(LangGraphCoachState)
 
-        def deterministic_safety_check(
-            state: _CoachGraphState,
-        ) -> _CoachGraphState:
-            request = state["request"]
-            if assess_message_safety(request.message).has_medical_concern:
-                return {"response": _safety_response(request.message)}
-            return {}
-
-        def native_agent_response(state: _CoachGraphState) -> _CoachGraphState:
-            if "response" in state:
-                return {}
-            return {"response": native_provider.handle(state["request"])}
-
-        def response_validation(state: _CoachGraphState) -> _CoachGraphState:
-            if isinstance(state.get("response"), AgentResponse):
-                return {}
-            return {"response": _langgraph_failure_response()}
-
+        graph.add_node("safety_precheck_node", safety_precheck_node)
+        graph.add_node("intent_route_node", intent_route_node)
         graph.add_node(
-            "deterministic_safety_check",
-            deterministic_safety_check,
+            "native_response_node",
+            partial(native_response_node, native_provider=self._native_provider),
         )
-        graph.add_node("native_agent_response", native_agent_response)
-        graph.add_node("response_validation", response_validation)
-        graph.add_edge(START, "deterministic_safety_check")
-        graph.add_edge("deterministic_safety_check", "native_agent_response")
-        graph.add_edge("native_agent_response", "response_validation")
-        graph.add_edge("response_validation", END)
+        graph.add_node(
+            "response_contract_validation_node",
+            response_contract_validation_node,
+        )
+        graph.add_edge(START, "safety_precheck_node")
+        graph.add_edge("safety_precheck_node", "intent_route_node")
+        graph.add_edge("intent_route_node", "native_response_node")
+        graph.add_edge("native_response_node", "response_contract_validation_node")
+        graph.add_edge("response_contract_validation_node", END)
         return graph.compile()
+
+
+def _coerce_agent_response(response: Any) -> AgentResponse | None:
+    if isinstance(response, AgentResponse):
+        return response
+    if response is None:
+        return None
+    try:
+        return AgentResponse.model_validate(response)
+    except Exception:
+        return None
 
 
 def _safety_response(message: str) -> AgentResponse:
@@ -141,3 +198,26 @@ def _langgraph_failure_response() -> AgentResponse:
         confidence=0.0,
         actions=[],
     )
+
+
+def _langgraph_fallback_response() -> AgentResponse:
+    return AgentResponse(
+        message=(
+            "I can help with workout plans, schedule changes, exercise swaps, "
+            "compressing today's workout, or nutrition guidance. Tell me your goal, "
+            "training frequency, and today's constraints."
+        ),
+        intent="answerOnly",
+        confidence=0.5,
+        actions=[],
+    )
+
+
+__all__ = [
+    "LangGraphCoachAgentProvider",
+    "LangGraphCoachState",
+    "intent_route_node",
+    "native_response_node",
+    "response_contract_validation_node",
+    "safety_precheck_node",
+]

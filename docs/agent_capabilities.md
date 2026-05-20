@@ -34,6 +34,21 @@ behavior. `langgraph` is optional and experimental; it wraps native
 behavior through a minimal graph and falls back safely when LangGraph is
 not installed.
 
+Current LangGraph node flow:
+
+```text
+input
+-> safety_precheck_node
+-> intent_route_node
+-> native_response_node
+-> response_contract_validation_node
+-> AgentResponse
+```
+
+The graph is orchestration only. It still delegates actual action
+generation to the native provider and cannot bypass confirmation or the
+trusted `sourceContextHash` boundary.
+
 ## Supported actions
 
 | Action | Mutates local state | Requires user confirmation | Description |

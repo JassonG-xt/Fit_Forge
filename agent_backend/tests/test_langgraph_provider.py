@@ -10,7 +10,10 @@ from typing import Any, Callable
 import pytest
 
 from agents.coach_agent import run_coach_agent
-from agents.providers.langgraph_provider import LangGraphCoachAgentProvider
+from agents.providers.langgraph_provider import (
+    LangGraphCoachAgentProvider,
+    response_contract_validation_node,
+)
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse
 
@@ -47,17 +50,28 @@ def _request(message: str = "今天只有20分钟，帮我压缩训练") -> Agen
     )
 
 
+_EXPECTED_NODE_ORDER = (
+    "safety_precheck_node",
+    "intent_route_node",
+    "native_response_node",
+    "response_contract_validation_node",
+)
+
+
 class _FakeCompiledGraph:
-    def __init__(self, nodes: dict[str, Callable[[dict[str, Any]], dict[str, Any]]]):
+    def __init__(
+        self,
+        nodes: dict[str, Callable[[dict[str, Any]], dict[str, Any]]],
+        edges: list[tuple[str, str]],
+    ):
         self._nodes = nodes
+        self.edges = edges
+        self.invoked_nodes: list[str] = []
 
     def invoke(self, state: dict[str, Any]) -> dict[str, Any]:
         current = dict(state)
-        for name in (
-            "deterministic_safety_check",
-            "native_agent_response",
-            "response_validation",
-        ):
+        for name in _EXPECTED_NODE_ORDER:
+            self.invoked_nodes.append(name)
             current.update(self._nodes[name](current))
         return current
 
@@ -79,7 +93,7 @@ class _FakeStateGraph:
         self.edges.append((start, end))
 
     def compile(self) -> _FakeCompiledGraph:
-        return _FakeCompiledGraph(self.nodes)
+        return _FakeCompiledGraph(self.nodes, self.edges)
 
 
 def _install_fake_langgraph(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -122,6 +136,27 @@ def test_langgraph_unavailable_returns_safe_answer_only(
     assert response.actions == []
     assert "LangGraph" in response.message
     assert "unavailable" in response.message
+
+
+def test_langgraph_builds_named_safe_node_sequence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+
+    graph = LangGraphCoachAgentProvider()._build_graph()
+
+    assert tuple(graph._nodes) == _EXPECTED_NODE_ORDER
+    assert graph.edges == [
+        ("__start__", "safety_precheck_node"),
+        ("safety_precheck_node", "intent_route_node"),
+        ("intent_route_node", "native_response_node"),
+        ("native_response_node", "response_contract_validation_node"),
+        ("response_contract_validation_node", "__end__"),
+    ]
+
+    graph.invoke({"request": _request()})
+
+    assert tuple(graph.invoked_nodes) == _EXPECTED_NODE_ORDER
 
 
 def test_langgraph_graph_path_delegates_to_native_provider(
@@ -228,3 +263,29 @@ def test_langgraph_graph_failure_returns_safe_fallback(
 
     assert response.intent == "answerOnly"
     assert response.actions == []
+
+
+def test_langgraph_native_node_failure_returns_safe_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+
+    class FailingNativeProvider:
+        def handle(self, request: AgentRequest) -> AgentResponse:
+            raise RuntimeError("native provider failed")
+
+    response = LangGraphCoachAgentProvider(
+        native_provider=FailingNativeProvider(),
+    ).handle(_request())
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+
+
+def test_langgraph_malformed_response_state_returns_safe_fallback() -> None:
+    result = response_contract_validation_node(
+        {"request": _request(), "response": {"intent": "compressWorkout"}}
+    )
+
+    assert result["response"].intent == "answerOnly"
+    assert result["response"].actions == []

@@ -27,8 +27,19 @@ User message
 
 `native` uses the existing FitForge mock/real provider behavior. `langgraph`
 is optional and experimental; when the optional dependency is installed, it
-builds a minimal LangGraph wrapper around the native provider. Unknown values
-fall back to `native`.
+builds a minimal LangGraph wrapper around the native provider. The LangGraph
+path now has explicit safe nodes:
+
+```text
+input
+-> safety_precheck_node
+-> intent_route_node
+-> native_response_node
+-> response_contract_validation_node
+-> AgentResponse
+```
+
+Unknown values fall back to `native`.
 
 The optional package set lives in `requirements-agent-optional.txt`; normal
 backend CI and the default runtime do not need it.
@@ -66,7 +77,9 @@ uvicorn main:app --reload --port 8000
 If LangGraph is not installed, `FITFORGE_AGENT_ORCHESTRATOR=langgraph`
 returns a safe `answerOnly` response instead of crashing the FastAPI service.
 This is not a full migration to LangGraph; the graph currently delegates to
-the native provider and returns the same `AgentResponse` schema.
+the native provider and returns the same `AgentResponse` schema. It is
+orchestration only and cannot directly mutate plans or bypass
+confirmation, `sourceContextHash`, or `LocalAgentActionExecutor`.
 
 ## Current implementation status
 

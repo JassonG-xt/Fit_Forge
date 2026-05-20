@@ -98,6 +98,23 @@ Expected:
 - confirmation boundary preserved
 - no AppState write before preview / approval
 
+### 4. LangGraph node path
+
+If the backend is started with `FITFORGE_AGENT_ORCHESTRATOR=langgraph`,
+the optional adapter still produces the same structured contract:
+
+```text
+input
+-> safety_precheck_node
+-> intent_route_node
+-> native_response_node
+-> response_contract_validation_node
+-> AgentResponse
+```
+
+It is a good interview line to say that LangGraph is only orchestration
+here, not mutation authority.
+
 ## Why not fully migrate to LangGraph?
 
 FitForge's core value is the structured-action safety boundary.
@@ -111,6 +128,7 @@ that:
 - user confirmation stays mandatory
 - `sourceContextHash` stays trusted from backend context
 - `LocalAgentActionExecutor` remains the only mutation boundary
+- the optional LangGraph graph only wraps these rules; it does not replace them
 
 ## Short closing line
 

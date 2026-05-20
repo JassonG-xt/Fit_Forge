@@ -116,6 +116,25 @@ The orchestration boundary work adds one new category:
 This keeps the total eval suite at 67 cases, while the original 4
 `expectedGap` cases remain the same regression signal set.
 
+### Phase 4 addendum
+
+The optional LangGraph adapter now runs explicit safe nodes:
+
+```text
+input
+-> safety_precheck_node
+-> intent_route_node
+-> native_response_node
+-> response_contract_validation_node
+-> AgentResponse
+```
+
+The eval contract stays at the provider boundary. These cases still assert
+the same structured-action safety rules, not LangGraph internals: native
+default authority, optional experimental orchestration, trusted
+`sourceContextHash`, user confirmation for mutation, and safe fallback on
+high-risk or malformed output.
+
 ### Cross-run promotion of three paraphrases (history)
 
 Three Chinese paraphrases were promoted from `expectedGap` to `active` after
