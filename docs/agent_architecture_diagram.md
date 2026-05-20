@@ -66,6 +66,21 @@ flowchart TD
 - Safety short-circuits happen before provider execution.
 - LangGraph, when enabled, is only an orchestration wrapper.
 
+## LangGraph node flow
+
+```mermaid
+flowchart TD
+    IN[input] --> SAFE[safety_precheck_node]
+    SAFE --> ROUTE[intent_route_node]
+    ROUTE --> NATIVE[native_response_node]
+    NATIVE --> VALIDATE[response_contract_validation_node]
+    VALIDATE --> OUT[AgentResponse]
+```
+
+The optional graph still delegates actual action generation to the native
+provider. It only adds explicit deterministic node boundaries around the
+existing contract.
+
 ## Current non-goals
 
 - no direct LLM state mutation

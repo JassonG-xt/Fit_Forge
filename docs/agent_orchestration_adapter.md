@@ -84,16 +84,29 @@ LangGraph cannot bypass this chain. It cannot directly mutate plans,
 cannot trust model-generated `riskLevel` or `sourceContextHash`, and
 cannot skip the user-confirmation boundary.
 
-## Current LangGraph adapter
+## Current LangGraph node flow
 
-`agents/providers/langgraph_provider.py` is intentionally small and safe.
-If LangGraph is unavailable, it returns a valid `answerOnly`
+`agents/providers/langgraph_provider.py` stays intentionally small and safe.
+The optional LangGraph path now runs explicit deterministic nodes:
+
+```text
+input
+-> safety_precheck_node
+-> intent_route_node
+-> native_response_node
+-> response_contract_validation_node
+-> AgentResponse
+```
+
+The node flow does not invent new action types and does not bypass the
+structured-action boundary. `native_response_node` still delegates actual
+action generation to the existing native provider, and
+`response_contract_validation_node` fails closed to a safe `answerOnly`
+response when the graph output is malformed or missing.
+
+If LangGraph is unavailable, the provider returns a valid `answerOnly`
 `AgentResponse` explaining that the experimental orchestration adapter is
 unavailable in the current backend environment.
-
-If LangGraph is installed, the current graph wraps the native provider
-and returns the same `AgentResponse` schema. It does not add new action
-types, streaming, memory, or autonomous mutation.
 
 ## Non-goals
 
@@ -106,5 +119,6 @@ types, streaming, memory, or autonomous mutation.
 - not production observability
 - not a real multi-agent graph yet
 
-Future phases may split the graph into dedicated Safety, Intent Routing,
-Planner, Recovery, Nutrition, and Response Validator nodes.
+Future phases may replace the coarse `intent_route_node` with dedicated
+Planner, Recovery, Nutrition, and Validator nodes, but those are not
+implemented in this phase.
