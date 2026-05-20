@@ -81,6 +81,13 @@ the native provider and returns the same `AgentResponse` schema. It is
 orchestration only and cannot directly mutate plans or bypass
 confirmation, `sourceContextHash`, or `LocalAgentActionExecutor`.
 
+`FITFORGE_AGENT_TRACE=1` enables backend-only privacy-safe trace logs for
+Coach Agent requests. The trace records structural metadata only: selected
+orchestrator, agent mode, provider, node names, fallback reason, response
+intent, action types, confirmation counts, and elapsed time. It does not log
+raw user text, raw context, prompts, raw LLM output, API keys, tokens, or the
+full `sourceContextHash`.
+
 ## Current implementation status
 
 | Capability | Status |

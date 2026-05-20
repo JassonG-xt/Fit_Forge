@@ -135,6 +135,13 @@ default authority, optional experimental orchestration, trusted
 `sourceContextHash`, user confirmation for mutation, and safe fallback on
 high-risk or malformed output.
 
+### Privacy-safe tracing note
+
+`FITFORGE_AGENT_TRACE=1` does not change eval expectations. The eval suite
+still asserts the structured `AgentResponse` / `AgentAction` contract only;
+privacy-safe trace logging is backend observability and is covered by unit
+tests, not by eval JSON.
+
 ### Cross-run promotion of three paraphrases (history)
 
 Three Chinese paraphrases were promoted from `expectedGap` to `active` after

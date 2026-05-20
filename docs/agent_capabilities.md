@@ -49,6 +49,12 @@ The graph is orchestration only. It still delegates actual action
 generation to the native provider and cannot bypass confirmation or the
 trusted `sourceContextHash` boundary.
 
+## Privacy-safe tracing
+
+`FITFORGE_AGENT_TRACE=1` is a backend-only diagnostic switch. It logs only
+structural orchestration metadata and does not alter the `AgentResponse`
+contract or expose any debug payload to Flutter.
+
 ## Supported actions
 
 | Action | Mutates local state | Requires user confirmation | Description |

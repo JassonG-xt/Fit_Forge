@@ -96,6 +96,31 @@ silently regressing.
 - AgentEventLog applies count caps, truncation, and best-effort redaction
   before persisting locally; users can clear the log from Settings.
 
+## Privacy-safe orchestration tracing
+
+`FITFORGE_AGENT_TRACE=1` enables backend-only Coach Agent trace logs. The
+trace is intentionally metadata-only so it can help debug provider routing,
+fallbacks, safety short-circuits, and action-contract behavior without
+recording sensitive fitness text.
+
+Safe trace fields include:
+
+- `trace_id`
+- `orchestrator`
+- `agent_mode`
+- `provider`
+- node names
+- fallback reason
+- response intent
+- action type names
+- mutation action count
+- `safety_response`
+- `elapsed_ms`
+
+The trace does **not** log raw user messages, history, prompt text, raw LLM
+output, payload contents, API keys, tokens, health details, or the full
+`sourceContextHash`.
+
 ## Remaining risks
 
 These are deliberately not in scope for this repo's CI and should be handled
