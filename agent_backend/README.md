@@ -121,6 +121,10 @@ omits raw prompts, raw responses, raw context, payload contents, and full
 `sourceContextHash` values. Local reports under `evals/results/*.json|md` are
 gitignored.
 
+The same smoke matrix now runs in GitHub Actions CI from the backend pytest
+job. CI writes reports to temporary paths and may upload them as artifacts,
+but it does not commit generated smoke output.
+
 ## Current implementation status
 
 | Capability | Status |

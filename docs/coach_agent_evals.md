@@ -159,6 +159,7 @@ trace off / on, and `FITFORGE_AGENT_MODE=mock`. It covers answer-only fallback,
 `compressWorkout`, `replaceExercise`, deterministic `generatePlan`,
 structured `weeklyReview`, `safetyResponse`, prompt-injection no-direct
 mutation, unknown-orchestrator fallback, and LangGraph unavailable fallback.
+The same smoke matrix now runs in GitHub Actions CI as a backend safety gate.
 
 If the optional dependency is not installed, normal LangGraph graph rows are
 reported as `skip`, while the safe unavailable fallback remains testable:
