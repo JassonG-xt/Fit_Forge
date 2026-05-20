@@ -92,6 +92,10 @@ uvicorn main:app --reload --port 8000
 If you want trace logs as well, set `FITFORGE_AGENT_TRACE=1` in the same
 shell before starting `uvicorn`.
 
+## Release scorecard
+
+For the release / portfolio summary of this architecture, see [`docs/agent_orchestration_release_scorecard.md`](agent_orchestration_release_scorecard.md).
+
 ## Smoke matrix
 
 The orchestration boundary has a deterministic mock-only smoke matrix:

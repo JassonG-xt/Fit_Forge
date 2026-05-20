@@ -10,6 +10,7 @@ This directory holds repository-grounded documentation for the current Flutter a
 - [agent_mvp_status.md](agent_mvp_status.md) — Coach Agent MVP stability snapshot (current tag `agent-mvp-eval-v2`), eval status, runtime modes, and next-stage roadmap
 - [coach_agent_evals.md](coach_agent_evals.md) — eval suite contract, case categories, status meanings, and how to add a case
 - [agent_architecture_diagram.md](agent_architecture_diagram.md) — Mermaid diagrams for high-level data flow, mutation safety boundary (backend / Flutter swimlanes), safety short-circuit, generatePlan boundary, and eval/CI boundary
+- [agent_orchestration_release_scorecard.md](agent_orchestration_release_scorecard.md) ??release / portfolio scorecard for the Coach Agent orchestration architecture, validation evidence, limitations, and interview narrative
 - [coach_agent_demo_script.md](coach_agent_demo_script.md) — short showcase / recording demo script (5 core scenarios: preference-aware generatePlan / replace / compress / weeklyReview / safety)
 - [coach_agent_final_demo_script.md](coach_agent_final_demo_script.md) — video-ready Coach Agent demo script (6 scenarios incl. recovery routing and safety-over-mutation)
 - [coach_agent_portfolio_walkthrough.md](coach_agent_portfolio_walkthrough.md) — reviewer-oriented walkthrough of the local-first structured-action Coach Agent architecture
