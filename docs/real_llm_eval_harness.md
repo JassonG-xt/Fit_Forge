@@ -7,6 +7,11 @@ against a real (or fake-transport) LLM provider. Used to:
 - Decide whether `expectedGap` cases can flip to `active`.
 - Smoke-test a new model before swapping it in.
 
+For the deterministic mock-only orchestration smoke matrix, use
+`python -m evals.run_orchestration_smoke` instead. That scorecard verifies
+provider routing, trace privacy, fallback behavior, and the structured-action
+safety boundary without real LLM calls or API keys.
+
 ## Why this is **not** in per-PR CI
 
 1. **Cost** — every PR shouldn't spend tokens.

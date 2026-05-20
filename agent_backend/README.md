@@ -88,6 +88,39 @@ intent, action types, confirmation counts, and elapsed time. It does not log
 raw user text, raw context, prompts, raw LLM output, API keys, tokens, or the
 full `sourceContextHash`.
 
+## Orchestration smoke matrix
+
+The backend includes a deterministic mock-only smoke matrix for the Coach
+Agent orchestration boundary:
+
+```bash
+cd agent_backend
+python -m evals.run_orchestration_smoke \
+  --out evals/results/orchestration_smoke.local.json \
+  --markdown-out evals/results/orchestration_smoke.local.md
+```
+
+The smoke matrix runs `FITFORGE_AGENT_MODE=mock` across native and optional
+LangGraph orchestration rows plus trace off / on rows. If LangGraph is not
+installed, dependency-present LangGraph rows are skipped and the unavailable
+fallback case is still checked. To include the optional graph path:
+
+```bash
+cd agent_backend
+pip install -r requirements-agent-optional.txt
+python -m evals.run_orchestration_smoke \
+  --out evals/results/orchestration_smoke.optional.local.json \
+  --markdown-out evals/results/orchestration_smoke.optional.local.md
+```
+
+The scorecard verifies provider routing, safety short-circuiting, mutation
+confirmation, prompt-injection no-direct-mutation behavior, unknown
+orchestrator fallback, LangGraph unavailable fallback, and trace privacy. It
+does not call real LLM providers, does not require API keys, and intentionally
+omits raw prompts, raw responses, raw context, payload contents, and full
+`sourceContextHash` values. Local reports under `evals/results/*.json|md` are
+gitignored.
+
 ## Current implementation status
 
 | Capability | Status |

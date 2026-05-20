@@ -55,6 +55,24 @@ trusted `sourceContextHash` boundary.
 structural orchestration metadata and does not alter the `AgentResponse`
 contract or expose any debug payload to Flutter.
 
+## Smoke matrix
+
+`agent_backend/evals/run_orchestration_smoke.py` provides a mock-only
+scorecard for the current orchestration boundary:
+
+```bash
+cd agent_backend
+python -m evals.run_orchestration_smoke \
+  --out evals/results/orchestration_smoke.local.json \
+  --markdown-out evals/results/orchestration_smoke.local.md
+```
+
+It verifies native and optional LangGraph routing, trace off / on behavior,
+safety response, mutation confirmation, prompt-injection no-direct-mutation,
+unknown orchestrator fallback, and LangGraph unavailable fallback. The report
+omits raw prompts, raw responses, raw context, payload contents, and full
+`sourceContextHash` values.
+
 ## Supported actions
 
 | Action | Mutates local state | Requires user confirmation | Description |
