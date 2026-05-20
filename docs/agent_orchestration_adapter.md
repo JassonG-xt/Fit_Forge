@@ -109,6 +109,8 @@ behavior, unknown orchestrator fallback, and LangGraph unavailable fallback.
 When LangGraph is not installed, dependency-present graph rows are skipped
 rather than failed. Install `requirements-agent-optional.txt` to exercise the
 optional graph path.
+The same smoke matrix now runs in GitHub Actions CI, with reports written to
+temporary paths or uploaded as artifacts rather than committed.
 
 The JSON and Markdown scorecards store only structural metadata: case id,
 orchestrator, trace mode, response intent, action type names, mutation count,

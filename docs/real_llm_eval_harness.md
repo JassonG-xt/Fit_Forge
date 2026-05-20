@@ -11,6 +11,8 @@ For the deterministic mock-only orchestration smoke matrix, use
 `python -m evals.run_orchestration_smoke` instead. That scorecard verifies
 provider routing, trace privacy, fallback behavior, and the structured-action
 safety boundary without real LLM calls or API keys.
+That same smoke matrix now runs in GitHub Actions CI from the backend pytest
+job, using temporary report paths or artifacts instead of committed outputs.
 
 ## Why this is **not** in per-PR CI
 
