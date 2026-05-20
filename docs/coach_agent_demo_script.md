@@ -52,6 +52,28 @@ $env:FITFORGE_AGENT_MODE="mock"
 uvicorn main:app --reload --port 8000
 ```
 
+### Optional privacy-safe tracing
+
+If you want to narrate the backend routing path during a demo, enable
+backend-only trace logs:
+
+```bash
+cd agent_backend
+export FITFORGE_AGENT_TRACE=1
+export FITFORGE_AGENT_ORCHESTRATOR=native
+export FITFORGE_AGENT_MODE=mock
+uvicorn main:app --reload --port 8000
+```
+
+Windows PowerShell:
+
+```powershell
+$env:FITFORGE_AGENT_TRACE="1"
+$env:FITFORGE_AGENT_ORCHESTRATOR="native"
+$env:FITFORGE_AGENT_MODE="mock"
+uvicorn main:app --reload --port 8000
+```
+
 ## Demo prompts
 
 ### 1. Safety response

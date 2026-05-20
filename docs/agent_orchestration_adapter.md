@@ -43,6 +43,30 @@ knock the service off the safe path.
 | `mock` | Default backend behavior used in local demo and CI. |
 | `real` | Existing real LLM provider behavior. |
 
+## Privacy-safe tracing
+
+`FITFORGE_AGENT_TRACE=1` enables backend-only orchestration tracing. The
+trace is metadata-only and does not change `AgentResponse` behavior or add
+client-visible fields.
+
+Safe trace metadata:
+
+- trace id
+- orchestrator
+- agent mode
+- provider
+- node names
+- fallback reason
+- response intent
+- action type names
+- mutation action count
+- `safetyResponse`
+- elapsed time
+
+The trace never logs raw user messages, raw history, prompt text, raw LLM
+output, API keys, tokens, payload contents, or the full
+`sourceContextHash`.
+
 To run the optional path locally:
 
 ```bash
@@ -64,6 +88,9 @@ $env:FITFORGE_AGENT_ORCHESTRATOR="langgraph"
 $env:FITFORGE_AGENT_MODE="mock"
 uvicorn main:app --reload --port 8000
 ```
+
+If you want trace logs as well, set `FITFORGE_AGENT_TRACE=1` in the same
+shell before starting `uvicorn`.
 
 ## Safety boundary
 

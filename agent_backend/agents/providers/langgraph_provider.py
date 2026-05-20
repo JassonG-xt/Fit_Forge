@@ -14,6 +14,13 @@ import logging
 from functools import partial
 from typing import Any, TypedDict
 
+from agents.orchestration_trace import (
+    record_trace_error,
+    record_trace_fallback_reason,
+    record_trace_node,
+    record_trace_provider,
+    record_trace_response,
+)
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -33,6 +40,7 @@ class LangGraphCoachState(TypedDict, total=False):
 
 
 def safety_precheck_node(state: LangGraphCoachState) -> LangGraphCoachState:
+    record_trace_node("safety_precheck_node")
     request = state["request"]
     if assess_message_safety(request.message).has_medical_concern:
         return {
@@ -43,6 +51,7 @@ def safety_precheck_node(state: LangGraphCoachState) -> LangGraphCoachState:
 
 
 def intent_route_node(state: LangGraphCoachState) -> LangGraphCoachState:
+    record_trace_node("intent_route_node")
     if "response" in state:
         return {}
     message = state["request"].message.strip()
@@ -55,6 +64,7 @@ def native_response_node(
     state: LangGraphCoachState,
     native_provider: CoachAgentProvider | None = None,
 ) -> LangGraphCoachState:
+    record_trace_node("native_response_node")
     if "response" in state:
         return {}
 
@@ -69,6 +79,7 @@ def native_response_node(
 def response_contract_validation_node(
     state: LangGraphCoachState,
 ) -> LangGraphCoachState:
+    record_trace_node("response_contract_validation_node")
     response = _coerce_agent_response(state.get("response"))
     if response is None:
         return {"response": _langgraph_failure_response()}
@@ -86,14 +97,19 @@ class LangGraphCoachAgentProvider:
         self._native_provider = native_provider or NativeCoachAgentProvider()
 
     def handle(self, request: AgentRequest) -> AgentResponse:
+        record_trace_provider("langgraph")
         try:
             graph = self._build_graph()
         except ImportError:
+            record_trace_error("ImportError")
+            record_trace_fallback_reason("langgraph_unavailable")
             return _langgraph_unavailable_response()
 
         try:
             result = graph.invoke({"request": request})
         except Exception as exc:  # pragma: no cover - defensive logging only
+            record_trace_error(exc.__class__.__name__)
+            record_trace_fallback_reason("graph_execution_error")
             logger.warning(
                 "LangGraph orchestration failed; returning safe fallback: %s",
                 exc.__class__.__name__,
@@ -104,7 +120,10 @@ class LangGraphCoachAgentProvider:
             result.get("response") if isinstance(result, dict) else None
         )
         if response is not None:
+            record_trace_response(response)
             return response
+        record_trace_error("MalformedGraphOutput")
+        record_trace_fallback_reason("malformed_graph_output")
         return _langgraph_failure_response()
 
     def _build_graph(self):
@@ -177,7 +196,7 @@ def _safety_response(message: str) -> AgentResponse:
 
 
 def _langgraph_unavailable_response() -> AgentResponse:
-    return AgentResponse(
+    response = AgentResponse(
         message=(
             "Experimental LangGraph orchestration is unavailable in "
             "this backend environment. The request was not executed."
@@ -186,10 +205,12 @@ def _langgraph_unavailable_response() -> AgentResponse:
         confidence=0.0,
         actions=[],
     )
+    record_trace_response(response)
+    return response
 
 
 def _langgraph_failure_response() -> AgentResponse:
-    return AgentResponse(
+    response = AgentResponse(
         message=(
             "Experimental LangGraph orchestration could not complete safely. "
             "Please retry with the native orchestrator."
@@ -198,10 +219,12 @@ def _langgraph_failure_response() -> AgentResponse:
         confidence=0.0,
         actions=[],
     )
+    record_trace_response(response)
+    return response
 
 
 def _langgraph_fallback_response() -> AgentResponse:
-    return AgentResponse(
+    response = AgentResponse(
         message=(
             "I can help with workout plans, schedule changes, exercise swaps, "
             "compressing today's workout, or nutrition guidance. Tell me your goal, "
@@ -211,6 +234,8 @@ def _langgraph_fallback_response() -> AgentResponse:
         confidence=0.5,
         actions=[],
     )
+    record_trace_response(response)
+    return response
 
 
 __all__ = [

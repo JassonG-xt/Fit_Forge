@@ -65,6 +65,8 @@ flowchart TD
 - `requiresConfirmation` is forced for mutation actions.
 - Safety short-circuits happen before provider execution.
 - LangGraph, when enabled, is only an orchestration wrapper.
+- `FITFORGE_AGENT_TRACE=1` adds backend-only privacy-safe trace logs and does
+  not surface any raw user or model text to Flutter.
 
 ## LangGraph node flow
 
