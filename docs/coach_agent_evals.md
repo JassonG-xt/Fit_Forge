@@ -137,21 +137,23 @@ default authority, optional experimental orchestration, trusted
 `sourceContextHash`, user confirmation for mutation, and safe fallback on
 high-risk or malformed output.
 
-### Phase A addendum
+### Phase B addendum
 
-Phase A keeps LangGraph optional and experimental while hardening the
-validator and parity checks:
+Phase B keeps LangGraph optional and experimental while adding a recovery
+node for fatigue / time-constraint / schedule-recovery routing:
 
 - native remains the default orchestrator
 - LangGraph remains orchestration-only, not mutation authority
+- recovery routing stays orchestration-only and cannot mutate app state
 - malformed graph output fails closed
 - `safetyResponse` cannot smuggle mutation actions
 - mutation actions must require confirmation and use the trusted context hash
-- parity coverage compares native and LangGraph outputs for the core Coach
-  Agent intents
+- parity coverage continues for the core Coach Agent intents
+- recovery-focused pytest coverage handles ambiguous fatigue / safety cases
 
-Phase A validator failure coverage lives in pytest, while the smoke matrix
-adds routing, fallback, confirmation, and privacy-safe metadata coverage.
+Validator failure coverage lives in pytest, while the smoke matrix adds
+routing, fallback, confirmation, recovery / safety precedence, and
+privacy-safe metadata coverage.
 
 ### Privacy-safe tracing note
 

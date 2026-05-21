@@ -4,8 +4,9 @@ FitForge Coach Agent is a provider-agnostic structured-action agent.
 The backend may use the native provider or the optional experimental
 LangGraph orchestrator, but every path must return the existing
 `AgentResponse` / `AgentAction` contract.
-Phase A hardens the LangGraph validator and parity checks; LangGraph remains
-optional and orchestration-only, and native remains the default path.
+Phase B adds a dedicated recovery node to the optional LangGraph path;
+LangGraph remains optional and orchestration-only, and native remains the
+default path.
 
 ## Current architecture
 
@@ -36,12 +37,13 @@ behavior. `langgraph` is optional and experimental; it wraps native
 behavior through a minimal graph and falls back safely when LangGraph is
 not installed.
 
-Phase A node responsibilities:
+Phase B node responsibilities:
 
 | Node | Responsibility | Can mutate app state? |
 |---|---|---|
 | `safety_precheck_node` | Deterministic high-risk symptom short-circuit | No |
 | `intent_route_node` | Coarse routing only | No |
+| `recovery_node` | Detects fatigue / recovery / time-constraint signals and records safe metadata | No |
 | `native_response_node` | Delegates action generation to the native provider | No |
 | `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
 
@@ -51,6 +53,7 @@ Current LangGraph node flow:
 input
 -> safety_precheck_node
 -> intent_route_node
+-> recovery_node
 -> native_response_node
 -> response_contract_validation_node
 -> AgentResponse
@@ -119,7 +122,7 @@ runtime behavior.
 
 Unknown orchestrator values fall back to native behavior.
 
-## Phase A non-goals
+## Phase B non-goals
 
 - not a fully autonomous agent
 - not long-term memory

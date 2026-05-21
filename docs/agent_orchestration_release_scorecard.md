@@ -10,7 +10,7 @@
 - Real LLM mode: `FITFORGE_AGENT_MODE=real` (manual / optional, not default CI)
 - CI status: backend pytest, Flutter analyze/test, secret scan, dependency audit, and orchestration smoke gate all pass
 
-Phase A hardens the LangGraph response validator and parity coverage. LangGraph remains optional and orchestration-only; native remains the default path.
+Phase B adds a recovery node to the optional LangGraph path. LangGraph remains optional and orchestration-only; native remains the default path.
 
 ## Architecture Summary
 
@@ -37,6 +37,7 @@ LangGraph is not mutation authority; it only orchestrates and then fail-closes o
 | Optional LangGraph adapter | Implemented | [`agent-langgraph-orchestration-adapter-v1`](agent_orchestration_adapter.md) |
 | Structured LangGraph nodes | Implemented | [`agent-langgraph-structured-nodes-v1`](agent_orchestration_adapter.md) |
 | Phase A validator hardening | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md) and backend tests |
+| Phase B recovery node | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md), backend tests, and smoke matrix |
 | Privacy-safe tracing | Implemented | [`agent-privacy-safe-tracing-v1`](security.md) |
 | Smoke matrix | Implemented | [`agent-orchestration-smoke-matrix-v1`](coach_agent_evals.md) |
 | CI smoke gate | Implemented | [`agent-orchestration-smoke-ci-v1`](../.github/workflows/ci.yml) |
@@ -110,12 +111,12 @@ Not a full framework-based agent system. It uses a custom structured-action arch
 - HealthKit / wearable data not integrated.
 - Not medical diagnosis.
 - Not a commercial-grade fitness content platform yet.
-- Phase A does not replace the native default path.
+- Phase B does not replace the native default path.
 
 ## Next Recommended Phases
 
 - Add a response validator node with stronger contract checks.
-- Add planner / recovery / nutrition nodes behind LangGraph without changing the executor boundary.
+- Add planner / nutrition nodes behind LangGraph without changing the executor boundary.
 - Add synthetic real-provider smoke scorecards manually.
 - Add observability docs / dashboard only if needed.
 - Add a user-facing demo video checklist.
