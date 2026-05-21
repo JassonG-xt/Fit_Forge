@@ -14,6 +14,7 @@ import logging
 from functools import partial
 from typing import Any, TypedDict
 
+from agents.action_safety import MUTATION_ACTION_TYPES
 from agents.orchestration_trace import (
     record_trace_error,
     record_trace_fallback_reason,
@@ -30,6 +31,18 @@ from .base import CoachAgentProvider
 from .native_provider import NativeCoachAgentProvider
 
 logger = logging.getLogger(__name__)
+
+_ALLOWED_GRAPH_INTENTS = {
+    "answerOnly",
+    "weeklyReview",
+    "nutritionAdvice",
+    "safetyResponse",
+    "generatePlan",
+    "rescheduleWeek",
+    "replaceExercise",
+    "compressWorkout",
+    "moveWorkoutSession",
+}
 
 
 class LangGraphCoachState(TypedDict, total=False):
@@ -81,11 +94,12 @@ def response_contract_validation_node(
 ) -> LangGraphCoachState:
     record_trace_node("response_contract_validation_node")
     response = _coerce_agent_response(state.get("response"))
-    if response is None:
+    request = state.get("request")
+    if response is None or not isinstance(request, AgentRequest):
+        record_trace_fallback_reason("validator_contract_violation")
         return {"response": _langgraph_failure_response()}
-    if response.intent == "safetyResponse" and any(
-        action.type != "safetyResponse" for action in response.actions
-    ):
+    if not _is_safe_graph_response(response, request):
+        record_trace_fallback_reason("validator_contract_violation")
         return {"response": _langgraph_failure_response()}
     return {"response": response}
 
@@ -159,6 +173,43 @@ def _coerce_agent_response(response: Any) -> AgentResponse | None:
         return AgentResponse.model_validate(response)
     except Exception:
         return None
+
+
+def _is_safe_graph_response(
+    response: AgentResponse,
+    request: AgentRequest,
+) -> bool:
+    if response.intent not in _ALLOWED_GRAPH_INTENTS:
+        return False
+
+    if response.intent == "answerOnly":
+        return not response.actions
+
+    if response.intent == "safetyResponse":
+        return all(action.type == "safetyResponse" for action in response.actions)
+
+    mutation_actions = [
+        action for action in response.actions if action.type in MUTATION_ACTION_TYPES
+    ]
+    if response.intent not in MUTATION_ACTION_TYPES:
+        if mutation_actions:
+            return False
+        return True
+
+    if not mutation_actions or len(mutation_actions) != len(response.actions):
+        return False
+
+    trusted_hash = request.context.planContextHash
+    if not trusted_hash:
+        return False
+
+    for action in mutation_actions:
+        if not action.requiresConfirmation:
+            return False
+        if not action.sourceContextHash or action.sourceContextHash != trusted_hash:
+            return False
+
+    return True
 
 
 def _safety_response(message: str) -> AgentResponse:

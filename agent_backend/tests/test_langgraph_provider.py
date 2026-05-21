@@ -10,6 +10,7 @@ from typing import Any, Callable
 import pytest
 
 from agents.coach_agent import run_coach_agent
+from agents.action_safety import MUTATION_ACTION_TYPES
 from agents.providers.langgraph_provider import (
     LangGraphCoachAgentProvider,
     response_contract_validation_node,
@@ -289,3 +290,176 @@ def test_langgraph_malformed_response_state_returns_safe_fallback() -> None:
 
     assert result["response"].intent == "answerOnly"
     assert result["response"].actions == []
+
+
+@pytest.mark.parametrize(
+    "response_state",
+    [
+        {"intent": "compressWorkout"},
+        {
+            "message": "hi",
+            "intent": "safetyResponse",
+            "actions": [
+                {
+                    "id": "x",
+                    "type": "compressWorkout",
+                    "title": "t",
+                    "summary": "s",
+                    "requiresConfirmation": True,
+                }
+            ],
+        },
+        {
+            "message": "hi",
+            "intent": "compressWorkout",
+            "actions": [
+                {
+                    "id": "x",
+                    "type": "compressWorkout",
+                    "title": "t",
+                    "summary": "s",
+                    "requiresConfirmation": False,
+                }
+            ],
+        },
+        {
+            "message": "hi",
+            "intent": "compressWorkout",
+            "actions": [
+                {
+                    "id": "x",
+                    "type": "compressWorkout",
+                    "title": "t",
+                    "summary": "s",
+                    "requiresConfirmation": True,
+                }
+            ],
+        },
+    ],
+)
+def test_langgraph_response_contract_validation_fail_closed(
+    response_state: dict[str, object],
+) -> None:
+    result = response_contract_validation_node(
+        {"request": _request(), "response": response_state}
+    )
+
+    assert result["response"].intent == "answerOnly"
+    assert result["response"].actions == []
+
+
+def test_langgraph_response_contract_validation_rejects_hash_mismatch() -> None:
+    result = response_contract_validation_node(
+        {
+            "request": _request(),
+            "response": {
+                "message": "hi",
+                "intent": "compressWorkout",
+                "actions": [
+                    {
+                        "id": "x",
+                        "type": "compressWorkout",
+                        "title": "t",
+                        "summary": "s",
+                        "requiresConfirmation": True,
+                        "sourceContextHash": "mismatch_hash",
+                    }
+                ],
+            },
+        }
+    )
+
+    assert result["response"].intent == "answerOnly"
+    assert result["response"].actions == []
+
+
+def test_langgraph_response_contract_validation_rejects_missing_hash() -> None:
+    result = response_contract_validation_node(
+        {
+            "request": _request(),
+            "response": {
+                "message": "hi",
+                "intent": "compressWorkout",
+                "actions": [
+                    {
+                        "id": "x",
+                        "type": "compressWorkout",
+                        "title": "t",
+                        "summary": "s",
+                        "requiresConfirmation": True,
+                    }
+                ],
+            },
+        }
+    )
+
+    assert result["response"].intent == "answerOnly"
+    assert result["response"].actions == []
+
+
+def test_langgraph_response_contract_validation_rejects_unknown_intent() -> None:
+    result = response_contract_validation_node(
+        {
+            "request": _request(),
+            "response": {
+                "message": "hi",
+                "intent": "notARealIntent",
+                "actions": [],
+            },
+        }
+    )
+
+    assert result["response"].intent == "answerOnly"
+    assert result["response"].actions == []
+
+
+def test_langgraph_native_and_graph_parity_cover_core_intents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+    monkeypatch.setenv("FITFORGE_AGENT_MODE", "mock")
+
+    cases = [
+        ("answerOnly", _request("今天天气怎么样")),  # fallback
+        ("compressWorkout", _request("今天只有20分钟，帮我压缩训练")),
+        ("replaceExercise", _request("没有杠铃，帮我替换今天的动作")),
+        ("generatePlan", _request("帮我生成一个增肌计划")),
+        (
+            "weeklyReview",
+            AgentRequest(
+                message="帮我复盘这周训练",
+                context={
+                    "planContextHash": "trusted_hash",
+                    "recentSessions": [
+                        {"id": "s1", "dayType": "push"},
+                        {"id": "s2", "dayType": "legs"},
+                    ],
+                    "progressSummary": {"totalWorkoutsThisWeek": 2, "streakDays": 2},
+                },
+            ),
+        ),
+        ("safetyResponse", _request("我胸口疼但还想继续练")),
+    ]
+
+    native_provider = LangGraphCoachAgentProvider()._native_provider
+    graph_provider = LangGraphCoachAgentProvider()
+
+    for expected_intent, request in cases:
+        native_response = native_provider.handle(request)
+        graph_response = graph_provider.handle(request)
+
+        assert graph_response.intent == native_response.intent == expected_intent
+        assert [a.type for a in graph_response.actions] == [
+            a.type for a in native_response.actions
+        ]
+        assert sum(1 for a in graph_response.actions if a.type in MUTATION_ACTION_TYPES) == sum(
+            1 for a in native_response.actions if a.type in MUTATION_ACTION_TYPES
+        )
+        for action in graph_response.actions:
+            if action.type in MUTATION_ACTION_TYPES:
+                assert action.requiresConfirmation is True
+                assert action.sourceContextHash == "trusted_hash"
+        if expected_intent == "safetyResponse":
+            assert all(action.type == "safetyResponse" for action in graph_response.actions)
+        if expected_intent == "answerOnly":
+            assert graph_response.actions == []

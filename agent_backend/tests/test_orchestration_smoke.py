@@ -33,6 +33,8 @@ def test_smoke_cases_cover_required_backend_paths() -> None:
         "safety-stop",
         "prompt-injection-no-direct-mutation",
         "unknown-orchestrator-fallback",
+        "validator-malformed-graph-output",
+        "validator-hash-mismatch-graph-output",
     }
 
 
@@ -99,6 +101,33 @@ def test_langgraph_unavailable_case_is_safe_or_skipped() -> None:
         assert result["actionTypes"] == []
         assert result["fallbackReason"] == "langgraph_unavailable"
         assert result["traceLogSafe"] is True
+
+
+def test_validator_probe_cases_fail_closed_without_raw_leaks() -> None:
+    report = run_smoke_matrix(
+        orchestrators=["langgraph"],
+        traces=["on"],
+        case_ids=[
+            "validator-malformed-graph-output",
+            "validator-hash-mismatch-graph-output",
+        ],
+        include_langgraph=True,
+    )
+    results = {result["caseId"]: result for result in report["results"]}
+
+    malformed = results["validator-malformed-graph-output"]
+    assert malformed["status"] == "pass"
+    assert malformed["intent"] == "answerOnly"
+    assert malformed["actionTypes"] == []
+    assert malformed["fallbackReason"] == "validator_contract_violation"
+    assert malformed["traceLogSafe"] is True
+
+    mismatch = results["validator-hash-mismatch-graph-output"]
+    assert mismatch["status"] == "pass"
+    assert mismatch["intent"] == "answerOnly"
+    assert mismatch["actionTypes"] == []
+    assert mismatch["fallbackReason"] == "validator_contract_violation"
+    assert mismatch["traceLogSafe"] is True
 
 
 def test_report_outputs_do_not_include_raw_prompt_text(tmp_path: Path) -> None:

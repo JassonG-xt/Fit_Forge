@@ -1,7 +1,8 @@
 # Agent Orchestration Adapter
 
 FitForge remains a provider-agnostic structured-action agent system.
-This adapter boundary is not a full LangGraph migration.
+Phase A hardens the optional LangGraph adapter into a verifiable safety
+orchestration layer, but it is still not a full LangGraph migration.
 
 ## Current architecture
 
@@ -31,7 +32,7 @@ preview, or bypass confirmation.
 | Value | Behavior |
 |---|---|
 | `native` | Default. Uses the existing FitForge provider behavior. |
-| `langgraph` | Optional experimental wrapper around native behavior. LangGraph is imported lazily and is not required for normal backend CI. |
+| `langgraph` | Optional experimental wrapper around native behavior. LangGraph is imported lazily and is not required for normal backend CI. Phase A keeps it orchestration-only. |
 
 Unknown values fall back to `native` so a bad deployment setting does not
 knock the service off the safe path.
@@ -155,26 +156,34 @@ input
 -> AgentResponse
 ```
 
+| Node | Responsibility | Can mutate app state? |
+|---|---|---|
+| `safety_precheck_node` | Deterministic high-risk symptom short-circuit | No |
+| `intent_route_node` | Coarse routing only | No |
+| `native_response_node` | Delegates action generation to the native provider | No |
+| `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
+
 The node flow does not invent new action types and does not bypass the
 structured-action boundary. `native_response_node` still delegates actual
 action generation to the existing native provider, and
 `response_contract_validation_node` fails closed to a safe `answerOnly`
-response when the graph output is malformed or missing.
+response when the graph output is malformed, unsafe, missing confirmation,
+or carries a suspicious `sourceContextHash`.
 
 If LangGraph is unavailable, the provider returns a valid `answerOnly`
 `AgentResponse` explaining that the experimental orchestration adapter is
 unavailable in the current backend environment.
 
-## Non-goals
+## Phase A non-goals
 
-- not a fully autonomous agent
-- not direct LLM state mutation
+- not a full multi-agent migration
 - not long-term memory
 - not streaming
-- not cloud sync
-- not a UI redesign
+- not real LLM CI
+- not direct backend mutation
+- not Flutter UI rewrite
 - not production observability
-- not a real multi-agent graph yet
+- not a full replacement for the native default path
 
 Future phases may replace the coarse `intent_route_node` with dedicated
 Planner, Recovery, Nutrition, and Validator nodes, but those are not

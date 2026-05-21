@@ -4,6 +4,8 @@ FitForge Coach Agent is a provider-agnostic structured-action agent.
 The backend may use the native provider or the optional experimental
 LangGraph orchestrator, but every path must return the existing
 `AgentResponse` / `AgentAction` contract.
+Phase A hardens the LangGraph validator and parity checks; LangGraph remains
+optional and orchestration-only, and native remains the default path.
 
 ## Current architecture
 
@@ -34,6 +36,15 @@ behavior. `langgraph` is optional and experimental; it wraps native
 behavior through a minimal graph and falls back safely when LangGraph is
 not installed.
 
+Phase A node responsibilities:
+
+| Node | Responsibility | Can mutate app state? |
+|---|---|---|
+| `safety_precheck_node` | Deterministic high-risk symptom short-circuit | No |
+| `intent_route_node` | Coarse routing only | No |
+| `native_response_node` | Delegates action generation to the native provider | No |
+| `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
+
 Current LangGraph node flow:
 
 ```text
@@ -48,6 +59,8 @@ input
 The graph is orchestration only. It still delegates actual action
 generation to the native provider and cannot bypass confirmation or the
 trusted `sourceContextHash` boundary.
+It also fail-closes malformed output, safety-violating output, and mutation
+actions that are missing confirmation or carry an unsafe hash.
 
 ## Privacy-safe tracing
 
@@ -106,7 +119,7 @@ runtime behavior.
 
 Unknown orchestrator values fall back to native behavior.
 
-## Current non-goals
+## Phase A non-goals
 
 - not a fully autonomous agent
 - not long-term memory
@@ -115,6 +128,8 @@ Unknown orchestrator values fall back to native behavior.
 - not HealthKit / Health Connect
 - not direct backend state mutation
 - not a multi-agent graph yet
+- not a Flutter UI rewrite
+- not real LLM CI
 
 ## Release scorecard
 
