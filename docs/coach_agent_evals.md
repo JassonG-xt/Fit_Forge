@@ -23,6 +23,8 @@ which provider is wired up:
   confirmation)
 - Phase A validator hardening (malformed / unsafe LangGraph output fails
   closed to `answerOnly` with no actions)
+- Phase C recovery policy coverage (ambiguous fatigue / overtraining requests
+  in the optional LangGraph path return non-mutating `answerOnly` advice)
 - The agent never auto-executes; mutations always go through
   `AgentAction → preview → user confirmation → LocalAgentActionExecutor → AppState`
 
@@ -155,6 +157,30 @@ Validator failure coverage lives in pytest, while the smoke matrix adds
 routing, fallback, confirmation, recovery / safety precedence, and
 privacy-safe metadata coverage.
 
+
+### Phase C addendum
+
+Phase C keeps native as the default orchestrator and keeps LangGraph optional
+and experimental. It adds a `recovery_policy_node` after `recovery_node` in the
+optional LangGraph path:
+
+```text
+input
+-> safety_precheck_node
+-> intent_route_node
+-> recovery_node
+-> recovery_policy_node
+-> native_response_node
+-> response_contract_validation_node
+-> AgentResponse
+```
+
+The policy node consumes recovery metadata and may return safe, non-mutating
+`answerOnly` advice for ambiguous fatigue / overtraining requests. Explicit
+mutation requests, such as workout compression or schedule changes, still flow
+to the native provider and must pass response contract validation. Safety
+precheck remains first and still wins over recovery policy.
+
 ### Privacy-safe tracing note
 
 `FITFORGE_AGENT_TRACE=1` does not change eval expectations. The eval suite
@@ -183,8 +209,10 @@ trace off / on, and `FITFORGE_AGENT_MODE=mock`. It covers answer-only fallback,
 `compressWorkout`, `replaceExercise`, deterministic `generatePlan`,
 structured `weeklyReview`, `safetyResponse`, prompt-injection no-direct
 mutation, unknown-orchestrator fallback, LangGraph unavailable fallback, and
-validator fallback probes. The same smoke matrix now runs in GitHub Actions CI
-as a backend safety gate.
+validator fallback probes. Phase C adds strict optional-LangGraph recovery
+policy probes for fatigue / overtraining answer-only advice and safety
+precedence. The same smoke matrix now runs in GitHub Actions CI as a backend
+safety gate.
 
 If the optional dependency is not installed, normal LangGraph graph rows are
 reported as `skip`, while the safe unavailable fallback remains testable:

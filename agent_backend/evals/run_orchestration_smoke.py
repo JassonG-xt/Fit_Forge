@@ -64,8 +64,10 @@ class SmokeCase:
     require_mutation_confirmation: bool = False
     expect_no_mutation: bool = False
     expect_safety_response: bool = False
+    expect_answer_only: bool = False
     expect_unknown_orchestrator_fallback: bool = False
     expect_langgraph_unavailable: bool = False
+    strict_langgraph_recovery_policy: bool = False
     validator_probe_kind: str | None = None
     context: dict[str, Any] = field(default_factory=dict)
 
@@ -179,9 +181,18 @@ def build_smoke_cases() -> list[SmokeCase]:
         SmokeCase(
             case_id="recovery-fatigue-answer-only",
             category="recovery",
-            prompt="我这几天很累，状态很差，还要继续练吗",
-            acceptable_intents=("answerOnly", "weeklyReview"),
+            prompt="\u6211\u8fd9\u51e0\u5929\u5f88\u7d2f\uff0c\u72b6\u6001\u5f88\u5dee\uff0c\u8fd8\u8981\u7ee7\u7eed\u7ec3\u5417",
             expect_no_mutation=True,
+            expect_answer_only=True,
+            strict_langgraph_recovery_policy=True,
+        ),
+        SmokeCase(
+            case_id="recovery-overtraining-answer-only",
+            category="recovery",
+            prompt="\u6211\u8fde\u7eed\u7ec3\u4e86\u597d\u51e0\u5929\uff0c\u6709\u70b9\u7d2f\uff0c\u4eca\u5929\u600e\u4e48\u5b89\u6392",
+            expect_no_mutation=True,
+            expect_answer_only=True,
+            strict_langgraph_recovery_policy=True,
         ),
         SmokeCase(
             case_id="recovery-safety-overrides-compress",
@@ -394,6 +405,8 @@ def _result_from_response(
             notes.append("intent_mismatch")
     elif case.expected_intent and response.intent != case.expected_intent:
         notes.append("intent_mismatch")
+    if case.expect_answer_only and requested_orchestrator == "langgraph" and response.intent != "answerOnly":
+        notes.append("answer_only_expected")
     if case.expected_action_type and case.expected_action_type not in action_types:
         notes.append("action_type_mismatch")
     if case.expect_no_mutation and mutation_actions:
@@ -403,6 +416,11 @@ def _result_from_response(
             notes.append("safety_response_mismatch")
         if mutation_actions:
             notes.append("safety_returned_mutation_action")
+    if case.strict_langgraph_recovery_policy and requested_orchestrator == "langgraph":
+        if response.intent != "answerOnly":
+            notes.append("recovery_policy_intent_mismatch")
+        if action_types:
+            notes.append("recovery_policy_actions_not_empty")
 
     requires_confirmation_ok: bool | None = None
     if mutation_actions:
