@@ -1,8 +1,9 @@
 # Agent Orchestration Adapter
 
 FitForge remains a provider-agnostic structured-action agent system.
-Phase A hardens the optional LangGraph adapter into a verifiable safety
-orchestration layer, but it is still not a full LangGraph migration.
+Phase B keeps the optional LangGraph adapter experimental while adding a
+dedicated recovery node for fatigue / time-constraint / schedule-recovery
+routing. It is still not a full LangGraph migration.
 
 ## Current architecture
 
@@ -32,7 +33,7 @@ preview, or bypass confirmation.
 | Value | Behavior |
 |---|---|
 | `native` | Default. Uses the existing FitForge provider behavior. |
-| `langgraph` | Optional experimental wrapper around native behavior. LangGraph is imported lazily and is not required for normal backend CI. Phase A keeps it orchestration-only. |
+| `langgraph` | Optional experimental wrapper around native behavior. LangGraph is imported lazily and is not required for normal backend CI. Phase B keeps it orchestration-only and adds recovery-oriented routing metadata. |
 
 Unknown values fall back to `native` so a bad deployment setting does not
 knock the service off the safe path.
@@ -151,6 +152,7 @@ The optional LangGraph path now runs explicit deterministic nodes:
 input
 -> safety_precheck_node
 -> intent_route_node
+-> recovery_node
 -> native_response_node
 -> response_contract_validation_node
 -> AgentResponse
@@ -160,6 +162,7 @@ input
 |---|---|---|
 | `safety_precheck_node` | Deterministic high-risk symptom short-circuit | No |
 | `intent_route_node` | Coarse routing only | No |
+| `recovery_node` | Detects fatigue / recovery / time-constraint signals and records safe metadata | No |
 | `native_response_node` | Delegates action generation to the native provider | No |
 | `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
 
@@ -174,7 +177,7 @@ If LangGraph is unavailable, the provider returns a valid `answerOnly`
 `AgentResponse` explaining that the experimental orchestration adapter is
 unavailable in the current backend environment.
 
-## Phase A non-goals
+## Phase B non-goals
 
 - not a full multi-agent migration
 - not long-term memory

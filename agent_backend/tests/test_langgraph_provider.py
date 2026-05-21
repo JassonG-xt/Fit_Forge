@@ -13,6 +13,7 @@ from agents.coach_agent import run_coach_agent
 from agents.action_safety import MUTATION_ACTION_TYPES
 from agents.providers.langgraph_provider import (
     LangGraphCoachAgentProvider,
+    recovery_node,
     response_contract_validation_node,
 )
 from schemas.agent_request import AgentRequest
@@ -54,6 +55,7 @@ def _request(message: str = "今天只有20分钟，帮我压缩训练") -> Agen
 _EXPECTED_NODE_ORDER = (
     "safety_precheck_node",
     "intent_route_node",
+    "recovery_node",
     "native_response_node",
     "response_contract_validation_node",
 )
@@ -150,7 +152,8 @@ def test_langgraph_builds_named_safe_node_sequence(
     assert graph.edges == [
         ("__start__", "safety_precheck_node"),
         ("safety_precheck_node", "intent_route_node"),
-        ("intent_route_node", "native_response_node"),
+        ("intent_route_node", "recovery_node"),
+        ("recovery_node", "native_response_node"),
         ("native_response_node", "response_contract_validation_node"),
         ("response_contract_validation_node", "__end__"),
     ]
@@ -215,6 +218,39 @@ def test_langgraph_graph_path_preserves_safety_response(
     assert response.intent == "safetyResponse"
     assert response.safety.shouldStopWorkout is True
     assert all(action.type == "safetyResponse" for action in response.actions)
+
+
+def test_recovery_node_noops_when_response_already_present() -> None:
+    assert recovery_node({"request": _request(), "response": {"intent": "answerOnly"}}) == {}
+
+
+def test_recovery_node_marks_time_constrained_signals() -> None:
+    result = recovery_node(
+        {
+            "request": _request("今天只有20分钟，帮我压缩训练"),
+        }
+    )
+
+    assert result["recovery"]["signal"] == "time_constrained"
+    assert result["recovery"]["reason"] == "explicit_target_minutes"
+
+
+def test_recovery_node_ignores_high_risk_symptoms() -> None:
+    assert recovery_node(
+        {
+            "request": _request("我胸口疼但还想继续练，帮我压缩训练"),
+        }
+    ) == {}
+
+
+def test_recovery_node_marks_fatigue_signals() -> None:
+    result = recovery_node(
+        {
+            "request": _request("我这几天很累，状态很差，还要继续练吗"),
+        }
+    )
+
+    assert result["recovery"]["signal"] == "fatigue_or_recovery"
 
 
 @pytest.mark.parametrize(

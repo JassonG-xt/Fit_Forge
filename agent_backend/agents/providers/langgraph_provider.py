@@ -1,8 +1,8 @@
 """Experimental LangGraph orchestration adapter.
 
 The optional path stays small and safe:
-input -> safety_precheck_node -> intent_route_node -> native_response_node
--> response_contract_validation_node -> output.
+input -> safety_precheck_node -> intent_route_node -> recovery_node
+-> native_response_node -> response_contract_validation_node -> output.
 
 LangGraph is imported lazily so normal backend CI does not require the
 optional dependency.
@@ -10,6 +10,7 @@ optional dependency.
 
 from __future__ import annotations
 
+import re
 import logging
 from functools import partial
 from typing import Any, TypedDict
@@ -49,6 +50,7 @@ class LangGraphCoachState(TypedDict, total=False):
     request: AgentRequest
     response: Any
     route: str
+    recovery: dict[str, Any]
     error: str
 
 
@@ -71,6 +73,18 @@ def intent_route_node(state: LangGraphCoachState) -> LangGraphCoachState:
     if not message:
         return {"route": "fallback"}
     return {"route": "native"}
+
+
+def recovery_node(state: LangGraphCoachState) -> LangGraphCoachState:
+    record_trace_node("recovery_node")
+    if "response" in state:
+        return {}
+
+    request = state["request"]
+    recovery = _detect_recovery_signal(request)
+    if recovery is None:
+        return {}
+    return {"recovery": recovery}
 
 
 def native_response_node(
@@ -148,6 +162,7 @@ class LangGraphCoachAgentProvider:
 
         graph.add_node("safety_precheck_node", safety_precheck_node)
         graph.add_node("intent_route_node", intent_route_node)
+        graph.add_node("recovery_node", recovery_node)
         graph.add_node(
             "native_response_node",
             partial(native_response_node, native_provider=self._native_provider),
@@ -158,7 +173,8 @@ class LangGraphCoachAgentProvider:
         )
         graph.add_edge(START, "safety_precheck_node")
         graph.add_edge("safety_precheck_node", "intent_route_node")
-        graph.add_edge("intent_route_node", "native_response_node")
+        graph.add_edge("intent_route_node", "recovery_node")
+        graph.add_edge("recovery_node", "native_response_node")
         graph.add_edge("native_response_node", "response_contract_validation_node")
         graph.add_edge("response_contract_validation_node", END)
         return graph.compile()
@@ -172,6 +188,103 @@ def _coerce_agent_response(response: Any) -> AgentResponse | None:
     try:
         return AgentResponse.model_validate(response)
     except Exception:
+        return None
+
+
+def _detect_recovery_signal(request: AgentRequest) -> dict[str, Any] | None:
+    message = request.message.lower()
+    if assess_message_safety(request.message).has_medical_concern:
+        return None
+
+    explicit_minutes = _extract_explicit_minutes(request.message)
+    context = request.context.model_dump()
+    progress = context.get("progressSummary") or {}
+    profile = context.get("profile") or {}
+    streak_days = _as_int(progress.get("streakDays"))
+    weekly_frequency = _as_int(progress.get("weeklyFrequency") or profile.get("weeklyFrequency"))
+    completed = _as_int(progress.get("totalWorkoutsThisWeek"))
+
+    if _has_schedule_recovery_signal(message):
+        return {"signal": "schedule_recovery", "reason": "schedule_change_keywords"}
+
+    if explicit_minutes is not None and _has_time_constraint_signal(message):
+        return {
+            "signal": "time_constrained",
+            "reason": "explicit_target_minutes",
+            "targetMinutes": explicit_minutes,
+        }
+
+    if (
+        _has_overtraining_signal(message)
+        or (
+            streak_days is not None
+            and streak_days >= 4
+            and _has_recovery_keywords(message)
+        )
+        or (
+            weekly_frequency is not None
+            and completed is not None
+            and completed >= weekly_frequency
+            and _has_recovery_keywords(message)
+        )
+    ):
+        return {"signal": "overtraining", "reason": "load_or_overtraining_keywords"}
+
+    if _has_recovery_fatigue_signal(message) or _has_recovery_keywords(message):
+        return {"signal": "fatigue_or_recovery", "reason": "recovery_keywords"}
+
+    return None
+
+
+def _has_recovery_keywords(message: str) -> bool:
+    return any(
+        token in message
+        for token in (
+            "累",
+            "疲劳",
+            "恢复",
+            "休息",
+            "酸痛",
+            "连续训练",
+            "练太多",
+            "训练过多",
+            "streak",
+        )
+    )
+
+
+def _has_recovery_fatigue_signal(message: str) -> bool:
+    return any(token in message for token in ("累", "疲劳", "恢复", "休息", "酸痛"))
+
+
+def _has_overtraining_signal(message: str) -> bool:
+    return any(token in message for token in ("连续训练", "练太多", "训练过多", "streak"))
+
+
+def _has_time_constraint_signal(message: str) -> bool:
+    return any(token in message for token in ("分钟", "时间不够", "只有", "压缩", "缩短"))
+
+
+def _has_schedule_recovery_signal(message: str) -> bool:
+    return any(token in message for token in ("改训练日", "调整训练日", "本周只能", "这周只能", "今天只能"))
+
+
+def _extract_explicit_minutes(message: str) -> int | None:
+    match = re.search(r"(\d+)\s*分钟", message)
+    if match:
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
+    return None
+
+
+def _as_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
         return None
 
 
@@ -294,6 +407,7 @@ __all__ = [
     "LangGraphCoachState",
     "intent_route_node",
     "native_response_node",
+    "recovery_node",
     "response_contract_validation_node",
     "safety_precheck_node",
 ]

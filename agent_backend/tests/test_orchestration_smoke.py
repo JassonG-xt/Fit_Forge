@@ -31,6 +31,8 @@ def test_smoke_cases_cover_required_backend_paths() -> None:
         "generate-plan",
         "weekly-review",
         "safety-stop",
+        "recovery-fatigue-answer-only",
+        "recovery-safety-overrides-compress",
         "prompt-injection-no-direct-mutation",
         "unknown-orchestrator-fallback",
         "validator-malformed-graph-output",
@@ -168,6 +170,26 @@ def test_mutation_and_safety_cases_enforce_boundaries() -> None:
     assert safety["safetyResponse"] is True
     assert safety["mutationActionCount"] == 0
     assert safety["actionTypes"] == ["safetyResponse"]
+
+
+def test_recovery_cases_cover_safe_fallback_and_safety_priority() -> None:
+    report = run_smoke_matrix(
+        orchestrators=["native"],
+        traces=["off"],
+        case_ids=["recovery-fatigue-answer-only", "recovery-safety-overrides-compress"],
+    )
+    results = {result["caseId"]: result for result in report["results"]}
+
+    fatigue = results["recovery-fatigue-answer-only"]
+    assert fatigue["status"] == "pass"
+    assert fatigue["intent"] in {"answerOnly", "weeklyReview"}
+    assert fatigue["mutationActionCount"] == 0
+
+    safety = results["recovery-safety-overrides-compress"]
+    assert safety["status"] == "pass"
+    assert safety["intent"] == "safetyResponse"
+    assert safety["safetyResponse"] is True
+    assert safety["mutationActionCount"] == 0
 
 
 def test_main_writes_reports_and_returns_nonzero_for_failures(
