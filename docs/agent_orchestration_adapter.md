@@ -1,9 +1,9 @@
 # Agent Orchestration Adapter
 
 FitForge remains a provider-agnostic structured-action agent system.
-Phase B keeps the optional LangGraph adapter experimental while adding a
-dedicated recovery node for fatigue / time-constraint / schedule-recovery
-routing. It is still not a full LangGraph migration.
+Phase C keeps the optional LangGraph adapter experimental while adding a
+`recovery_policy_node` that consumes recovery metadata for safe,
+non-mutating recovery advice. It is still not a full LangGraph migration.
 
 ## Current architecture
 
@@ -33,7 +33,7 @@ preview, or bypass confirmation.
 | Value | Behavior |
 |---|---|
 | `native` | Default. Uses the existing FitForge provider behavior. |
-| `langgraph` | Optional experimental wrapper around native behavior. LangGraph is imported lazily and is not required for normal backend CI. Phase B keeps it orchestration-only and adds recovery-oriented routing metadata. |
+| `langgraph` | Optional experimental wrapper around native behavior. LangGraph is imported lazily and is not required for normal backend CI. Phase C keeps it orchestration-only and consumes recovery metadata for safe answer-only advice. |
 
 Unknown values fall back to `native` so a bad deployment setting does not
 knock the service off the safe path.
@@ -112,6 +112,8 @@ python -m evals.run_orchestration_smoke \
 It checks native and optional LangGraph routing, trace off / on, safety
 short-circuiting, mutation confirmation, prompt-injection no-direct-mutation
 behavior, unknown orchestrator fallback, and LangGraph unavailable fallback.
+It also includes Phase C recovery policy probes for ambiguous fatigue /
+overtraining requests and safety-over-recovery precedence.
 When LangGraph is not installed, dependency-present graph rows are skipped
 rather than failed. Install `requirements-agent-optional.txt` to exercise the
 optional graph path.
@@ -153,6 +155,7 @@ input
 -> safety_precheck_node
 -> intent_route_node
 -> recovery_node
+-> recovery_policy_node
 -> native_response_node
 -> response_contract_validation_node
 -> AgentResponse
@@ -162,13 +165,16 @@ input
 |---|---|---|
 | `safety_precheck_node` | Deterministic high-risk symptom short-circuit | No |
 | `intent_route_node` | Coarse routing only | No |
-| `recovery_node` | Detects fatigue / recovery / time-constraint signals and records safe metadata | No |
-| `native_response_node` | Delegates action generation to the native provider | No |
+| `recovery_node` | Detects fatigue / recovery / time-constraint signals and records metadata | No |
+| `recovery_policy_node` | Consumes recovery metadata and may return safe non-mutating recovery advice | No |
+| `native_response_node` | Delegates explicit action generation to the native provider | No |
 | `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
 
 The node flow does not invent new action types and does not bypass the
-structured-action boundary. `native_response_node` still delegates actual
-action generation to the existing native provider, and
+structured-action boundary. Ambiguous fatigue / overtraining requests can
+return `answerOnly` advice with no actions. Explicit mutation requests still
+flow to `native_response_node`, which delegates actual action generation to
+the existing native provider, and
 `response_contract_validation_node` fails closed to a safe `answerOnly`
 response when the graph output is malformed, unsafe, missing confirmation,
 or carries a suspicious `sourceContextHash`.
@@ -177,7 +183,7 @@ If LangGraph is unavailable, the provider returns a valid `answerOnly`
 `AgentResponse` explaining that the experimental orchestration adapter is
 unavailable in the current backend environment.
 
-## Phase B non-goals
+## Phase C non-goals
 
 - not a full multi-agent migration
 - not long-term memory

@@ -14,6 +14,7 @@ from agents.action_safety import MUTATION_ACTION_TYPES
 from agents.providers.langgraph_provider import (
     LangGraphCoachAgentProvider,
     recovery_node,
+    recovery_policy_node,
     response_contract_validation_node,
 )
 from schemas.agent_request import AgentRequest
@@ -56,6 +57,7 @@ _EXPECTED_NODE_ORDER = (
     "safety_precheck_node",
     "intent_route_node",
     "recovery_node",
+    "recovery_policy_node",
     "native_response_node",
     "response_contract_validation_node",
 )
@@ -153,7 +155,8 @@ def test_langgraph_builds_named_safe_node_sequence(
         ("__start__", "safety_precheck_node"),
         ("safety_precheck_node", "intent_route_node"),
         ("intent_route_node", "recovery_node"),
-        ("recovery_node", "native_response_node"),
+        ("recovery_node", "recovery_policy_node"),
+        ("recovery_policy_node", "native_response_node"),
         ("native_response_node", "response_contract_validation_node"),
         ("response_contract_validation_node", "__end__"),
     ]
@@ -251,6 +254,74 @@ def test_recovery_node_marks_fatigue_signals() -> None:
     )
 
     assert result["recovery"]["signal"] == "fatigue_or_recovery"
+
+
+def test_recovery_policy_node_noops_when_response_already_present() -> None:
+    assert recovery_policy_node(
+        {
+            "request": _request(),
+            "recovery": {"signal": "fatigue_or_recovery"},
+            "response": {"intent": "answerOnly"},
+        }
+    ) == {}
+
+
+def test_recovery_policy_node_noops_without_recovery_metadata() -> None:
+    assert recovery_policy_node({"request": _request()}) == {}
+
+
+def test_recovery_policy_node_answers_only_for_fatigue() -> None:
+    result = recovery_policy_node(
+        {
+            "request": _request("\u6211\u8fd9\u51e0\u5929\u5f88\u7d2f\uff0c\u72b6\u6001\u5f88\u5dee\uff0c\u8fd8\u8981\u7ee7\u7eed\u7ec3\u5417"),
+            "recovery": {
+                "signal": "fatigue_or_recovery",
+                "reason": "recovery_keywords",
+            },
+        }
+    )
+
+    assert result["response"].intent == "answerOnly"
+    assert result["response"].actions == []
+
+
+def test_recovery_policy_node_answers_only_for_overtraining() -> None:
+    result = recovery_policy_node(
+        {
+            "request": _request("\u6211\u8fde\u7eed\u7ec3\u4e86\u597d\u51e0\u5929\uff0c\u6709\u70b9\u7d2f\uff0c\u4eca\u5929\u600e\u4e48\u5b89\u6392"),
+            "recovery": {
+                "signal": "overtraining",
+                "reason": "load_or_overtraining_keywords",
+            },
+        }
+    )
+
+    assert result["response"].intent == "answerOnly"
+    assert result["response"].actions == []
+
+
+def test_recovery_policy_node_does_not_intercept_explicit_compress_requests() -> None:
+    assert recovery_policy_node(
+        {
+            "request": _request("\u4eca\u5929\u53ea\u670920\u5206\u949f\uff0c\u5e2e\u6211\u538b\u7f29\u8bad\u7ec3"),
+            "recovery": {
+                "signal": "time_constrained",
+                "reason": "explicit_target_minutes",
+            },
+        }
+    ) == {}
+
+
+def test_recovery_policy_node_does_not_intercept_safety_response() -> None:
+    assert recovery_policy_node(
+        {
+            "request": _request("chest pain"),
+            "recovery": {
+                "signal": "fatigue_or_recovery",
+                "reason": "recovery_keywords",
+            },
+        }
+    ) == {}
 
 
 @pytest.mark.parametrize(

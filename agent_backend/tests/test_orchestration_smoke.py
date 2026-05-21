@@ -32,6 +32,7 @@ def test_smoke_cases_cover_required_backend_paths() -> None:
         "weekly-review",
         "safety-stop",
         "recovery-fatigue-answer-only",
+        "recovery-overtraining-answer-only",
         "recovery-safety-overrides-compress",
         "prompt-injection-no-direct-mutation",
         "unknown-orchestrator-fallback",
@@ -176,7 +177,11 @@ def test_recovery_cases_cover_safe_fallback_and_safety_priority() -> None:
     report = run_smoke_matrix(
         orchestrators=["native"],
         traces=["off"],
-        case_ids=["recovery-fatigue-answer-only", "recovery-safety-overrides-compress"],
+        case_ids=[
+            "recovery-fatigue-answer-only",
+            "recovery-overtraining-answer-only",
+            "recovery-safety-overrides-compress",
+        ],
     )
     results = {result["caseId"]: result for result in report["results"]}
 
@@ -185,11 +190,53 @@ def test_recovery_cases_cover_safe_fallback_and_safety_priority() -> None:
     assert fatigue["intent"] in {"answerOnly", "weeklyReview"}
     assert fatigue["mutationActionCount"] == 0
 
+    overtraining = results["recovery-overtraining-answer-only"]
+    assert overtraining["status"] == "pass"
+    assert overtraining["intent"] in {"answerOnly", "weeklyReview"}
+    assert overtraining["mutationActionCount"] == 0
+
     safety = results["recovery-safety-overrides-compress"]
     assert safety["status"] == "pass"
     assert safety["intent"] == "safetyResponse"
     assert safety["safetyResponse"] is True
     assert safety["mutationActionCount"] == 0
+
+
+def test_langgraph_recovery_policy_cases_return_safe_advice_when_available() -> None:
+    report = run_smoke_matrix(
+        orchestrators=["langgraph"],
+        traces=["off"],
+        case_ids=[
+            "recovery-fatigue-answer-only",
+            "recovery-overtraining-answer-only",
+            "recovery-safety-overrides-compress",
+        ],
+        include_langgraph=True,
+    )
+    results = {result["caseId"]: result for result in report["results"]}
+
+    for case_id in (
+        "recovery-fatigue-answer-only",
+        "recovery-overtraining-answer-only",
+        "recovery-safety-overrides-compress",
+    ):
+        assert results[case_id]["status"] in {"pass", "skip"}
+
+    fatigue = results["recovery-fatigue-answer-only"]
+    if fatigue["status"] == "pass":
+        assert fatigue["intent"] == "answerOnly"
+        assert fatigue["actionTypes"] == []
+
+    overtraining = results["recovery-overtraining-answer-only"]
+    if overtraining["status"] == "pass":
+        assert overtraining["intent"] == "answerOnly"
+        assert overtraining["actionTypes"] == []
+
+    safety = results["recovery-safety-overrides-compress"]
+    if safety["status"] == "pass":
+        assert safety["intent"] == "safetyResponse"
+        assert safety["safetyResponse"] is True
+        assert safety["actionTypes"] == ["safetyResponse"]
 
 
 def test_main_writes_reports_and_returns_nonzero_for_failures(

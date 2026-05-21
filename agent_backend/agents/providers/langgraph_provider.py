@@ -2,7 +2,7 @@
 
 The optional path stays small and safe:
 input -> safety_precheck_node -> intent_route_node -> recovery_node
--> native_response_node -> response_contract_validation_node -> output.
+-> recovery_policy_node -> native_response_node -> response_contract_validation_node -> output.
 
 LangGraph is imported lazily so normal backend CI does not require the
 optional dependency.
@@ -87,6 +87,22 @@ def recovery_node(state: LangGraphCoachState) -> LangGraphCoachState:
     return {"recovery": recovery}
 
 
+def recovery_policy_node(state: LangGraphCoachState) -> LangGraphCoachState:
+    record_trace_node("recovery_policy_node")
+    if "response" in state:
+        return {}
+
+    request = state["request"]
+    if assess_message_safety(request.message).has_medical_concern:
+        return {}
+    recovery = state.get("recovery")
+    if not isinstance(recovery, dict):
+        return {}
+    if not _should_recovery_policy_answer(recovery, request.message):
+        return {}
+    return {"response": _recovery_policy_response()}
+
+
 def native_response_node(
     state: LangGraphCoachState,
     native_provider: CoachAgentProvider | None = None,
@@ -163,6 +179,7 @@ class LangGraphCoachAgentProvider:
         graph.add_node("safety_precheck_node", safety_precheck_node)
         graph.add_node("intent_route_node", intent_route_node)
         graph.add_node("recovery_node", recovery_node)
+        graph.add_node("recovery_policy_node", recovery_policy_node)
         graph.add_node(
             "native_response_node",
             partial(native_response_node, native_provider=self._native_provider),
@@ -174,7 +191,8 @@ class LangGraphCoachAgentProvider:
         graph.add_edge(START, "safety_precheck_node")
         graph.add_edge("safety_precheck_node", "intent_route_node")
         graph.add_edge("intent_route_node", "recovery_node")
-        graph.add_edge("recovery_node", "native_response_node")
+        graph.add_edge("recovery_node", "recovery_policy_node")
+        graph.add_edge("recovery_policy_node", "native_response_node")
         graph.add_edge("native_response_node", "response_contract_validation_node")
         graph.add_edge("response_contract_validation_node", END)
         return graph.compile()
@@ -286,6 +304,50 @@ def _as_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _should_recovery_policy_answer(
+    recovery: dict[str, Any],
+    message: str,
+) -> bool:
+    if recovery.get("signal") not in {"fatigue_or_recovery", "overtraining"}:
+        return False
+    return not _has_explicit_mutation_intent(message)
+
+
+def _has_explicit_mutation_intent(message: str) -> bool:
+    return any(
+        token in message
+        for token in (
+            "压缩",
+            "缩短",
+            "换动作",
+            "替换",
+            "生成计划",
+            "制定计划",
+            "调整训练日",
+            "改训练日",
+            "移动训练",
+            "挪到",
+            "改到周",
+        )
+    ) or (
+        bool(re.search(r"\d+\s*分钟", message))
+        and any(token in message for token in ("帮我", "调整", "压缩", "缩短", "训练"))
+    )
+
+
+def _recovery_policy_response() -> AgentResponse:
+    return AgentResponse(
+        message=(
+            "如果只是普通疲劳，可以先降低训练强度、减少训练量或休息一天；"
+            "优先保证睡眠、补水和热身。如果出现胸痛、头晕、呼吸困难等症状，"
+            "请停止训练并寻求专业帮助。"
+        ),
+        intent="answerOnly",
+        confidence=0.85,
+        actions=[],
+    )
 
 
 def _is_safe_graph_response(
@@ -408,6 +470,7 @@ __all__ = [
     "intent_route_node",
     "native_response_node",
     "recovery_node",
+    "recovery_policy_node",
     "response_contract_validation_node",
     "safety_precheck_node",
 ]

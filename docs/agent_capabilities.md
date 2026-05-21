@@ -4,9 +4,8 @@ FitForge Coach Agent is a provider-agnostic structured-action agent.
 The backend may use the native provider or the optional experimental
 LangGraph orchestrator, but every path must return the existing
 `AgentResponse` / `AgentAction` contract.
-Phase B adds a dedicated recovery node to the optional LangGraph path;
-LangGraph remains optional and orchestration-only, and native remains the
-default path.
+Phase C adds a recovery policy node to the optional LangGraph path; LangGraph
+remains optional and orchestration-only, and native remains the default path.
 
 ## Current architecture
 
@@ -37,14 +36,15 @@ behavior. `langgraph` is optional and experimental; it wraps native
 behavior through a minimal graph and falls back safely when LangGraph is
 not installed.
 
-Phase B node responsibilities:
+Phase C node responsibilities:
 
 | Node | Responsibility | Can mutate app state? |
 |---|---|---|
 | `safety_precheck_node` | Deterministic high-risk symptom short-circuit | No |
 | `intent_route_node` | Coarse routing only | No |
-| `recovery_node` | Detects fatigue / recovery / time-constraint signals and records safe metadata | No |
-| `native_response_node` | Delegates action generation to the native provider | No |
+| `recovery_node` | Detects fatigue / recovery / time-constraint signals and records metadata | No |
+| `recovery_policy_node` | Consumes recovery metadata and may return safe non-mutating recovery advice | No |
+| `native_response_node` | Delegates explicit action generation to the native provider | No |
 | `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
 
 Current LangGraph node flow:
@@ -54,14 +54,16 @@ input
 -> safety_precheck_node
 -> intent_route_node
 -> recovery_node
+-> recovery_policy_node
 -> native_response_node
 -> response_contract_validation_node
 -> AgentResponse
 ```
 
-The graph is orchestration only. It still delegates actual action
-generation to the native provider and cannot bypass confirmation or the
-trusted `sourceContextHash` boundary.
+The graph is orchestration only. Ambiguous fatigue / overtraining requests
+may return `answerOnly` recovery advice with no actions. Explicit mutation
+requests still delegate actual action generation to the native provider and
+cannot bypass confirmation or the trusted `sourceContextHash` boundary.
 It also fail-closes malformed output, safety-violating output, and mutation
 actions that are missing confirmation or carry an unsafe hash.
 
@@ -122,7 +124,7 @@ runtime behavior.
 
 Unknown orchestrator values fall back to native behavior.
 
-## Phase B non-goals
+## Phase C non-goals
 
 - not a fully autonomous agent
 - not long-term memory
@@ -133,6 +135,7 @@ Unknown orchestrator values fall back to native behavior.
 - not a multi-agent graph yet
 - not a Flutter UI rewrite
 - not real LLM CI
+- not replacing the native default path
 
 ## Release scorecard
 
