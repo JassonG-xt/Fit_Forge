@@ -21,6 +21,8 @@ which provider is wired up:
 - Provider-boundary safety (native default or experimental LangGraph still
   returns the same structured contract and cannot bypass preview /
   confirmation)
+- Phase A validator hardening (malformed / unsafe LangGraph output fails
+  closed to `answerOnly` with no actions)
 - The agent never auto-executes; mutations always go through
   `AgentAction → preview → user confirmation → LocalAgentActionExecutor → AppState`
 
@@ -135,6 +137,22 @@ default authority, optional experimental orchestration, trusted
 `sourceContextHash`, user confirmation for mutation, and safe fallback on
 high-risk or malformed output.
 
+### Phase A addendum
+
+Phase A keeps LangGraph optional and experimental while hardening the
+validator and parity checks:
+
+- native remains the default orchestrator
+- LangGraph remains orchestration-only, not mutation authority
+- malformed graph output fails closed
+- `safetyResponse` cannot smuggle mutation actions
+- mutation actions must require confirmation and use the trusted context hash
+- parity coverage compares native and LangGraph outputs for the core Coach
+  Agent intents
+
+Phase A validator failure coverage lives in pytest, while the smoke matrix
+adds routing, fallback, confirmation, and privacy-safe metadata coverage.
+
 ### Privacy-safe tracing note
 
 `FITFORGE_AGENT_TRACE=1` does not change eval expectations. The eval suite
@@ -162,8 +180,9 @@ current provider boundary across native / optional LangGraph orchestration,
 trace off / on, and `FITFORGE_AGENT_MODE=mock`. It covers answer-only fallback,
 `compressWorkout`, `replaceExercise`, deterministic `generatePlan`,
 structured `weeklyReview`, `safetyResponse`, prompt-injection no-direct
-mutation, unknown-orchestrator fallback, and LangGraph unavailable fallback.
-The same smoke matrix now runs in GitHub Actions CI as a backend safety gate.
+mutation, unknown-orchestrator fallback, LangGraph unavailable fallback, and
+validator fallback probes. The same smoke matrix now runs in GitHub Actions CI
+as a backend safety gate.
 
 If the optional dependency is not installed, normal LangGraph graph rows are
 reported as `skip`, while the safe unavailable fallback remains testable:

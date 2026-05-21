@@ -31,6 +31,15 @@ from unittest.mock import patch
 
 from agents.action_safety import MUTATION_ACTION_TYPES
 from agents.coach_agent import run_coach_agent
+from agents.orchestration_trace import (
+    orchestration_trace_scope,
+    record_trace_fallback_reason,
+    record_trace_node,
+    record_trace_orchestrator,
+    record_trace_provider,
+    record_trace_response,
+)
+from agents.providers.langgraph_provider import response_contract_validation_node
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse
 
@@ -40,6 +49,8 @@ _BACKEND_DIR = _THIS_DIR.parent
 _DEFAULT_RESULTS_DIR = _THIS_DIR / "results"
 _TRACE_LOGGER = "agents.orchestration_trace"
 _LANGGRAPH_UNAVAILABLE_CASE_ID = "langgraph-unavailable-fallback"
+_VALIDATOR_MALFORMED_CASE_ID = "validator-malformed-graph-output"
+_VALIDATOR_HASH_MISMATCH_CASE_ID = "validator-hash-mismatch-graph-output"
 
 
 @dataclass(frozen=True)
@@ -54,6 +65,7 @@ class SmokeCase:
     expect_safety_response: bool = False
     expect_unknown_orchestrator_fallback: bool = False
     expect_langgraph_unavailable: bool = False
+    validator_probe_kind: str | None = None
     context: dict[str, Any] = field(default_factory=dict)
 
 
@@ -180,6 +192,22 @@ def build_smoke_cases() -> list[SmokeCase]:
             expect_no_mutation=True,
             expect_langgraph_unavailable=True,
         ),
+        SmokeCase(
+            case_id=_VALIDATOR_MALFORMED_CASE_ID,
+            category="validatorFallback",
+            prompt=RAW_PROMPTS[0],
+            expected_intent="answerOnly",
+            expect_no_mutation=True,
+            validator_probe_kind="malformed_response",
+        ),
+        SmokeCase(
+            case_id=_VALIDATOR_HASH_MISMATCH_CASE_ID,
+            category="validatorFallback",
+            prompt=RAW_PROMPTS[1],
+            expected_intent="answerOnly",
+            expect_no_mutation=True,
+            validator_probe_kind="hash_mismatch",
+        ),
     ]
 
 
@@ -245,6 +273,33 @@ def _resolve_requested_orchestrator(case: SmokeCase, orchestrator: str) -> str:
     if case.expect_unknown_orchestrator_fallback:
         return "not-a-real-orchestrator"
     return orchestrator
+
+
+def _validator_probe_state(case: SmokeCase) -> dict[str, Any]:
+    base_response = {
+        "message": "validator probe",
+        "intent": "compressWorkout",
+        "actions": [
+            {
+                "id": "probe_action",
+                "type": "compressWorkout",
+                "title": "t",
+                "summary": "s",
+                "requiresConfirmation": True,
+            }
+        ],
+    }
+    if case.validator_probe_kind == "malformed_response":
+        return {"request": _request_for_case(case), "response": {"intent": "compressWorkout"}}
+    if case.validator_probe_kind == "hash_mismatch":
+        probe = json.loads(json.dumps(base_response))
+        probe["actions"][0]["sourceContextHash"] = "mismatched_hash"
+        return {"request": _request_for_case(case), "response": probe}
+    raise ValueError(f"Unknown validator probe kind: {case.validator_probe_kind}")
+
+
+def _request_for_case(case: SmokeCase) -> AgentRequest:
+    return AgentRequest(message=case.prompt, context=_context_for_case(case))
 
 
 @contextmanager
@@ -388,6 +443,28 @@ def _result_from_response(
     )
 
 
+def _result_from_validator_probe(
+    case: SmokeCase,
+    response: AgentResponse,
+    *,
+    requested_orchestrator: str,
+    trace: str,
+    trace_records: list[str],
+) -> SmokeResult:
+    result = _result_from_response(
+        case,
+        response,
+        requested_orchestrator=requested_orchestrator,
+        trace=trace,
+        trace_records=trace_records,
+    )
+    if result.fallbackReason is None:
+        result.fallbackReason = "validator_contract_violation"
+    if "validator_contract_violation" not in result.notes:
+        result.notes.append("validator_contract_violation")
+    return result
+
+
 def _skip_result(
     case: SmokeCase,
     *,
@@ -409,6 +486,12 @@ def _skip_result(
 
 def _run_one_case(case: SmokeCase, *, orchestrator: str, trace: str) -> SmokeResult:
     requested_orchestrator = _resolve_requested_orchestrator(case, orchestrator)
+    if case.validator_probe_kind is not None:
+        return _run_validator_probe_case(
+            case,
+            orchestrator=requested_orchestrator,
+            trace=trace,
+        )
     if (
         requested_orchestrator == "langgraph"
         and not case.expect_langgraph_unavailable
@@ -436,6 +519,33 @@ def _run_one_case(case: SmokeCase, *, orchestrator: str, trace: str) -> SmokeRes
         case,
         response,
         requested_orchestrator=requested_orchestrator,
+        trace=trace,
+        trace_records=trace_records,
+    )
+
+
+def _run_validator_probe_case(
+    case: SmokeCase,
+    *,
+    orchestrator: str,
+    trace: str,
+) -> SmokeResult:
+    request = _request_for_case(case)
+    state = _validator_probe_state(case)
+    with _env_for_smoke(orchestrator, trace):
+        with _capture_trace_logs(trace == "on") as trace_records:
+            with orchestration_trace_scope("mock"):
+                record_trace_orchestrator("native")
+                record_trace_provider("langgraph")
+                record_trace_node("response_contract_validation_node")
+                result = response_contract_validation_node(state)
+                response = result["response"]
+                record_trace_response(response)
+                record_trace_fallback_reason("validator_contract_violation")
+    return _result_from_validator_probe(
+        case,
+        response,
+        requested_orchestrator=orchestrator,
         trace=trace,
         trace_records=trace_records,
     )

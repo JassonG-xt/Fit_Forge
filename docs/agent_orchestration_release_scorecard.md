@@ -10,6 +10,8 @@
 - Real LLM mode: `FITFORGE_AGENT_MODE=real` (manual / optional, not default CI)
 - CI status: backend pytest, Flutter analyze/test, secret scan, dependency audit, and orchestration smoke gate all pass
 
+Phase A hardens the LangGraph response validator and parity coverage. LangGraph remains optional and orchestration-only; native remains the default path.
+
 ## Architecture Summary
 
 FitForge Coach Agent is a provider-agnostic structured-action agent layer.
@@ -17,6 +19,7 @@ FitForge Coach Agent is a provider-agnostic structured-action agent layer.
 The backend can use the native provider or the optional experimental LangGraph orchestrator, but every path must return the existing `AgentResponse` / `AgentAction` contract.
 
 The backend never directly mutates plan state. Mutation actions are previewed in Flutter and only executed after user confirmation through `LocalAgentActionExecutor`.
+LangGraph is not mutation authority; it only orchestrates and then fail-closes on malformed or unsafe graph output.
 
 ## Why not fully migrate to LangGraph?
 
@@ -33,6 +36,7 @@ The backend never directly mutates plan state. Mutation actions are previewed in
 | Provider boundary | Implemented | [`agent-orchestration-provider-boundary-v1`](../README.md) and [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md) |
 | Optional LangGraph adapter | Implemented | [`agent-langgraph-orchestration-adapter-v1`](agent_orchestration_adapter.md) |
 | Structured LangGraph nodes | Implemented | [`agent-langgraph-structured-nodes-v1`](agent_orchestration_adapter.md) |
+| Phase A validator hardening | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md) and backend tests |
 | Privacy-safe tracing | Implemented | [`agent-privacy-safe-tracing-v1`](security.md) |
 | Smoke matrix | Implemented | [`agent-orchestration-smoke-matrix-v1`](coach_agent_evals.md) |
 | CI smoke gate | Implemented | [`agent-orchestration-smoke-ci-v1`](../.github/workflows/ci.yml) |
@@ -106,6 +110,7 @@ Not a full framework-based agent system. It uses a custom structured-action arch
 - HealthKit / wearable data not integrated.
 - Not medical diagnosis.
 - Not a commercial-grade fitness content platform yet.
+- Phase A does not replace the native default path.
 
 ## Next Recommended Phases
 
