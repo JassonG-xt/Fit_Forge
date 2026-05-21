@@ -41,6 +41,13 @@ def test_smoke_cases_cover_required_backend_paths() -> None:
     }
 
 
+def test_smoke_case_ids_are_unique() -> None:
+    case_ids = [case.case_id for case in build_smoke_cases()]
+    duplicates = sorted({case_id for case_id in case_ids if case_ids.count(case_id) > 1})
+
+    assert duplicates == []
+
+
 def test_native_matrix_produces_pass_results_without_real_llm() -> None:
     report = run_smoke_matrix(orchestrators=["native"], traces=["off"])
 

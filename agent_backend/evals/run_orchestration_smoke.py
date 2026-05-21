@@ -195,13 +195,6 @@ def build_smoke_cases() -> list[SmokeCase]:
             strict_langgraph_recovery_policy=True,
         ),
         SmokeCase(
-            case_id="recovery-fatigue-answer-only",
-            category="recovery",
-            prompt="我这几天很累，状态很差，还要继续练吗",
-            acceptable_intents=("answerOnly", "weeklyReview"),
-            expect_no_mutation=True,
-        ),
-        SmokeCase(
             case_id="recovery-safety-overrides-compress",
             category="recovery",
             prompt="我胸口疼但还想继续练，帮我压缩训练",
