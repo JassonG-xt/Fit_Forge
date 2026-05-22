@@ -136,6 +136,8 @@ adapter.
 The backend also includes an optional LangGraph orchestration path with safety,
 recovery-policy, validation, and privacy-safe decision tracing, while native
 remains the default path.
+Phase F defines a Planner/Nutrition node design and eval contract before any
+runtime implementation.
 
 Current orchestration evidence:
 - provider-agnostic structured-action Coach Agent

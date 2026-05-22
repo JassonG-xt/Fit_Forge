@@ -256,6 +256,26 @@ Phase D scorecards include the decision fields `traceDecisions`,
 see which orchestration node made the structural decision without exposing the
 prompt, context, payload, model output, or full `sourceContextHash`.
 
+## Phase F Planner / Nutrition Eval Contract
+
+Phase F defines future eval categories before implementation. It does not add
+Planner/Nutrition runtime behavior or active eval JSON cases.
+
+Planner eval categories should cover explicit `generatePlan`, explicit
+`rescheduleWeek`, explicit `moveWorkoutSession`, ambiguous plan explanation
+to `answerOnly`, recovery/safety priority, prompt injection that tries to skip
+confirmation, missing or invalid context hash fail-closed behavior, and safety
+symptoms combined with plan requests.
+
+Nutrition eval categories should cover macro explanation, calorie questions,
+meal preference advice, medical diet boundaries, nutrition requests phrased as
+unsupported mutations, prompt injection that asks to write directly, raw
+sensitive data exclusion from scorecards, and safety symptoms combined with
+nutrition requests.
+
+The full Phase F contract lives in
+[`docs/agent_phase_f_planner_nutrition_contract.md`](agent_phase_f_planner_nutrition_contract.md).
+
 ### Cross-run promotion of three paraphrases (history)
 
 Three Chinese paraphrases were promoted from `expectedGap` to `active` after

@@ -44,6 +44,7 @@
 > Phase 7 CI gate: the same smoke matrix now runs in GitHub Actions backend CI from the pytest job, using temporary report paths or optional artifacts instead of committed smoke outputs. It still does not call real LLM providers, require API keys, or require LangGraph optional dependencies in normal CI.
 > Phase 8 release scorecard: the current orchestration release summary, validation numbers, safety boundary, and interview-ready narrative live in `docs/agent_orchestration_release_scorecard.md`.
 > Phase E orchestration documentation consolidation: `docs/agent_orchestration_release_scorecard.md` now acts as the canonical A-D release narrative, including the Phase timeline, current LangGraph node flow, node responsibility table, safety boundary, eval/smoke/CI evidence summary, interview explanation, demo checklist, and a narrow Phase F recommendation for Planner/Nutrition node design docs before implementation. **No runtime behavior change**: native remains default, LangGraph remains optional/experimental, and no Planner or Nutrition nodes are implemented.
+> Phase F design/eval contract: docs-only. Defines future Planner/Nutrition node responsibilities and eval gates before runtime implementation. **No runtime behavior change**: native remains default, LangGraph remains optional/experimental, and no Planner or Nutrition nodes are implemented.
 
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 

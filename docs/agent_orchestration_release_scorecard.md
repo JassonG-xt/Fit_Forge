@@ -2,19 +2,20 @@
 
 ## Snapshot
 
-- Current stage: Phase E documentation consolidation
-- Latest milestone tag: `agent-phase-d-decision-scorecard-v1`
+- Current stage: Phase F Planner/Nutrition design/eval contract
+- Latest milestone tag: `agent-phase-e-orchestration-scorecard-v1`
 - Default orchestrator: `native`
 - Optional orchestrator: `langgraph`
 - Real LLM mode: optional/manual only
 - CI: Flutter analyze/test, web build, backend pytest, orchestration smoke, secret scan, dependency audit
 - Production readiness: not claimed
 
-Phase E consolidates the Phase A-D orchestration work into a release
+Phase E consolidated the Phase A-D orchestration work into a release
 scorecard, architecture narrative, interview explanation, and demo/eval
-checklist. It does not add runtime behavior, Flutter UI changes, Planner
-nodes, Nutrition nodes, real LLM calls, dependencies, or a new default
-orchestrator.
+checklist. Phase F defines Planner/Nutrition node responsibilities, safety
+boundaries, decision trace enums, and eval contracts before implementation.
+It does not add runtime behavior, Flutter UI changes, Planner nodes,
+Nutrition nodes, real LLM calls, dependencies, or a new default orchestrator.
 
 ## Phase Timeline
 
@@ -24,7 +25,8 @@ orchestrator.
 | B | `agent-phase-b-recovery-node-v1` | Recovery metadata node | Metadata only |
 | C | `agent-phase-c-recovery-policy-v1` | Recovery policy answerOnly advice | Optional LangGraph behavior for ambiguous recovery |
 | D | `agent-phase-d-decision-scorecard-v1` | Decision tracing/scorecard | Metadata-only observability |
-| E | pending | Release narrative consolidation | Docs only |
+| E | `agent-phase-e-orchestration-scorecard-v1` | Release narrative consolidation | Docs only |
+| F | pending | Planner/Nutrition design and eval contract | Docs only |
 
 ## Current Architecture
 
@@ -206,8 +208,10 @@ Is not:
 
 ## Next Recommended Phase
 
-Phase F: Planner/Nutrition node design doc and eval contract, before
-implementation.
+After Phase F, implement nothing until the Planner/Nutrition eval categories,
+smoke matrix cases, decision trace enums, and safety boundaries in
+[`docs/agent_phase_f_planner_nutrition_contract.md`](agent_phase_f_planner_nutrition_contract.md)
+are agreed.
 
-Do not implement Planner or Nutrition behavior until the design document,
-expected node responsibilities, safety boundary, and eval contract are agreed.
+Planner/Nutrition work should remain design/eval contract only until that
+gate is satisfied.
