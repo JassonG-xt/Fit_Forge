@@ -9,6 +9,9 @@ Phase D adds privacy-safe node-level decision tracing and smoke scorecards for
 the optional LangGraph path. Phase E consolidates that work into the release
 scorecard and interview narrative. LangGraph remains optional and
 orchestration-only, and native remains the default path.
+Phase F defines future Planner/Nutrition node responsibilities and eval gates
+in [`docs/agent_phase_f_planner_nutrition_contract.md`](agent_phase_f_planner_nutrition_contract.md);
+those nodes are design-only at this stage and are not implemented.
 
 ## Current Architecture
 
@@ -145,6 +148,9 @@ provider remains the default path and the source of current runtime behavior.
 
 Unknown orchestrator values fall back to native behavior.
 
+Future Planner/Nutrition nodes are proposed only. They do not exist in the
+current runtime graph and must not expand mutation authority.
+
 ## Phase E Non-Goals
 
 - not a fully autonomous agent
@@ -159,6 +165,7 @@ Unknown orchestrator values fall back to native behavior.
 - not replacing the native default path
 - not adding Planner or Nutrition behavior
 - not exposing trace scorecards in Flutter
+- not implementing the Phase F Planner/Nutrition design
 
 ## Release Scorecard
 
@@ -169,6 +176,7 @@ validation evidence, limitations, and interview framing, see
 ## References
 
 - `docs/agent_orchestration_adapter.md`
+- `docs/agent_phase_f_planner_nutrition_contract.md`
 - `docs/coach_agent_evals.md`
 - `docs/coach_agent_demo_script.md`
 - `docs/agent_mvp_status.md`

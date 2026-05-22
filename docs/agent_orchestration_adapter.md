@@ -6,6 +6,8 @@ privacy-safe node-level decision tracing and smoke scorecards. Phase E
 consolidates the release narrative and demo/eval checklist without changing
 runtime behavior. It is still not a full LangGraph migration and does not add
 Planner or Nutrition behavior.
+Phase F proposes future Planner/Nutrition nodes in a design/eval contract only;
+the current graph remains unchanged.
 
 ## Current architecture
 
@@ -209,6 +211,10 @@ If LangGraph is unavailable, the provider returns a valid `answerOnly`
 `AgentResponse` explaining that the experimental orchestration adapter is
 unavailable in the current backend environment.
 
+Future Planner/Nutrition nodes are proposed only in
+[`docs/agent_phase_f_planner_nutrition_contract.md`](agent_phase_f_planner_nutrition_contract.md).
+They are not wired into this graph in Phase F.
+
 ## Phase D non-goals
 
 - not a full multi-agent migration
@@ -222,7 +228,7 @@ unavailable in the current backend environment.
 - not new Planner / Nutrition behavior
 - not a product UI tracing surface
 
-Recommended next phase: write the Planner/Nutrition node design doc and eval
-contract before implementation. Future phases may replace the coarse
-`intent_route_node` with dedicated Planner, Recovery, Nutrition, and Validator
-nodes, but those are not implemented in this phase.
+Phase F documents the Planner/Nutrition node design and eval contract before
+implementation. Future phases may replace the coarse `intent_route_node` with
+dedicated Planner, Recovery, Nutrition, and Validator nodes, but those are not
+implemented in this phase.
