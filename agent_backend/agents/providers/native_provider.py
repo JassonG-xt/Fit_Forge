@@ -26,7 +26,7 @@ from safety.fitness_guardrails import assess_message_safety
 
 
 # ──────────────────────────────────────────────
-# Mock implementation (keyword-based, unchanged)
+# Mock implementation (keyword-based)
 # ──────────────────────────────────────────────
 
 _DAY_LOOKUP = {
@@ -97,7 +97,24 @@ def _is_compress(message: str) -> int | None:
       - explicit `<digits> 分钟` → that number
       - `半小时` → 30
     """
-    triggers = ("压缩", "缩短", "短一点", "快一点", "只有", "只能")
+    triggers = (
+        "压缩",
+        "缩短",
+        "短一点",
+        "快一点",
+        "只有",
+        "只能",
+        "赶时间",
+        "时间不多",
+        "时间不够",
+        "太忙",
+        "快速练",
+        "简单练一下",
+        "短一点的版本",
+        "快点练完",
+        "很快练完",
+        "压到",
+    )
     if not any(token in message for token in triggers):
         return None
     match = re.search(r"(\d+)\s*分钟", message)
@@ -154,6 +171,18 @@ def _compress_response(message: str, request: AgentRequest) -> AgentResponse:
     )
 
 
+def _compress_clarification_response() -> AgentResponse:
+    return AgentResponse(
+        message=(
+            "可以帮你压缩今日训练。为了不随便删动作，我需要你告诉我目标时长，"
+            "比如 20 分钟、30 分钟或半小时。"
+        ),
+        intent="answerOnly",
+        confidence=0.7,
+        actions=[],
+    )
+
+
 def _extract_weekdays(message: str) -> list[int]:
     found: set[int] = set()
     for token, value in _DAY_LOOKUP.items():
@@ -185,6 +214,12 @@ def _has_recovery_context(message: str) -> bool:
         for k in (
             "累",
             "恢复",
+            "状态很差",
+            "降强度",
+            "休息还是继续",
+            "好几天",
+            "疲劳",
+            "酸痛",
             "练太密",
             "练得太密",
             "连续练",
@@ -194,17 +229,196 @@ def _has_recovery_context(message: str) -> bool:
 
 
 def _has_weekly_reschedule_scope(message: str) -> bool:
-    return any(k in message for k in ("这周", "本周", "训练日"))
+    return any(k in message for k in ("这周", "本周", "训练日", "工作日", "周末"))
 
 
 def _has_weekly_reschedule_intent(message: str) -> bool:
-    return any(k in message for k in ("安排", "改到", "改在", "重新排", "调整"))
+    return any(k in message for k in ("安排", "改到", "改在", "重新排", "重新安排", "调整", "排一下"))
 
 
 def _looks_like_single_session_move(message: str) -> bool:
     if not any(k in message for k in ("今天", "今日", "这次")):
         return False
     return any(k in message for k in ("挪到", "往后挪", "改到", "改在"))
+
+
+def _has_training_plan_intent(message: str) -> bool:
+    if _looks_like_schedule_request(message):
+        return False
+    direct = (
+        "生成",
+        "做个计划",
+        "新计划",
+        "新的训练计划",
+        "帮我做计划",
+        "安排一个适合我的计划",
+        "重新开始锻炼",
+        "重新开始训练",
+        "恢复训练",
+        "从哪里开始",
+    )
+    if _has_any(message, direct):
+        return True
+    if _has_all(message, ("给", "计划")):
+        return True
+    if _has_all(message, ("新手", "安排")) or _has_all(message, ("耐力", "安排")):
+        return True
+    if _has_training_goal_signal(message) and _has_any(message, ("帮我安排", "安排一下", "帮我排一下")):
+        return True
+    return False
+
+
+def _has_training_goal_signal(message: str) -> bool:
+    return _has_any(
+        message,
+        (
+            "一周大概能练",
+            "一周能练",
+            "每周能练",
+            "想减脂",
+            "减脂",
+            "想增肌",
+            "增肌",
+            "想练胸",
+            "想练背",
+            "想练腿",
+            "练胸和背",
+            "恢复训练",
+            "重新开始锻炼",
+            "重新开始训练",
+        ),
+    )
+
+
+def _has_free_form_compress_intent(message: str) -> bool:
+    return _has_any(
+        message,
+        (
+            "时间不多",
+            "时间不够",
+            "赶时间",
+            "太忙",
+            "快速练",
+            "简单练一下",
+            "短一点的版本",
+            "快点练完",
+            "很快练完",
+            "少练一点",
+            "压到",
+            "压缩",
+            "缩短",
+            "短一点",
+        ),
+    )
+
+
+def _has_replace_intent(message: str) -> bool:
+    return _has_any(
+        message,
+        (
+            "替换",
+            "换一个",
+            "换个",
+            "换成",
+            "换成别的",
+            "替换掉",
+            "做不了",
+            "不舒服",
+            "动作怎么改",
+            "这个动作",
+            "调整一下动作",
+        ),
+    )
+
+
+def _has_equipment_constraint(message: str) -> bool:
+    return _has_any(
+        message,
+        (
+            "器械不方便",
+            "没有器械",
+            "没有杠铃",
+            "没有哑铃",
+            "没杠铃",
+            "没哑铃",
+            "杠铃",
+            "哑铃",
+        ),
+    )
+
+
+def _has_free_form_nutrition_intent(message: str) -> bool:
+    return _has_any(
+        message,
+        (
+            "吃多了",
+            "晚饭",
+            "晚餐",
+            "午餐",
+            "饮食",
+            "热量",
+            "碳水",
+            "蛋白质",
+            "脂肪",
+            "减脂期",
+            "增肌期",
+            "吃什么",
+            "怎么吃",
+            "控制饮食",
+            "晚餐怎么补救",
+            "吃得有点乱",
+            "完全不吃碳水",
+        ),
+    )
+
+
+def _has_free_form_recovery_intent(message: str) -> bool:
+    return _has_any(
+        message,
+        (
+            "状态很差",
+            "降强度",
+            "休息还是继续",
+            "最近有点累",
+            "有点累",
+            "好几天",
+            "疲劳",
+            "酸痛",
+            "累",
+            "恢复",
+            "连续练",
+            "连续训练",
+            "还要继续",
+        ),
+    )
+
+
+def _has_weekly_review_intent(message: str) -> bool:
+    return _has_any(
+        message,
+        (
+            "总结",
+            "复盘",
+            "本周训练",
+            "这周训练",
+            "一周训练",
+            "最近训练",
+            "下周应该注意",
+            "练得怎么样",
+            "练得有点累",
+            "练得太密",
+            "今天还要继续",
+            "要不要调整",
+        ),
+    )
+
+
+def _looks_like_schedule_request(message: str) -> bool:
+    return (
+        _has_any(message, ("这周", "本周", "周末", "工作日", "训练日", "练不了了"))
+        or _is_move_session(message)
+        or _looks_like_single_session_move(message)
+    )
 
 
 # Stage 3-4 — single-session move routing (mirrors Flutter mock Stage 3-3).
@@ -367,13 +581,25 @@ def _reschedule_response(message: str) -> AgentResponse | None:
     )
 
 
+def _schedule_clarification_response() -> AgentResponse:
+    return AgentResponse(
+        message=(
+            "可以帮你调整训练时间。请告诉我是调整整周可训练日，还是把某一天的训练移动到另一天下；"
+            "例如“这周只能周二周四练”或“把周一训练挪到周三”。"
+        ),
+        intent="answerOnly",
+        confidence=0.7,
+        actions=[],
+    )
+
+
 def _replace_response(message: str, request: AgentRequest) -> AgentResponse | None:
-    if not any(k in message for k in ("替换", "换一个", "换个", "换成", "替换掉", "没有杠铃", "没有哑铃")):
+    if not (_has_replace_intent(message) or _has_equipment_constraint(message)):
         return None
 
     today = request.context.todayWorkout
     if not today or not today.get("exercises"):
-        return None
+        return _replace_clarification_response()
 
     unavailable: list[str] = []
     if "杠铃" in message or "barbell" in message.lower():
@@ -392,7 +618,7 @@ def _replace_response(message: str, request: AgentRequest) -> AgentResponse | No
         from_id = today["exercises"][0].get("exerciseId")
         from_name = today["exercises"][0].get("exerciseName")
     if not from_id:
-        return None
+        return _replace_clarification_response()
 
     candidate = None
     for ex in request.context.availableExerciseSummary:
@@ -405,7 +631,7 @@ def _replace_response(message: str, request: AgentRequest) -> AgentResponse | No
         candidate = ex
         break
     if not candidate:
-        return None
+        return _replace_clarification_response()
 
     payload = {
         "fromExerciseId": from_id,
@@ -429,6 +655,18 @@ def _replace_response(message: str, request: AgentRequest) -> AgentResponse | No
                 payload=payload,
             )
         ],
+    )
+
+
+def _replace_clarification_response() -> AgentResponse:
+    return AgentResponse(
+        message=(
+            "可以帮你替换动作。请告诉我具体要替换哪个动作，以及你现在可用的器械；"
+            "如果今天已有训练计划，我会优先找同部位替代动作。"
+        ),
+        intent="answerOnly",
+        confidence=0.7,
+        actions=[],
     )
 
 
@@ -655,7 +893,11 @@ def _day_type_label(key: str) -> str:
 
 def _nutrition_response() -> AgentResponse:
     return AgentResponse(
-        message="如果某餐摄入偏多，下一餐可以选高蛋白、低油脂、适量碳水的组合。不建议完全跳餐或极端节食。",
+        message=(
+            "如果某餐摄入偏多，下一餐可以选高蛋白、低油脂、适量碳水的组合。"
+            "蛋白质问题可以先按每餐都有优质蛋白来安排，再结合体重和训练量微调。"
+            "不建议完全不吃碳水、完全跳餐或极端节食。"
+        ),
         intent="nutritionAdvice",
         confidence=0.8,
         actions=[
@@ -734,17 +976,13 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
     # generatePlan must win over compress when the user asks to generate a plan
     # AND happens to mention preferences like `每次 45 分钟` — the minutes are
     # a generatePlan preference, not a request to compress today's workout.
-    if _has_any(message, ("生成", "做个计划", "新计划", "新的训练计划", "帮我做计划")):
-        return _generate_plan_response(message)
-
-    # Compound generatePlan rules: require two tokens to avoid false positives.
-    if (_has_all(message, ("给", "计划"))
-            or _has_all(message, ("新手", "安排"))
-            or _has_all(message, ("耐力", "安排"))):
+    if _has_training_plan_intent(message):
         return _generate_plan_response(message)
 
     if _is_compress(message) is not None:
         return _compress_response(message, request)
+    if _has_free_form_compress_intent(message):
+        return _compress_clarification_response()
 
     replace = _replace_response(message, request)
     if replace is not None:
@@ -760,30 +998,14 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
         rescheduled = _reschedule_response(message)
         if rescheduled is not None:
             return rescheduled
-
-    if _has_any(
-        message,
-        (
-            "总结",
-            "复盘",
-            "本周训练",
-            "这周训练",
-            "一周训练",
-            "最近训练",
-            "下周应该注意",
-            "练得怎么样",
-            "恢复",
-            "练得有点累",
-            "练得太密",
-            "连续练",
-            "连续训练",
-            "今天还要继续",
-            "要不要调整",
-        ),
-    ):
+    if _has_weekly_review_intent(message):
         return _weekly_review_response(request)
+    if _has_free_form_recovery_intent(message):
+        return _weekly_review_response(request)
+    if _looks_like_schedule_request(message) or _has_all(message, ("这周", "两天")):
+        return _schedule_clarification_response()
 
-    if _has_any(message, ("吃多了", "晚餐", "午餐", "饮食", "热量", "碳水")):
+    if _has_free_form_nutrition_intent(message):
         return _nutrition_response()
 
     return _fallback_response()

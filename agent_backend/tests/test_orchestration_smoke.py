@@ -100,6 +100,11 @@ def test_smoke_cases_cover_required_backend_paths() -> None:
         "unknown-orchestrator-fallback",
         "validator-malformed-graph-output",
         "validator-hash-mismatch-graph-output",
+        "freeform-plan-clarify-or-generate",
+        "freeform-compress-20m",
+        "freeform-replace-clarify-or-action",
+        "freeform-nutrition-protein",
+        "freeform-safety-over-plan",
     }
 
 
@@ -323,6 +328,47 @@ def test_mutation_and_safety_cases_enforce_boundaries() -> None:
     assert safety["safetyResponse"] is True
     assert safety["mutationActionCount"] == 0
     assert safety["actionTypes"] == ["safetyResponse"]
+
+
+def test_freeform_smoke_cases_cover_phase_g_routing() -> None:
+    report = run_smoke_matrix(
+        orchestrators=["native"],
+        traces=["off"],
+        case_ids=[
+            "freeform-plan-clarify-or-generate",
+            "freeform-compress-20m",
+            "freeform-replace-clarify-or-action",
+            "freeform-nutrition-protein",
+            "freeform-safety-over-plan",
+        ],
+    )
+    results = {result["caseId"]: result for result in report["results"]}
+
+    plan = results["freeform-plan-clarify-or-generate"]
+    assert plan["status"] == "pass"
+    assert plan["actionTypes"] == ["generatePlan"]
+    assert plan["requiresConfirmationOk"] is True
+
+    compress = results["freeform-compress-20m"]
+    assert compress["status"] == "pass"
+    assert compress["actionTypes"] == ["compressWorkout"]
+    assert compress["requiresConfirmationOk"] is True
+
+    replace = results["freeform-replace-clarify-or-action"]
+    assert replace["status"] == "pass"
+    assert replace["actionTypes"] == ["replaceExercise"]
+    assert replace["requiresConfirmationOk"] is True
+
+    nutrition = results["freeform-nutrition-protein"]
+    assert nutrition["status"] == "pass"
+    assert nutrition["intent"] == "nutritionAdvice"
+    assert nutrition["mutationActionCount"] == 0
+
+    safety = results["freeform-safety-over-plan"]
+    assert safety["status"] == "pass"
+    assert safety["intent"] == "safetyResponse"
+    assert safety["safetyResponse"] is True
+    assert safety["mutationActionCount"] == 0
 
 
 def test_recovery_cases_cover_safe_fallback_and_safety_priority() -> None:

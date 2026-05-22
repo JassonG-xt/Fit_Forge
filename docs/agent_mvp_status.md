@@ -46,6 +46,8 @@
 > Phase E orchestration documentation consolidation: `docs/agent_orchestration_release_scorecard.md` now acts as the canonical A-D release narrative, including the Phase timeline, current LangGraph node flow, node responsibility table, safety boundary, eval/smoke/CI evidence summary, interview explanation, demo checklist, and a narrow Phase F recommendation for Planner/Nutrition node design docs before implementation. **No runtime behavior change**: native remains default, LangGraph remains optional/experimental, and no Planner or Nutrition nodes are implemented.
 > Phase F design/eval contract: docs-only. Defines future Planner/Nutrition node responsibilities and eval gates before runtime implementation. **No runtime behavior change**: native remains default, LangGraph remains optional/experimental, and no Planner or Nutrition nodes are implemented.
 
+> Phase G free-form routing hardening: deterministic mock/native routing now covers a focused set of realistic Chinese free-form paraphrases for plan generation, workout compression, exercise replacement, schedule changes, recovery, nutrition, and safety priority. This is **not** full semantic NLU and does not call real LLMs. It adds active paraphrase eval cases, representative smoke cases, specific clarification responses for under-specified compression / replacement / schedule requests, and keeps generic fallback for unrelated messages. No new action types, Planner/Nutrition runtime nodes, Flutter UI changes, direct backend AppState mutation, or safety-boundary changes were introduced.
+
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
 ### 历史稳定点
@@ -428,6 +430,7 @@ flutter run --dart-define=FITFORGE_AGENT_MODE=http \
 - 没把真实 LLM 调用塞进 per-PR CI
 - 没为了 eval 全绿放宽 `action_payload_parser` / `inject_action_safety` / stale action protection / fitness guardrails
 - 改 mock router 时只为升级一条已经过 cross-run 验证的 case，不为 future-proofing 主动扩 keyword
+- Phase G 的 mock/native router 扩展仍应保持小而明确；不要把 deterministic mock 变成伪 NLU，也不要为了让 free-form prompt 看起来更聪明而猜 mutation payload。
 
 ## 参考文档
 

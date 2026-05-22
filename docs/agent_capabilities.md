@@ -12,6 +12,11 @@ orchestration-only, and native remains the default path.
 Phase F defines future Planner/Nutrition node responsibilities and eval gates
 in [`docs/agent_phase_f_planner_nutrition_contract.md`](agent_phase_f_planner_nutrition_contract.md);
 those nodes are design-only at this stage and are not implemented.
+Phase G hardens deterministic mock/native routing for realistic free-form
+Chinese paraphrases. It improves coverage for planning, compression,
+replacement, schedule changes, recovery, nutrition, and safety priority
+without adding semantic NLU, real LLM calls, new action types, Planner nodes,
+Nutrition nodes, or runtime mutation authority.
 
 ## Current Architecture
 
@@ -115,6 +120,9 @@ unknown orchestrator fallback, and LangGraph unavailable fallback. The report
 also includes a concise decision summary for trace-on runs. It omits raw
 prompts, raw responses, raw context, payload contents, and full
 `sourceContextHash` values.
+Phase G adds representative free-form smoke cases so user-written Chinese
+messages are checked against the same structured-action boundary instead of
+only preset chip prompts.
 
 ## Supported Actions
 
@@ -151,6 +159,12 @@ Unknown orchestrator values fall back to native behavior.
 Future Planner/Nutrition nodes are proposed only. They do not exist in the
 current runtime graph and must not expand mutation authority.
 
+The mock/native router is still deterministic keyword routing. It now has
+small, explicit helper groups for common Chinese paraphrases and specific
+clarification responses when a request is recognizable but lacks required
+details, such as a compression target duration or concrete schedule source /
+target. The generic fallback remains for unrelated messages.
+
 ## Phase E Non-Goals
 
 - not a fully autonomous agent
@@ -166,6 +180,7 @@ current runtime graph and must not expand mutation authority.
 - not adding Planner or Nutrition behavior
 - not exposing trace scorecards in Flutter
 - not implementing the Phase F Planner/Nutrition design
+- not full semantic NLU; Phase G is deterministic mock/native routing coverage
 
 ## Release Scorecard
 

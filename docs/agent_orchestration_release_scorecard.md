@@ -2,7 +2,7 @@
 
 ## Snapshot
 
-- Current stage: Phase F Planner/Nutrition design/eval contract
+- Current stage: Phase G free-form mock/native routing hardening
 - Latest milestone tag: `agent-phase-e-orchestration-scorecard-v1`
 - Default orchestrator: `native`
 - Optional orchestrator: `langgraph`
@@ -16,6 +16,10 @@ checklist. Phase F defines Planner/Nutrition node responsibilities, safety
 boundaries, decision trace enums, and eval contracts before implementation.
 It does not add runtime behavior, Flutter UI changes, Planner nodes,
 Nutrition nodes, real LLM calls, dependencies, or a new default orchestrator.
+Phase G adds deterministic free-form Chinese paraphrase eval coverage and
+mock/native routing hardening. It reduces generic fallback overuse for common
+user-written messages while keeping the structured-action safety boundary
+unchanged.
 
 ## Phase Timeline
 
@@ -26,7 +30,8 @@ Nutrition nodes, real LLM calls, dependencies, or a new default orchestrator.
 | C | `agent-phase-c-recovery-policy-v1` | Recovery policy answerOnly advice | Optional LangGraph behavior for ambiguous recovery |
 | D | `agent-phase-d-decision-scorecard-v1` | Decision tracing/scorecard | Metadata-only observability |
 | E | `agent-phase-e-orchestration-scorecard-v1` | Release narrative consolidation | Docs only |
-| F | pending | Planner/Nutrition design and eval contract | Docs only |
+| F | `agent-phase-f-planner-nutrition-contract-v1` | Planner/Nutrition design and eval contract | Docs only |
+| G | pending | Free-form Chinese paraphrase coverage and mock/native router hardening | Deterministic mock/native routing only |
 
 ## Current Architecture
 
@@ -138,7 +143,8 @@ LangGraph routing, trace off/on modes, safety short-circuiting, mutation
 confirmation, prompt-injection no-direct-mutation behavior, unknown
 orchestrator fallback, LangGraph unavailable fallback, recovery policy
 answer-only handling, explicit mutation delegation, validator fail-closed
-behavior, and privacy-safe decision summary fields.
+behavior, representative free-form Chinese paraphrase routing, and
+privacy-safe decision summary fields.
 
 The scorecard records structural metadata such as case id, orchestrator, trace
 mode, response intent, action type names, mutation count, confirmation status,
@@ -146,6 +152,11 @@ fallback reason, safety flags, `traceDecisions`, `decisionNodes`, `decisions`,
 `decisionReasons`, `finalDecisionNode`, and `finalDecision`.
 
 It does not call real LLM providers and does not require API keys.
+
+Phase G is not a full semantic NLU system. It adds small, explicit
+deterministic helper groups and clarification responses for common Chinese
+paraphrases. Unrelated messages still use the generic fallback, and mutation
+actions still require confirmation plus trusted `sourceContextHash`.
 
 ## Interview Explanation
 
@@ -215,3 +226,8 @@ are agreed.
 
 Planner/Nutrition work should remain design/eval contract only until that
 gate is satisfied.
+
+After Phase G, the next recommended step is to inspect remaining expected-gap
+phrases and product telemetry manually before extending deterministic routing
+again. Do not turn the mock router into broad NLU, and do not promote real LLM
+mode or Planner/Nutrition runtime behavior on the basis of this phase.

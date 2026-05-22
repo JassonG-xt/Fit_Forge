@@ -8,6 +8,7 @@ from dataclasses import dataclass
 HIGH_RISK_KEYWORDS = (
     # Cardiac / respiratory
     "胸口疼",
+    "胸口有点疼",
     "胸痛",
     "心绞",
     "呼吸困难",
@@ -20,6 +21,7 @@ HIGH_RISK_KEYWORDS = (
     "昏厥",
     "严重头晕",
     "头晕",
+    "头很晕",
     "眩晕",
     "dizzy",
     "dizziness",
