@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
+from typing import Any, Callable
 
 import pytest
 
@@ -15,6 +18,65 @@ from evals.run_orchestration_smoke import (
     write_json_report,
     write_markdown_scorecard,
 )
+
+
+_LANGGRAPH_NODE_ORDER = (
+    "safety_precheck_node",
+    "intent_route_node",
+    "recovery_node",
+    "recovery_policy_node",
+    "native_response_node",
+    "response_contract_validation_node",
+)
+
+
+class _FakeCompiledGraph:
+    def __init__(
+        self,
+        nodes: dict[str, Callable[[dict[str, Any]], dict[str, Any]]],
+    ) -> None:
+        self._nodes = nodes
+
+    def invoke(self, state: dict[str, Any]) -> dict[str, Any]:
+        current = dict(state)
+        for name in _LANGGRAPH_NODE_ORDER:
+            current.update(self._nodes[name](current))
+        return current
+
+
+class _FakeStateGraph:
+    def __init__(self, state_schema: object) -> None:
+        self.nodes: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {}
+
+    def add_node(
+        self,
+        name: str,
+        node: Callable[[dict[str, Any]], dict[str, Any]],
+    ) -> None:
+        self.nodes[name] = node
+
+    def add_edge(self, start: str, end: str) -> None:
+        return None
+
+    def compile(self) -> _FakeCompiledGraph:
+        return _FakeCompiledGraph(self.nodes)
+
+
+def _install_fake_langgraph(monkeypatch: pytest.MonkeyPatch) -> None:
+    langgraph_module = types.ModuleType("langgraph")
+    graph_module = types.ModuleType("langgraph.graph")
+    graph_module.StateGraph = _FakeStateGraph
+    graph_module.START = "__start__"
+    graph_module.END = "__end__"
+    monkeypatch.setitem(sys.modules, "langgraph", langgraph_module)
+    monkeypatch.setitem(sys.modules, "langgraph.graph", graph_module)
+
+
+def _decision_pairs(result: dict[str, Any]) -> set[tuple[str, str]]:
+    return {
+        (decision["node"], decision["decision"])
+        for decision in result.get("traceDecisions", [])
+    }
 
 
 def _serialized(report: dict) -> str:
@@ -138,6 +200,64 @@ def test_validator_probe_cases_fail_closed_without_raw_leaks() -> None:
     assert mismatch["actionTypes"] == []
     assert mismatch["fallbackReason"] == "validator_contract_violation"
     assert mismatch["traceLogSafe"] is True
+    assert (
+        "response_contract_validation_node",
+        "fail_closed",
+    ) in _decision_pairs(mismatch)
+
+
+def test_langgraph_trace_on_smoke_report_includes_recovery_decisions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+
+    report = run_smoke_matrix(
+        orchestrators=["langgraph"],
+        traces=["on"],
+        case_ids=["recovery-fatigue-answer-only"],
+        include_langgraph=True,
+    )
+    result = report["results"][0]
+
+    assert result["status"] == "pass"
+    assert result["traceDecisions"]
+    assert ("recovery_node", "detected_signal") in _decision_pairs(result)
+    assert ("recovery_policy_node", "policy_answer_only") in _decision_pairs(result)
+    assert result["finalDecisionNode"] == "recovery_policy_node"
+    assert result["finalDecision"] == "policy_answer_only"
+    assert result["decisionNodes"]
+    assert result["decisions"]
+    assert result["decisionReasons"]
+
+
+def test_langgraph_trace_on_smoke_report_includes_key_phase_d_decisions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+
+    report = run_smoke_matrix(
+        orchestrators=["langgraph"],
+        traces=["on"],
+        case_ids=["recovery-safety-overrides-compress", "compress-25m"],
+        include_langgraph=True,
+    )
+    results = {result["caseId"]: result for result in report["results"]}
+
+    safety = results["recovery-safety-overrides-compress"]
+    assert safety["status"] == "pass"
+    assert safety["intent"] == "safetyResponse"
+    assert ("safety_precheck_node", "safety_short_circuit") in _decision_pairs(safety)
+
+    compress = results["compress-25m"]
+    assert compress["status"] == "pass"
+    assert compress["intent"] == "compressWorkout"
+    assert compress["requiresConfirmationOk"] is True
+    assert {
+        ("recovery_node", "detected_signal"),
+        ("recovery_policy_node", "delegate_explicit_mutation"),
+        ("native_response_node", "delegated_to_native"),
+        ("response_contract_validation_node", "passed"),
+    } <= _decision_pairs(compress)
 
 
 def test_report_outputs_do_not_include_raw_prompt_text(tmp_path: Path) -> None:
@@ -157,6 +277,31 @@ def test_report_outputs_do_not_include_raw_prompt_text(tmp_path: Path) -> None:
         assert raw_prompt not in md_text
     assert "trusted_smoke_hash" not in serialized
     assert "planContextHash" not in serialized
+
+
+def test_markdown_scorecard_includes_privacy_safe_decision_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+    report = run_smoke_matrix(
+        orchestrators=["langgraph"],
+        traces=["on"],
+        case_ids=["recovery-fatigue-answer-only"],
+        include_langgraph=True,
+    )
+    md_path = tmp_path / "smoke.md"
+
+    write_markdown_scorecard(report, md_path)
+
+    md_text = md_path.read_text(encoding="utf-8")
+    assert "## Decision Summary" in md_text
+    assert "recovery_policy_node" in md_text
+    assert "policy_answer_only" in md_text
+    for raw_prompt in RAW_PROMPTS:
+        assert raw_prompt not in md_text
+    assert "trusted_smoke_hash" not in md_text
+    assert "planContextHash" not in md_text
 
 
 def test_mutation_and_safety_cases_enforce_boundaries() -> None:

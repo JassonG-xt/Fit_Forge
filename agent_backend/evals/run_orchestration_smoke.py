@@ -69,6 +69,7 @@ class SmokeCase:
     expect_langgraph_unavailable: bool = False
     strict_langgraph_recovery_policy: bool = False
     validator_probe_kind: str | None = None
+    expected_trace_decisions: tuple[tuple[str, str], ...] = ()
     context: dict[str, Any] = field(default_factory=dict)
 
 
@@ -87,6 +88,12 @@ class SmokeResult:
     requiresConfirmationOk: bool | None = None
     safetyResponse: bool = False
     fallbackReason: str | None = None
+    traceDecisions: list[dict[str, str]] = field(default_factory=list)
+    decisionNodes: list[str] = field(default_factory=list)
+    decisions: list[str] = field(default_factory=list)
+    decisionReasons: list[str] = field(default_factory=list)
+    finalDecisionNode: str | None = None
+    finalDecision: str | None = None
     traceLogSafe: bool | None = None
     notes: list[str] = field(default_factory=list)
 
@@ -105,6 +112,12 @@ class SmokeResult:
             "requiresConfirmationOk": self.requiresConfirmationOk,
             "safetyResponse": self.safetyResponse,
             "fallbackReason": self.fallbackReason,
+            "traceDecisions": [dict(decision) for decision in self.traceDecisions],
+            "decisionNodes": list(self.decisionNodes),
+            "decisions": list(self.decisions),
+            "decisionReasons": list(self.decisionReasons),
+            "finalDecisionNode": self.finalDecisionNode,
+            "finalDecision": self.finalDecision,
             "traceLogSafe": self.traceLogSafe,
             "notes": list(self.notes),
         }
@@ -137,6 +150,12 @@ def build_smoke_cases() -> list[SmokeCase]:
             expected_intent="compressWorkout",
             expected_action_type="compressWorkout",
             require_mutation_confirmation=True,
+            expected_trace_decisions=(
+                ("recovery_node", "detected_signal"),
+                ("recovery_policy_node", "delegate_explicit_mutation"),
+                ("native_response_node", "delegated_to_native"),
+                ("response_contract_validation_node", "passed"),
+            ),
         ),
         SmokeCase(
             case_id="replace-exercise",
@@ -185,6 +204,10 @@ def build_smoke_cases() -> list[SmokeCase]:
             expect_no_mutation=True,
             expect_answer_only=True,
             strict_langgraph_recovery_policy=True,
+            expected_trace_decisions=(
+                ("recovery_node", "detected_signal"),
+                ("recovery_policy_node", "policy_answer_only"),
+            ),
         ),
         SmokeCase(
             case_id="recovery-overtraining-answer-only",
@@ -202,6 +225,9 @@ def build_smoke_cases() -> list[SmokeCase]:
             expected_action_type="safetyResponse",
             expect_no_mutation=True,
             expect_safety_response=True,
+            expected_trace_decisions=(
+                ("safety_precheck_node", "safety_short_circuit"),
+            ),
         ),
         SmokeCase(
             case_id="unknown-orchestrator-fallback",
@@ -227,6 +253,9 @@ def build_smoke_cases() -> list[SmokeCase]:
             expected_intent="answerOnly",
             expect_no_mutation=True,
             validator_probe_kind="malformed_response",
+            expected_trace_decisions=(
+                ("response_contract_validation_node", "fail_closed"),
+            ),
         ),
         SmokeCase(
             case_id=_VALIDATOR_HASH_MISMATCH_CASE_ID,
@@ -235,6 +264,9 @@ def build_smoke_cases() -> list[SmokeCase]:
             expected_intent="answerOnly",
             expect_no_mutation=True,
             validator_probe_kind="hash_mismatch",
+            expected_trace_decisions=(
+                ("response_contract_validation_node", "fail_closed"),
+            ),
         ),
     ]
 
@@ -385,6 +417,54 @@ def _trace_log_is_safe(trace_records: list[str]) -> bool:
     return not any(marker in text for marker in unsafe_markers)
 
 
+def _decision_summary_fields(
+    trace_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    trace_decisions = []
+    if trace_payload:
+        raw_decisions = trace_payload.get("decisions")
+        if isinstance(raw_decisions, list):
+            trace_decisions = [
+                {
+                    key: str(decision[key])
+                    for key in ("node", "decision", "reason")
+                    if isinstance(decision, dict) and key in decision
+                }
+                for decision in raw_decisions
+                if isinstance(decision, dict)
+            ]
+    non_final_decisions = {
+        "pass_through",
+        "native",
+        "skipped_existing_response",
+        "no_signal",
+        "no_recovery_metadata",
+        "passed",
+    }
+    final_decision = next(
+        (
+            decision
+            for decision in reversed(trace_decisions)
+            if decision.get("decision") not in non_final_decisions
+        ),
+        trace_decisions[-1] if trace_decisions else {},
+    )
+    return {
+        "traceDecisions": trace_decisions,
+        "decisionNodes": [
+            decision["node"] for decision in trace_decisions if "node" in decision
+        ],
+        "decisions": [
+            decision["decision"] for decision in trace_decisions if "decision" in decision
+        ],
+        "decisionReasons": [
+            decision["reason"] for decision in trace_decisions if "reason" in decision
+        ],
+        "finalDecisionNode": final_decision.get("node"),
+        "finalDecision": final_decision.get("decision"),
+    }
+
+
 def _result_from_response(
     case: SmokeCase,
     response: AgentResponse,
@@ -398,6 +478,7 @@ def _result_from_response(
         action for action in response.actions if action.type in MUTATION_ACTION_TYPES
     ]
     trace_payload = _extract_trace_payload(trace_records)
+    decision_fields = _decision_summary_fields(trace_payload)
     notes: list[str] = []
 
     if case.acceptable_intents is not None:
@@ -421,6 +502,18 @@ def _result_from_response(
             notes.append("recovery_policy_intent_mismatch")
         if action_types:
             notes.append("recovery_policy_actions_not_empty")
+    if (
+        trace == "on"
+        and requested_orchestrator == "langgraph"
+        and case.expected_trace_decisions
+    ):
+        decision_pairs = {
+            (decision.get("node"), decision.get("decision"))
+            for decision in decision_fields["traceDecisions"]
+        }
+        for expected_node, expected_decision in case.expected_trace_decisions:
+            if (expected_node, expected_decision) not in decision_pairs:
+                notes.append(f"missing_decision:{expected_node}:{expected_decision}")
 
     requires_confirmation_ok: bool | None = None
     if mutation_actions:
@@ -476,6 +569,7 @@ def _result_from_response(
             action.type == "safetyResponse" for action in response.actions
         ),
         fallbackReason=fallback_reason,
+        **decision_fields,
         traceLogSafe=trace_log_safe,
         notes=notes,
     )
@@ -730,6 +824,29 @@ def write_markdown_scorecard(report: dict[str, Any], path: Path) -> None:
     for key, bucket in sorted(summary["byCategory"].items()):
         lines.append(
             f"| {key} | {bucket.get('pass', 0)} | {bucket.get('fail', 0)} | {bucket.get('skip', 0)} |"
+        )
+
+    lines += [
+        "",
+        "## Decision Summary",
+        "",
+        "| case | orchestrator | finalDecisionNode | finalDecision | fallbackReason | decisionPath |",
+        "|---|---|---|---|---|---|",
+    ]
+    for result in report["results"]:
+        decision_path = " > ".join(
+            f"{decision.get('node', '')}:{decision.get('decision', '')}"
+            for decision in result.get("traceDecisions", [])
+        )
+        lines.append(
+            "| {case} | {orchestrator} | {node} | {decision} | {fallback} | {path} |".format(
+                case=result["caseId"],
+                orchestrator=result["orchestrator"],
+                node=result.get("finalDecisionNode") or "",
+                decision=result.get("finalDecision") or "",
+                fallback=result.get("fallbackReason") or "",
+                path=decision_path,
+            )
         )
 
     failures = [result for result in report["results"] if result["status"] == "fail"]

@@ -1,9 +1,9 @@
 # Agent Orchestration Adapter
 
 FitForge remains a provider-agnostic structured-action agent system.
-Phase C keeps the optional LangGraph adapter experimental while adding a
-`recovery_policy_node` that consumes recovery metadata for safe,
-non-mutating recovery advice. It is still not a full LangGraph migration.
+Phase D keeps the optional LangGraph adapter experimental while adding
+privacy-safe node-level decision tracing and smoke scorecards. It is still
+not a full LangGraph migration and does not add Planner or Nutrition behavior.
 
 ## Current architecture
 
@@ -33,7 +33,7 @@ preview, or bypass confirmation.
 | Value | Behavior |
 |---|---|
 | `native` | Default. Uses the existing FitForge provider behavior. |
-| `langgraph` | Optional experimental wrapper around native behavior. LangGraph is imported lazily and is not required for normal backend CI. Phase C keeps it orchestration-only and consumes recovery metadata for safe answer-only advice. |
+| `langgraph` | Optional experimental wrapper around native behavior. LangGraph is imported lazily and is not required for normal backend CI. Phase D keeps it orchestration-only and adds metadata-only decision traces for eval/debug evidence. |
 
 Unknown values fall back to `native` so a bad deployment setting does not
 knock the service off the safe path.
@@ -58,6 +58,7 @@ Safe trace metadata:
 - agent mode
 - provider
 - node names
+- node decisions and reason enums
 - fallback reason
 - response intent
 - action type names
@@ -68,6 +69,21 @@ Safe trace metadata:
 The trace never logs raw user messages, raw history, prompt text, raw LLM
 output, API keys, tokens, payload contents, or the full
 `sourceContextHash`.
+
+Decision trace example:
+
+```json
+{
+  "decisions": [
+    {"node": "safety_precheck_node", "decision": "pass_through"},
+    {"node": "recovery_node", "decision": "detected_signal", "reason": "fatigue_or_recovery"},
+    {"node": "recovery_policy_node", "decision": "policy_answer_only", "reason": "fatigue_or_recovery"}
+  ]
+}
+```
+
+Decision traces are for backend evals, debugging, and interview evidence. They
+are not product UI and do not expose raw user or model content.
 
 To run the optional path locally:
 
@@ -113,7 +129,9 @@ It checks native and optional LangGraph routing, trace off / on, safety
 short-circuiting, mutation confirmation, prompt-injection no-direct-mutation
 behavior, unknown orchestrator fallback, and LangGraph unavailable fallback.
 It also includes Phase C recovery policy probes for ambiguous fatigue /
-overtraining requests and safety-over-recovery precedence.
+overtraining requests and safety-over-recovery precedence. Phase D adds a
+decision summary so trace-on LangGraph rows can show which node short-circuited,
+delegated, fail-closed, or passed validation.
 When LangGraph is not installed, dependency-present graph rows are skipped
 rather than failed. Install `requirements-agent-optional.txt` to exercise the
 optional graph path.
@@ -122,9 +140,9 @@ temporary paths or uploaded as artifacts rather than committed.
 
 The JSON and Markdown scorecards store only structural metadata: case id,
 orchestrator, trace mode, response intent, action type names, mutation count,
-confirmation status, fallback reason, and safety flags. They intentionally omit
-raw prompts, raw responses, raw context, payload contents, raw LLM output, and
-full `sourceContextHash` values.
+confirmation status, fallback reason, safety flags, and structural decision
+metadata. They intentionally omit raw prompts, raw responses, raw context,
+payload contents, raw LLM output, and full `sourceContextHash` values.
 
 ## Safety boundary
 
@@ -170,6 +188,12 @@ input
 | `native_response_node` | Delegates explicit action generation to the native provider | No |
 | `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
 
+Phase D node decisions use string enums such as `safety_short_circuit`,
+`policy_answer_only`, `delegate_explicit_mutation`, `delegated_to_native`,
+`passed`, and `fail_closed`. Reasons are also enums, such as
+`medical_concern`, `fatigue_or_recovery`, `explicit_mutation_intent`, and
+`validator_contract_violation`.
+
 The node flow does not invent new action types and does not bypass the
 structured-action boundary. Ambiguous fatigue / overtraining requests can
 return `answerOnly` advice with no actions. Explicit mutation requests still
@@ -183,7 +207,7 @@ If LangGraph is unavailable, the provider returns a valid `answerOnly`
 `AgentResponse` explaining that the experimental orchestration adapter is
 unavailable in the current backend environment.
 
-## Phase C non-goals
+## Phase D non-goals
 
 - not a full multi-agent migration
 - not long-term memory
@@ -193,6 +217,8 @@ unavailable in the current backend environment.
 - not Flutter UI rewrite
 - not production observability
 - not a full replacement for the native default path
+- not new Planner / Nutrition behavior
+- not a product UI tracing surface
 
 Future phases may replace the coarse `intent_route_node` with dedicated
 Planner, Recovery, Nutrition, and Validator nodes, but those are not

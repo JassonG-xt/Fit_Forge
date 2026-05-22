@@ -10,7 +10,9 @@
 - Real LLM mode: `FITFORGE_AGENT_MODE=real` (manual / optional, not default CI)
 - CI status: backend pytest, Flutter analyze/test, secret scan, dependency audit, and orchestration smoke gate all pass
 
-Phase C adds a recovery policy node to the optional LangGraph path. LangGraph remains optional and orchestration-only; native remains the default path.
+Phase D adds privacy-safe node-level decision tracing and smoke scorecards to
+the optional LangGraph path. LangGraph remains optional and orchestration-only;
+native remains the default path.
 
 ## Architecture Summary
 
@@ -39,6 +41,7 @@ LangGraph is not mutation authority; it only orchestrates and then fail-closes o
 | Phase A validator hardening | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md) and backend tests |
 | Phase B recovery node | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md), backend tests, and smoke matrix |
 | Phase C recovery policy | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md), backend tests, and smoke matrix |
+| Phase D decision scorecard | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md), backend tests, and smoke matrix |
 | Privacy-safe tracing | Implemented | [`agent-privacy-safe-tracing-v1`](security.md) |
 | Smoke matrix | Implemented | [`agent-orchestration-smoke-matrix-v1`](coach_agent_evals.md) |
 | CI smoke gate | Implemented | [`agent-orchestration-smoke-ci-v1`](../.github/workflows/ci.yml) |
@@ -68,6 +71,22 @@ Safety responses cannot carry mutation actions.
 Prompt injection cannot force direct mutation.
 Traces do not expose raw user or model text.
 
+Phase D decision traces record structural node decisions only, for example:
+
+```json
+{
+  "decisions": [
+    {"node": "safety_precheck_node", "decision": "pass_through"},
+    {"node": "recovery_node", "decision": "detected_signal", "reason": "fatigue_or_recovery"},
+    {"node": "recovery_policy_node", "decision": "policy_answer_only", "reason": "fatigue_or_recovery"}
+  ]
+}
+```
+
+They do not log raw prompts, context, payload contents, model output, full
+`sourceContextHash` values, API keys, or secrets. Decision scorecards are
+eval/debug/interview evidence, not product UI.
+
 ## Validation Summary
 
 - Backend pytest: `522 passed, 4 skipped`
@@ -86,6 +105,7 @@ The smoke matrix is mock-only and checks:
 - mutation confirmation
 - prompt-injection no-direct-mutation
 - recovery policy answer-only advice
+- node-level decision summaries for trace-on LangGraph rows
 - unknown orchestrator fallback
 - privacy-safe trace behavior
 - optional LangGraph path when available
@@ -114,6 +134,7 @@ Not a full framework-based agent system. It uses a custom structured-action arch
 - Not medical diagnosis.
 - Not a commercial-grade fitness content platform yet.
 - Phase C does not replace the native default path.
+- Phase D does not add Planner or Nutrition behavior.
 
 ## Next Recommended Phases
 
