@@ -17,6 +17,10 @@ Chinese paraphrases. It improves coverage for planning, compression,
 replacement, schedule changes, recovery, nutrition, and safety priority
 without adding semantic NLU, real LLM calls, new action types, Planner nodes,
 Nutrition nodes, or runtime mutation authority.
+Phase G.1 aligns the Flutter local `MockAgentClient` with that backend Phase G
+coverage so offline demo/development mode in the Coach Agent UI handles the
+same representative free-form Chinese paraphrases instead of falling back to
+the generic menu response.
 
 ## Current Architecture
 
@@ -164,6 +168,11 @@ small, explicit helper groups for common Chinese paraphrases and specific
 clarification responses when a request is recognizable but lacks required
 details, such as a compression target duration or concrete schedule source /
 target. The generic fallback remains for unrelated messages.
+
+Flutter mock mode mirrors the same boundary for user-facing local demos:
+high-risk paraphrases such as `胸口有点疼` and `头很晕` route to
+`safetyResponse`; vague compress / replacement / schedule requests get
+specific clarifications; unrelated messages still use the generic fallback.
 
 ## Phase E Non-Goals
 
