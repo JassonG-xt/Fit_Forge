@@ -417,6 +417,232 @@ def test_mock_compress_short_no_minutes_returns_no_mutation() -> None:
         }
 
 
+# ── Phase G: free-form Chinese paraphrase routing ──
+
+
+def _assert_no_mutation(response) -> None:
+    for action in response.actions:
+        assert action.type not in MUTATION_ACTION_TYPES
+        assert action.sourceContextHash is None
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "我想重新开始锻炼，帮我安排一个适合我的计划",
+        "我一周大概能练三次，主要想减脂，帮我排一下",
+        "我想练胸和背，帮我安排一下",
+        "最近没怎么练，想恢复训练，从哪里开始比较好",
+    ],
+)
+def test_mock_free_form_plan_paraphrases_route_to_generate_plan(message: str) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent == "generatePlan"
+    action = response.actions[0]
+    assert action.type == "generatePlan"
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+
+
+def test_mock_free_form_plan_missing_profile_gets_specific_clarification() -> None:
+    response = _run_mock_coach_agent(
+        _request(
+            "我想重新开始锻炼，帮我安排一个适合我的计划",
+            profile={"weeklyFrequency": 3},
+        )
+    )
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert "目标" in response.message
+    assert "每周能练几次" in response.message
+    assert "我可以帮你生成训练计划、调整训练日" not in response.message
+
+
+@pytest.mark.parametrize(
+    ("message", "target_minutes"),
+    [
+        ("今天只有20分钟，帮我搞一个短一点的版本", 20),
+        ("我赶时间，今天训练能不能压到半小时", 30),
+    ],
+)
+def test_mock_free_form_compress_with_minutes_routes_to_compress(
+    message: str,
+    target_minutes: int,
+) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent == "compressWorkout"
+    action = response.actions[0]
+    assert action.type == "compressWorkout"
+    assert action.payload["targetMinutes"] == target_minutes
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "今天时间不多，简单练一下",
+        "今天太忙了，只能很快练完",
+    ],
+)
+def test_mock_free_form_compress_without_minutes_clarifies(message: str) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert "目标时长" in response.message
+    assert "20 分钟" in response.message
+    assert "我可以帮你生成训练计划、调整训练日" not in response.message
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "这个动作我做不了，能换一个吗",
+        "我没有杠铃，今天动作怎么改",
+        "深蹲不舒服，能不能换成别的腿部动作",
+        "今天器械不方便，帮我调整一下动作",
+    ],
+)
+def test_mock_free_form_replace_paraphrases_route_or_clarify(message: str) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent == "replaceExercise"
+    action = response.actions[0]
+    assert action.type == "replaceExercise"
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+    assert {"fromExerciseId", "toExerciseId", "dayOfWeek"} <= set(action.payload)
+
+
+def test_mock_free_form_replace_missing_context_clarifies() -> None:
+    response = _run_mock_coach_agent(
+        _request(
+            "这个动作我做不了，能换一个吗",
+            today_workout={"dayOfWeek": 1, "dayType": "push", "exercises": []},
+            available_exercises=[],
+        )
+    )
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert "具体要替换哪个动作" in response.message
+    assert "可用的器械" in response.message
+    assert "我可以帮你生成训练计划、调整训练日" not in response.message
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_weekdays"),
+    [
+        ("这周只有周二周四有空，帮我重新安排", [2, 4]),
+        ("我周末没时间，只能工作日练", [1, 2, 3, 4, 5]),
+    ],
+)
+def test_mock_free_form_weekly_reschedule_paraphrases(
+    message: str,
+    expected_weekdays: list[int],
+) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent == "rescheduleWeek"
+    action = response.actions[0]
+    assert action.type == "rescheduleWeek"
+    assert action.payload["availableWeekdays"] == expected_weekdays
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+
+
+def test_mock_free_form_weekday_to_weekday_move_routes_to_move_session() -> None:
+    response = _run_mock_coach_agent(_request("把周一训练挪到周三"))
+
+    assert response.intent == "moveWorkoutSession"
+    action = response.actions[0]
+    assert action.type == "moveWorkoutSession"
+    assert action.payload["fromDayOfWeek"] == 1
+    assert action.payload["toDayOfWeek"] == 3
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == _TRUSTED_HASH
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "今天练不了了，能不能改到周三",
+        "这周只有两天能练",
+    ],
+)
+def test_mock_free_form_ambiguous_schedule_clarifies(message: str) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert "调整整周可训练日" in response.message
+    assert "某一天的训练" in response.message
+    assert "我可以帮你生成训练计划、调整训练日" not in response.message
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "我最近有点累，还要继续练吗",
+        "连续练了好几天，今天应该休息还是继续",
+        "我状态很差，但没有哪里疼，要不要降强度",
+    ],
+)
+def test_mock_free_form_recovery_paraphrases_do_not_mutate(message: str) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent in {"answerOnly", "weeklyReview"}
+    _assert_no_mutation(response)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "我晚饭吃多了，明天怎么控制",
+        "我想知道每天应该吃多少蛋白质",
+        "减脂期碳水是不是要完全不吃",
+        "今天吃得有点乱，晚餐怎么补救",
+    ],
+)
+def test_mock_free_form_nutrition_paraphrases_are_non_mutating(message: str) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent == "nutritionAdvice"
+    assert response.actions[0].type == "nutritionAdvice"
+    assert response.actions[0].requiresConfirmation is False
+    assert response.actions[0].sourceContextHash is None
+    assert "不建议完全" in response.message
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "我胸口有点疼，但还是想练，帮我安排一下",
+        "我头很晕，今天能不能压缩训练",
+    ],
+)
+def test_mock_free_form_safety_priority_blocks_mutation(message: str) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    assert response.actions
+    assert all(action.type == "safetyResponse" for action in response.actions)
+    _assert_no_mutation(response)
+
+
+def test_mock_unrelated_free_form_still_uses_generic_fallback() -> None:
+    response = _run_mock_coach_agent(_request("今天天气怎么样"))
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert response.message.startswith("我可以帮你生成训练计划")
+
+
 # ── E-1B: recovery-aware compress routing stays narrow ──
 
 

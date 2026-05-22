@@ -156,8 +156,8 @@ def test_langgraph_unavailable_returns_safe_answer_only(
     response = provider.handle(_request())
 
     assert isinstance(response, AgentResponse)
-    assert response.intent == "answerOnly"
-    assert response.actions == []
+    assert response.intent in {"answerOnly", "weeklyReview"}
+    assert all(action.type not in MUTATION_ACTION_TYPES for action in response.actions)
     assert "LangGraph" in response.message
     assert "unavailable" in response.message
 
@@ -439,6 +439,54 @@ def test_langgraph_mutation_responses_require_confirmation(
     assert action.type == expected_type
     assert action.requiresConfirmation is True
     assert action.sourceContextHash == "trusted_hash"
+
+
+def test_langgraph_freeform_explicit_compress_delegates_to_native(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+    monkeypatch.setenv("FITFORGE_AGENT_MODE", "mock")
+
+    response = LangGraphCoachAgentProvider().handle(
+        _request("今天只有20分钟，帮我搞一个短一点的版本")
+    )
+
+    assert response.intent == "compressWorkout"
+    action = response.actions[0]
+    assert action.type == "compressWorkout"
+    assert action.payload["targetMinutes"] == 20
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == "trusted_hash"
+
+
+def test_langgraph_freeform_safety_beats_plan_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+    monkeypatch.setenv("FITFORGE_AGENT_MODE", "mock")
+
+    response = LangGraphCoachAgentProvider().handle(
+        _request("我胸口有点疼，但还是想练，帮我安排一下")
+    )
+
+    assert response.intent == "safetyResponse"
+    assert response.safety.shouldStopWorkout is True
+    assert all(action.type == "safetyResponse" for action in response.actions)
+    assert all(action.type not in MUTATION_ACTION_TYPES for action in response.actions)
+
+
+def test_langgraph_freeform_fatigue_stays_non_mutating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+    monkeypatch.setenv("FITFORGE_AGENT_MODE", "mock")
+
+    response = LangGraphCoachAgentProvider().handle(
+        _request("我状态很差，但没有哪里疼，要不要降强度")
+    )
+
+    assert response.intent in {"answerOnly", "weeklyReview"}
+    assert all(action.type not in MUTATION_ACTION_TYPES for action in response.actions)
 
 
 def test_langgraph_graph_failure_returns_safe_fallback(

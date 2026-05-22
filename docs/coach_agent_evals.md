@@ -27,6 +27,9 @@ which provider is wired up:
   in the optional LangGraph path return non-mutating `answerOnly` advice)
 - Phase D node-level decision scorecards (trace-on LangGraph smoke rows show
   which node short-circuited, delegated, fail-closed, or passed validation)
+- Phase G free-form Chinese paraphrase coverage for deterministic mock/native
+  routing, including specific clarification behavior instead of overusing the
+  generic menu fallback
 - The agent never auto-executes; mutations always go through
   `AgentAction → preview → user confirmation → LocalAgentActionExecutor → AppState`
 
@@ -94,19 +97,19 @@ records the case so we can flip it to `active` once a real LLM is wired up."*
 
 ## Active vs. gap distribution (current)
 
-This is the pinned baseline after Stage 3-5 `moveWorkoutSession` eval coverage:
+This is the pinned baseline after Phase G free-form paraphrase coverage:
 
 ```
-compressWorkout   : 7 active / 1 expectedGap   (+1 over D-2: explicit recovery compression to 30 minutes)
-replaceExercise   : 4 active / 2 expectedGap
-rescheduleWeek    : 7 active / 1 expectedGap   (+2 over E-1B: explicit recovery weekly weekday reschedules)
-generatePlan      : 6 active / 0 expectedGap   (+1 over v2: B-1 preference-aware case)
-moveWorkoutSession: 2 active / 0 expectedGap   (Stage 3-5: explicit weekday-to-weekday move + recovery-prefix variant)
-nonMutatingCoaching: 16 active / 0             (+2 over E-1B: vague recovery reschedule and today-to-tomorrow stay non-mutating; +2 over Stage 3-5: vague move and today-to-tomorrow move stay non-mutating)
-safety            : 11 active / 0              (+1 over E-1B: safety-over-recovery-reschedule; +1 over Stage 3-5: safety-over-move)
+compressWorkout   : 8 active / 1 expectedGap
+replaceExercise   : 5 active / 2 expectedGap
+rescheduleWeek    : 8 active / 1 expectedGap
+generatePlan      : 8 active / 0 expectedGap
+moveWorkoutSession: 3 active / 0 expectedGap
+nonMutatingCoaching: 19 active / 0
+safety            : 12 active / 0
 promptInjection   : 6 active / 0
                   ────────────────────────
-total             : 59 active / 4 expectedGap (63 cases)
+total             : 73 active / 4 expectedGap (77 cases)
 ```
 
 The remaining 4 `expectedGap` cases are kept as regression signals and are not
@@ -121,6 +124,30 @@ The orchestration boundary work adds one new category:
 
 This keeps the total eval suite at 67 cases, while the original 4
 `expectedGap` cases remain the same regression signal set.
+
+### Phase G addendum
+
+Phase G adds active free-form Chinese paraphrase cases for planning,
+compression, replacement, weekly rescheduling, single-session movement,
+recovery, nutrition, and safety priority. These cases are intended to pass in
+mock/native mode after deterministic router hardening.
+
+This remains deterministic keyword routing, not full semantic NLU. The router
+now recognizes small, explicit helper groups for common user-written phrases
+and returns specific clarifications when the intent is clear but required
+details are missing. Examples:
+
+- Compression without an explicit target duration asks for a target time
+  instead of inventing `targetMinutes`.
+- Replacement without enough workout / candidate context asks for the source
+  exercise and available equipment instead of returning the generic fallback.
+- Ambiguous schedule wording asks whether the user wants a weekly availability
+  change or a specific weekday-to-weekday move.
+
+The generic fallback remains valid for unrelated messages such as weather
+questions. Safety still short-circuits before free-form routing, mutation
+actions still require confirmation, and trusted `sourceContextHash` injection
+is unchanged.
 
 ### Phase 4 addendum
 
@@ -230,7 +257,9 @@ validator fallback probes. Phase C adds strict optional-LangGraph recovery
 policy probes for fatigue / overtraining answer-only advice and safety
 precedence. Phase D adds decision-aware assertions for safety short-circuit,
 recovery policy answer-only, explicit mutation delegation to native, and
-validator fail-closed behavior. The same smoke matrix now runs in GitHub
+validator fail-closed behavior. Phase G adds representative free-form Chinese
+paraphrase cases for plan, compress, replace, nutrition, and safety priority.
+The same smoke matrix now runs in GitHub
 Actions CI as a backend safety gate.
 
 If the optional dependency is not installed, normal LangGraph graph rows are
