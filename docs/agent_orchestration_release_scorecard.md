@@ -2,144 +2,212 @@
 
 ## Snapshot
 
-- Main commit: `eb2337fc68363b44609de03e6631185f2c969b2d`
-- Release tag: `agent-orchestration-smoke-ci-v1`
-- Scope: provider-agnostic structured-action Coach Agent with native default provider, optional experimental LangGraph orchestration, privacy-safe tracing, orchestration smoke matrix, and CI smoke gate
-- Default mode: `FITFORGE_AGENT_ORCHESTRATOR=native`, `FITFORGE_AGENT_MODE=mock`
-- Optional orchestrator: `FITFORGE_AGENT_ORCHESTRATOR=langgraph`
-- Real LLM mode: `FITFORGE_AGENT_MODE=real` (manual / optional, not default CI)
-- CI status: backend pytest, Flutter analyze/test, secret scan, dependency audit, and orchestration smoke gate all pass
+- Current stage: Phase E documentation consolidation
+- Latest milestone tag: `agent-phase-d-decision-scorecard-v1`
+- Default orchestrator: `native`
+- Optional orchestrator: `langgraph`
+- Real LLM mode: optional/manual only
+- CI: Flutter analyze/test, web build, backend pytest, orchestration smoke, secret scan, dependency audit
+- Production readiness: not claimed
 
-Phase D adds privacy-safe node-level decision tracing and smoke scorecards to
-the optional LangGraph path. LangGraph remains optional and orchestration-only;
-native remains the default path.
+Phase E consolidates the Phase A-D orchestration work into a release
+scorecard, architecture narrative, interview explanation, and demo/eval
+checklist. It does not add runtime behavior, Flutter UI changes, Planner
+nodes, Nutrition nodes, real LLM calls, dependencies, or a new default
+orchestrator.
 
-## Architecture Summary
+## Phase Timeline
 
-FitForge Coach Agent is a provider-agnostic structured-action agent layer.
+| Phase | Tag | Scope | Runtime behavior impact |
+|---|---|---|---|
+| A | `agent-phase-a-validator-parity-v1` | Validator hardening + parity | Safer optional LangGraph validation |
+| B | `agent-phase-b-recovery-node-v1` | Recovery metadata node | Metadata only |
+| C | `agent-phase-c-recovery-policy-v1` | Recovery policy answerOnly advice | Optional LangGraph behavior for ambiguous recovery |
+| D | `agent-phase-d-decision-scorecard-v1` | Decision tracing/scorecard | Metadata-only observability |
+| E | pending | Release narrative consolidation | Docs only |
 
-The backend can use the native provider or the optional experimental LangGraph orchestrator, but every path must return the existing `AgentResponse` / `AgentAction` contract.
+## Current Architecture
 
-The backend never directly mutates plan state. Mutation actions are previewed in Flutter and only executed after user confirmation through `LocalAgentActionExecutor`.
-LangGraph is not mutation authority; it only orchestrates and then fail-closes on malformed or unsafe graph output.
-
-## Why not fully migrate to LangGraph?
-
-- FitForge's core value is the action safety boundary, not framework adoption.
-- Many actions are deterministic app operations and should remain outside the LLM.
-- LangGraph is useful for orchestration and node visibility.
-- LangGraph is optional and experimental, not the authority for mutation.
-- The native path remains the default because it is simpler, stable, and CI-protected.
-
-## Implemented Capabilities
-
-| Area | Status | Evidence |
-|---|---|---|
-| Provider boundary | Implemented | [`agent-orchestration-provider-boundary-v1`](../README.md) and [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md) |
-| Optional LangGraph adapter | Implemented | [`agent-langgraph-orchestration-adapter-v1`](agent_orchestration_adapter.md) |
-| Structured LangGraph nodes | Implemented | [`agent-langgraph-structured-nodes-v1`](agent_orchestration_adapter.md) |
-| Phase A validator hardening | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md) and backend tests |
-| Phase B recovery node | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md), backend tests, and smoke matrix |
-| Phase C recovery policy | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md), backend tests, and smoke matrix |
-| Phase D decision scorecard | Implemented | [`agent_orchestration_adapter.md`](agent_orchestration_adapter.md), backend tests, and smoke matrix |
-| Privacy-safe tracing | Implemented | [`agent-privacy-safe-tracing-v1`](security.md) |
-| Smoke matrix | Implemented | [`agent-orchestration-smoke-matrix-v1`](coach_agent_evals.md) |
-| CI smoke gate | Implemented | [`agent-orchestration-smoke-ci-v1`](../.github/workflows/ci.yml) |
-| Real LLM provider | Implemented but optional | [`real_llm_eval_harness.md`](real_llm_eval_harness.md) |
-| Multi-agent orchestration | Planned, not implemented | [`agent_mvp_status.md`](agent_mvp_status.md) |
-| Long-term memory | Planned / out of scope | [`agent_capabilities.md`](agent_capabilities.md) |
-| Streaming | Planned / out of scope | [`agent_capabilities.md`](agent_capabilities.md) |
-
-## Safety Boundary
+FitForge Coach Agent is a provider-agnostic structured-action agent layer for
+a Flutter fitness app. The backend can use the native provider or the optional
+experimental LangGraph orchestrator, but every path must return the existing
+`AgentResponse` / `AgentAction` contract.
 
 ```text
-User message
+Flutter AgentChatScreen
+-> AgentService
+-> AgentContextBuilder
+-> FastAPI /v1/coach/message
 -> CoachAgentProvider
--> native or optional LangGraph orchestrator
+-> native OR optional LangGraph
 -> AgentResponse / AgentAction
 -> deterministic validation / normalization
--> Flutter AgentActionCard preview
+-> Flutter preview
 -> user confirmation
 -> LocalAgentActionExecutor
 -> AppState / PlanEngine / NutritionEngine
 ```
 
-LLM output is untrusted.
-Mutation actions must require confirmation.
-`sourceContextHash` is not trusted from the model.
-Safety responses cannot carry mutation actions.
-Prompt injection cannot force direct mutation.
-Traces do not expose raw user or model text.
+Current optional LangGraph flow:
 
-Phase D decision traces record structural node decisions only, for example:
-
-```json
-{
-  "decisions": [
-    {"node": "safety_precheck_node", "decision": "pass_through"},
-    {"node": "recovery_node", "decision": "detected_signal", "reason": "fatigue_or_recovery"},
-    {"node": "recovery_policy_node", "decision": "policy_answer_only", "reason": "fatigue_or_recovery"}
-  ]
-}
+```text
+safety_precheck_node
+-> intent_route_node
+-> recovery_node
+-> recovery_policy_node
+-> native_response_node
+-> response_contract_validation_node
 ```
 
-They do not log raw prompts, context, payload contents, model output, full
-`sourceContextHash` values, API keys, or secrets. Decision scorecards are
-eval/debug/interview evidence, not product UI.
+LangGraph is an orchestration adapter, not mutation authority. Explicit
+mutation actions still delegate to the native provider path and must pass the
+same validation, preview, confirmation, and trusted-context boundaries.
 
-## Validation Summary
+## Node Responsibilities
 
-- Backend pytest: `522 passed, 4 skipped`
-- Smoke matrix: `30 pass, 0 fail, 2 skip`
-- Flutter analyze: no issues found
-- Flutter test: `396 passed, 1 skipped`
-- CI: backend pytest, Flutter analyze/test, secret scan, dependency audit, orchestration smoke gate
+| Node | Responsibility | Can mutate app state? | Decision trace examples |
+|---|---|---|---|
+| `safety_precheck_node` | Deterministic high-risk symptom short-circuit | No | `pass_through`, `safety_short_circuit` |
+| `intent_route_node` | Coarse routing | No | `native`, `fallback` |
+| `recovery_node` | Detects recovery/time/schedule signals | No | `detected_signal`, `no_signal` |
+| `recovery_policy_node` | Returns non-mutating recovery advice for ambiguous fatigue/overtraining | No | `policy_answer_only`, `delegate_explicit_mutation` |
+| `native_response_node` | Delegates explicit action generation to native provider | No | `delegated_to_native`, `skipped_existing_response` |
+| `response_contract_validation_node` | Validates and fail-closes AgentResponse | No | `passed`, `fail_closed` |
 
-## Smoke Matrix Summary
+Decision traces are metadata-only. They may record node names, decision enums,
+reason enums, final decision node, and final decision. They must not record raw
+prompts, raw context, payload contents, raw model output, full
+`sourceContextHash`, API keys, or secrets.
 
-The smoke matrix is mock-only and checks:
+## Safety Boundary
 
-- native orchestrator
-- trace off / trace on
-- safety short-circuit
-- mutation confirmation
-- prompt-injection no-direct-mutation
-- recovery policy answer-only advice
-- node-level decision summaries for trace-on LangGraph rows
-- unknown orchestrator fallback
-- privacy-safe trace behavior
-- optional LangGraph path when available
+- LLM output is untrusted.
+- LangGraph is orchestration, not mutation authority.
+- Mutation actions must require confirmation.
+- `sourceContextHash` must match trusted context.
+- Flutter previews actions before execution.
+- `LocalAgentActionExecutor` is the only mutation boundary.
+- Safety response cannot smuggle mutation actions.
+- Decision traces are metadata-only.
+
+The authority chain remains:
+
+```text
+AgentResponse / AgentAction
+-> deterministic validation / normalization
+-> requiresConfirmation
+-> trusted sourceContextHash guard
+-> Flutter preview
+-> user confirmation
+-> LocalAgentActionExecutor
+-> AppState / PlanEngine / NutritionEngine
+```
+
+## Evaluation Evidence
+
+Latest known local validation from Phase D:
+
+- Backend pytest: 554 passed, 4 skipped
+- Orchestration smoke: 50 pass, 0 fail, 2 skip
+- Optional LangGraph smoke: 50 pass, 0 fail, 2 skip
+- Flutter analyze: no issues
+- Flutter test: all tests passed
+- CI: green before merge
+
+These numbers are release evidence for the Phase D milestone, not a production
+readiness claim.
+
+To generate a local metadata-only scorecard:
+
+```bash
+cd agent_backend
+python -m evals.run_orchestration_smoke \
+  --out evals/results/orchestration_smoke.local.json \
+  --markdown-out evals/results/orchestration_smoke.local.md
+```
+
+Local scorecards under `agent_backend/evals/results/` are local artifacts and
+must not be committed unless explicitly scrubbed and reviewed.
+
+## Smoke And CI Evidence Summary
+
+The orchestration smoke matrix is mock-only. It checks native and optional
+LangGraph routing, trace off/on modes, safety short-circuiting, mutation
+confirmation, prompt-injection no-direct-mutation behavior, unknown
+orchestrator fallback, LangGraph unavailable fallback, recovery policy
+answer-only handling, explicit mutation delegation, validator fail-closed
+behavior, and privacy-safe decision summary fields.
+
+The scorecard records structural metadata such as case id, orchestrator, trace
+mode, response intent, action type names, mutation count, confirmation status,
+fallback reason, safety flags, `traceDecisions`, `decisionNodes`, `decisions`,
+`decisionReasons`, `finalDecisionNode`, and `finalDecision`.
 
 It does not call real LLM providers and does not require API keys.
 
 ## Interview Explanation
 
-FitForge Coach Agent is a provider-agnostic structured-action agent layer for a Flutter fitness app. It turns natural-language coaching requests into typed `AgentAction` proposals, but never lets the LLM mutate plan state directly. Mutation actions are previewed, require user confirmation, and are executed by deterministic local engines. The backend supports a native provider and an optional experimental LangGraph orchestration path with explicit safety, routing, and validation nodes, privacy-safe tracing, eval coverage, and a CI-enforced mock smoke matrix.
+FitForge Coach Agent is not just a chatbot and not a blind LangGraph
+migration. It is a provider-agnostic structured-action agent layer for a
+Flutter fitness app. The LLM or orchestrator can propose typed actions, but it
+cannot mutate app state directly. Mutations are previewed, require user
+confirmation, and are executed by deterministic local engines.
+
+LangGraph is used as an optional orchestration adapter, not as mutation
+authority. The optional graph now exposes explicit safety, routing, recovery,
+policy, native delegation, and response-validation nodes. Privacy-safe
+decision tracing records which node made each structural decision without
+logging raw user text, context, payloads, model output, or full
+`sourceContextHash`.
 
 ### What makes it different from a chatbot?
 
-It emits structured actions, not free-form advice. It has user confirmation, deterministic execution, evals, CI smoke gates, and privacy-safe tracing.
+It emits typed structured actions, not unconstrained advice. Mutation proposals
+are human-in-the-loop, validated, previewed, and executed by deterministic
+local app engines only after confirmation.
 
-### Is this a mainstream agent framework project?
+### Why not fully migrate to LangGraph?
 
-Not a full framework-based agent system. It uses a custom structured-action architecture with optional LangGraph orchestration, while following mainstream agent engineering principles: structured output, guardrails, human-in-the-loop execution, deterministic tools, evals, and tracing.
+FitForge's core value is the action safety boundary, not framework adoption.
+LangGraph is useful for orchestration visibility and node-level eval evidence,
+but deterministic app mutation should stay outside the LLM/orchestrator. The
+native provider remains the default because it is simpler, stable, and
+CI-protected.
 
-## Current Limitations
+## What This Project Is / Is Not
 
-- No full multi-agent collaboration yet.
-- No long-term memory.
-- No streaming.
-- Real LLM mode is optional and not part of default CI.
-- HealthKit / wearable data not integrated.
-- Not medical diagnosis.
-- Not a commercial-grade fitness content platform yet.
-- Phase C does not replace the native default path.
-- Phase D does not add Planner or Nutrition behavior.
+Is:
 
-## Next Recommended Phases
+- structured-action agent
+- human-in-the-loop mutation system
+- deterministic local execution
+- optional LangGraph orchestration
+- privacy-safe trace/eval system
 
-- Add planner / nutrition nodes behind LangGraph without changing the executor boundary.
-- Expand recovery policy consumption only where behavior can be verified.
-- Add synthetic real-provider smoke scorecards manually.
-- Add observability docs / dashboard only if needed.
-- Add a user-facing demo video checklist.
+Is not:
+
+- fully autonomous agent
+- medical diagnosis system
+- full multi-agent framework migration
+- cloud memory system
+- real LLM production deployment
+
+## Demo Checklist
+
+- Show native default path first.
+- Explain `AgentResponse` / `AgentAction` as the contract boundary.
+- Show a mutation preview and confirmation before local execution.
+- Show safety short-circuit behavior with no mutation action.
+- Optionally start the backend with `FITFORGE_AGENT_ORCHESTRATOR=langgraph`
+  and `FITFORGE_AGENT_TRACE=1`.
+- Show the orchestration smoke Markdown scorecard's decision summary.
+- State explicitly that traces are metadata-only and local scorecards are not
+  committed.
+
+## Next Recommended Phase
+
+Phase F: Planner/Nutrition node design doc and eval contract, before
+implementation.
+
+Do not implement Planner or Nutrition behavior until the design document,
+expected node responsibilities, safety boundary, and eval contract are agreed.

@@ -133,6 +133,9 @@ Milestone tag lineage:
 The Coach Agent is still a provider-agnostic structured-action layer with a
 native default path and an optional experimental LangGraph orchestration
 adapter.
+The backend also includes an optional LangGraph orchestration path with safety,
+recovery-policy, validation, and privacy-safe decision tracing, while native
+remains the default path.
 
 Current orchestration evidence:
 - provider-agnostic structured-action Coach Agent
