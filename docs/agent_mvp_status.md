@@ -48,6 +48,8 @@
 
 > Phase G free-form routing hardening: deterministic mock/native routing now covers a focused set of realistic Chinese free-form paraphrases for plan generation, workout compression, exercise replacement, schedule changes, recovery, nutrition, and safety priority. This is **not** full semantic NLU and does not call real LLMs. It adds active paraphrase eval cases, representative smoke cases, specific clarification responses for under-specified compression / replacement / schedule requests, and keeps generic fallback for unrelated messages. No new action types, Planner/Nutrition runtime nodes, Flutter UI changes, direct backend AppState mutation, or safety-boundary changes were introduced.
 
+> Phase G.1 Flutter mock parity: `lib/agent/mocks/mock_agent_client.dart` now mirrors the Phase G deterministic free-form routing coverage for local Coach Agent UI mock mode. It adds safety paraphrases (`胸口有点疼`, `头很晕`), free-form plan / compress / replace / schedule / recovery / nutrition keyword coverage, and specific clarification replies for under-specified compress / replace / schedule requests. Mutation actions still require confirmation and trusted `sourceContextHash`; safety still wins first; unrelated messages such as weather remain generic fallback. No backend behavior, action schema, executor, Planner/Nutrition node, real LLM, or Flutter UI surface change was introduced.
+
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
 ### 历史稳定点

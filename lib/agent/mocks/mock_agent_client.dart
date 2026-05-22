@@ -43,8 +43,11 @@ class MockAgentClient implements AgentClient {
       return _generatePlanResponse(message, context);
     }
 
-    if (_isCompressIntent(message)) {
+    if (_isCompressIntent(message) && _hasExplicitTargetMinutes(message)) {
       return _compressResponse(message, context);
+    }
+    if (_isFreeFormCompressIntent(message)) {
+      return _compressClarificationResponse();
     }
 
     if (_isReplaceIntent(message)) {
@@ -65,8 +68,12 @@ class MockAgentClient implements AgentClient {
       }
     }
 
-    if (_isWeeklyReviewIntent(lower)) {
+    if (_isWeeklyReviewIntent(lower) || _isRecoveryIntent(message)) {
       return _weeklyReviewResponse(context);
+    }
+
+    if (_looksLikeScheduleRequest(message)) {
+      return _scheduleClarificationResponse();
     }
 
     if (_isNutritionIntent(lower)) {
@@ -79,9 +86,11 @@ class MockAgentClient implements AgentClient {
   // ──── intent matchers ────
 
   static const _safetyKeywords = [
+    '胸口有点疼',
     '胸口疼',
     '胸痛',
     '心绞',
+    '头很晕',
     '头晕',
     '眩晕',
     '晕倒',
@@ -144,18 +153,81 @@ class MockAgentClient implements AgentClient {
       _safetyKeywords.any(text.toLowerCase().contains);
 
   bool _isCompressIntent(String text) {
-    final hasMinutes = RegExp(r'(\d+)\s*分钟').hasMatch(text);
-    final compressKeywords = ['压缩', '缩短', '短一点', '快一点', '只有'];
-    return hasMinutes && compressKeywords.any(text.contains);
+    final compressKeywords = [
+      '压缩',
+      '缩短',
+      '短一点',
+      '快一点',
+      '只有',
+      '只能',
+      '赶时间',
+      '时间不多',
+      '时间不够',
+      '太忙',
+      '快速练',
+      '简单练一下',
+      '短一点的版本',
+      '快点练完',
+      '很快练完',
+      '压到',
+    ];
+    return compressKeywords.any(text.contains);
+  }
+
+  bool _hasExplicitTargetMinutes(String text) =>
+      RegExp(r'(\d+)\s*分钟').hasMatch(text) || text.contains('半小时');
+
+  bool _isFreeFormCompressIntent(String text) {
+    final keywords = [
+      '时间不多',
+      '时间不够',
+      '赶时间',
+      '太忙',
+      '快速练',
+      '简单练一下',
+      '短一点的版本',
+      '快点练完',
+      '很快练完',
+      '少练一点',
+      '压到',
+      '压缩',
+      '缩短',
+      '短一点',
+    ];
+    return keywords.any(text.contains);
   }
 
   bool _isReplaceIntent(String text) {
-    final keywords = ['替换', '换一个', '换个', '替换掉', '没有杠铃', '没有哑铃', '没有器械'];
+    final keywords = [
+      '替换',
+      '换一个',
+      '换个',
+      '换成',
+      '换成别的',
+      '替换掉',
+      '做不了',
+      '不舒服',
+      '动作怎么改',
+      '这个动作',
+      '调整一下动作',
+      '没有杠铃',
+      '没有哑铃',
+      '没有器械',
+      '没杠铃',
+      '没哑铃',
+      '器械不方便',
+    ];
     return keywords.any(text.contains);
   }
 
   bool _isRescheduleIntent(String text) {
-    if (text.contains('调整') || text.contains('重新排') || text.contains('改时间')) {
+    if (_matchesWeekendOffWorkday(text)) {
+      return true;
+    }
+    if (text.contains('调整') ||
+        text.contains('重新排') ||
+        text.contains('重新安排') ||
+        text.contains('改时间')) {
       return true;
     }
     if (_isRecoveryWeeklyReschedule(text)) {
@@ -165,6 +237,11 @@ class MockAgentClient implements AgentClient {
     final hasMultipleDays = dayRegex.allMatches(text).length >= 2;
     final intentKeywords = ['练', '训练', '安排'];
     return hasMultipleDays && intentKeywords.any(text.contains);
+  }
+
+  bool _matchesWeekendOffWorkday(String text) {
+    final weekendOff = ['周末没空', '周末不能', '周末不行', '周末没时间'].any(text.contains);
+    return weekendOff && text.contains('工作日');
   }
 
   bool _isRecoveryWeeklyReschedule(String text) {
@@ -196,6 +273,12 @@ class MockAgentClient implements AgentClient {
     final hasToday = ['今天', '今日', '这次'].any(text.contains);
     if (!hasToday) return false;
     return ['挪到', '往后挪', '改到', '改在'].any(text.contains);
+  }
+
+  bool _looksLikeScheduleRequest(String text) {
+    return ['这周', '本周', '周末', '工作日', '训练日', '练不了了'].any(text.contains) ||
+        _isMoveSessionIntent(text) ||
+        _looksLikeSingleSessionMove(text);
   }
 
   // 单次训练移动（Stage 3-3）：只接受 explicit weekday-to-weekday，且 source
@@ -264,7 +347,48 @@ class MockAgentClient implements AgentClient {
   }
 
   bool _isGenerateIntent(String text) {
-    final keywords = ['生成', '做个计划', '新计划', '新的训练计划', '帮我做计划'];
+    if (_looksLikeScheduleRequest(text)) {
+      return false;
+    }
+    final keywords = [
+      '生成',
+      '做个计划',
+      '新计划',
+      '新的训练计划',
+      '帮我做计划',
+      '安排一个适合我的计划',
+      '重新开始锻炼',
+      '重新开始训练',
+      '恢复训练',
+      '从哪里开始',
+    ];
+    if (keywords.any(text.contains)) {
+      return true;
+    }
+    if (_hasTrainingGoalSignal(text) &&
+        ['帮我安排', '安排一下', '帮我排一下'].any(text.contains)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _hasTrainingGoalSignal(String text) {
+    final keywords = [
+      '一周大概能练',
+      '一周能练',
+      '每周能练',
+      '想减脂',
+      '减脂',
+      '想增肌',
+      '增肌',
+      '想练胸',
+      '想练背',
+      '想练腿',
+      '练胸和背',
+      '恢复训练',
+      '重新开始锻炼',
+      '重新开始训练',
+    ];
     return keywords.any(text.contains);
   }
 
@@ -279,6 +403,14 @@ class MockAgentClient implements AgentClient {
       '下周应该注意',
       '练得怎么样',
       '恢复',
+      '状态很差',
+      '降强度',
+      '休息还是继续',
+      '最近有点累',
+      '有点累',
+      '好几天',
+      '疲劳',
+      '酸痛',
       '练得有点累',
       '练得太密',
       '连续练',
@@ -289,8 +421,45 @@ class MockAgentClient implements AgentClient {
     return keywords.any(text.contains);
   }
 
+  bool _isRecoveryIntent(String text) {
+    final keywords = [
+      '状态很差',
+      '降强度',
+      '休息还是继续',
+      '最近有点累',
+      '有点累',
+      '好几天',
+      '疲劳',
+      '酸痛',
+      '累',
+      '恢复',
+      '连续练',
+      '连续训练',
+      '还要继续',
+    ];
+    return keywords.any(text.contains);
+  }
+
   bool _isNutritionIntent(String text) {
-    final keywords = ['吃多了', '晚餐', '午餐', '饮食', '热量', '碳水'];
+    final keywords = [
+      '吃多了',
+      '晚饭',
+      '晚餐',
+      '午餐',
+      '饮食',
+      '热量',
+      '碳水',
+      '蛋白质',
+      '脂肪',
+      '减脂期',
+      '增肌期',
+      '吃什么',
+      '怎么吃',
+      '控制饮食',
+      '晚餐怎么补救',
+      '吃得有点乱',
+      '完全不吃碳水',
+    ];
     return keywords.any(text.contains);
   }
 
@@ -331,8 +500,7 @@ class MockAgentClient implements AgentClient {
     String message,
     AgentContextSnapshot context,
   ) {
-    final match = RegExp(r'(\d+)\s*分钟').firstMatch(message);
-    final targetMinutes = int.tryParse(match?.group(1) ?? '') ?? 25;
+    final targetMinutes = _extractTargetMinutesFromMessage(message) ?? 25;
     final today = context.todayWorkout;
     final dayOfWeek = today != null ? today['dayOfWeek'] as int? : null;
     return AgentResponse(
@@ -356,6 +524,15 @@ class MockAgentClient implements AgentClient {
           },
         ),
       ],
+    );
+  }
+
+  AgentResponse _compressClarificationResponse() {
+    return const AgentResponse(
+      message: '可以帮你压缩今日训练。为了不随便删动作，我需要你告诉我目标时长，比如 20 分钟、30 分钟或半小时。',
+      intent: AgentIntent.answerOnly,
+      confidence: 0.7,
+      actions: [],
     );
   }
 
@@ -408,12 +585,7 @@ class MockAgentClient implements AgentClient {
     }
 
     if (toId == null || fromId == null) {
-      return const AgentResponse(
-        message: '我暂时没有足够的信息来推荐替代动作。请告诉我你想替换的动作和今天可用的器械。',
-        intent: AgentIntent.answerOnly,
-        confidence: 0.4,
-        actions: [],
-      );
+      return _replaceClarificationResponse();
     }
 
     final dayOfWeek = today != null ? today['dayOfWeek'] as int? : null;
@@ -440,6 +612,15 @@ class MockAgentClient implements AgentClient {
     );
   }
 
+  AgentResponse _replaceClarificationResponse() {
+    return const AgentResponse(
+      message: '可以帮你替换动作。请告诉我具体要替换哪个动作，以及你现在可用的器械；如果今天已有训练计划，我会优先找同部位替代动作。',
+      intent: AgentIntent.answerOnly,
+      confidence: 0.7,
+      actions: [],
+    );
+  }
+
   AgentResponse _rescheduleResponse(
     String message,
     AgentContextSnapshot context,
@@ -463,8 +644,12 @@ class MockAgentClient implements AgentClient {
       '星期天': 7,
     };
     final selected = <int>{};
-    for (final entry in dayMap.entries) {
-      if (message.contains(entry.key)) selected.add(entry.value);
+    if (_matchesWeekendOffWorkday(message)) {
+      selected.addAll([1, 2, 3, 4, 5]);
+    } else {
+      for (final entry in dayMap.entries) {
+        if (message.contains(entry.key)) selected.add(entry.value);
+      }
     }
     final weekdays = selected.toList()..sort();
     if (weekdays.isEmpty) {
@@ -489,6 +674,16 @@ class MockAgentClient implements AgentClient {
           },
         ),
       ],
+    );
+  }
+
+  AgentResponse _scheduleClarificationResponse() {
+    return const AgentResponse(
+      message:
+          '可以帮你调整训练时间。请告诉我是调整整周可训练日，还是把某一天的训练移动到另一天下；例如“这周只能周二周四练”或“把周一训练挪到周三”。',
+      intent: AgentIntent.answerOnly,
+      confidence: 0.7,
+      actions: [],
     );
   }
 
@@ -756,7 +951,8 @@ class MockAgentClient implements AgentClient {
     return AgentResponse(
       message:
           '如果某餐摄入偏多，下一餐可以选高蛋白、低油脂、适量碳水的组合。'
-          '不建议完全跳餐或极端节食。',
+          '蛋白质问题可以先按每餐都有优质蛋白来安排，再结合体重和训练量微调。'
+          '不建议完全不吃碳水、完全跳餐或极端节食。',
       intent: AgentIntent.nutritionAdvice,
       confidence: 0.8,
       actions: [

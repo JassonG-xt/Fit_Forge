@@ -89,6 +89,22 @@ void main() {
     expect(find.text('取消'), findsOneWidget);
   });
 
+  testWidgets('free-form safety paraphrase does not render generic fallback', (
+    tester,
+  ) async {
+    await pumpChat(tester);
+    final input = find.byType(TextField);
+    await tester.enterText(input, '我胸口有点疼，但是想练，帮我安排一下');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('我可以帮你生成训练计划'), findsNothing);
+    expect(find.text('检测到潜在健康风险'), findsOneWidget);
+    expect(find.textContaining('请暂停训练'), findsWidgets);
+    expect(find.text('应用修改'), findsNothing);
+  });
+
   testWidgets('cancelling an action disables the buttons', (tester) async {
     await pumpChat(tester);
     await tester.tap(find.text('今天只有 30 分钟，帮我压缩训练'));
