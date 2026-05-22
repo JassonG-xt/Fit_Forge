@@ -5,12 +5,15 @@ from __future__ import annotations
 import sys
 import types
 import builtins
+import json
+import logging
 from typing import Any, Callable
 
 import pytest
 
 from agents.coach_agent import run_coach_agent
 from agents.action_safety import MUTATION_ACTION_TYPES
+from agents.orchestration_trace import orchestration_trace_scope
 from agents.providers.langgraph_provider import (
     LangGraphCoachAgentProvider,
     recovery_node,
@@ -19,6 +22,9 @@ from agents.providers.langgraph_provider import (
 )
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse
+
+
+_TRACE_LOGGER = "agents.orchestration_trace"
 
 
 def _request(message: str = "今天只有20分钟，帮我压缩训练") -> AgentRequest:
@@ -109,6 +115,19 @@ def _install_fake_langgraph(monkeypatch: pytest.MonkeyPatch) -> None:
     graph_module.END = "__end__"
     monkeypatch.setitem(sys.modules, "langgraph", langgraph_module)
     monkeypatch.setitem(sys.modules, "langgraph.graph", graph_module)
+
+
+def _trace_payload(caplog: pytest.LogCaptureFixture) -> dict[str, Any]:
+    records = [record for record in caplog.records if record.name == _TRACE_LOGGER]
+    assert len(records) == 1
+    return json.loads(records[0].getMessage())
+
+
+def _decision_pairs(payload: dict[str, Any]) -> set[tuple[str, str, str | None]]:
+    return {
+        (decision["node"], decision["decision"], decision.get("reason"))
+        for decision in payload["decisions"]
+    }
 
 
 def _remove_fake_langgraph(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -221,6 +240,80 @@ def test_langgraph_graph_path_preserves_safety_response(
     assert response.intent == "safetyResponse"
     assert response.safety.shouldStopWorkout is True
     assert all(action.type == "safetyResponse" for action in response.actions)
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_intent", "expected_decisions"),
+    [
+        (
+            "\u6211\u80f8\u53e3\u75bc\u4f46\u8fd8\u60f3\u7ee7\u7eed\u7ec3\uff0c\u5e2e\u6211\u538b\u7f29\u8bad\u7ec3",
+            "safetyResponse",
+            {("safety_precheck_node", "safety_short_circuit", "medical_concern")},
+        ),
+        (
+            "\u6211\u8fd9\u51e0\u5929\u5f88\u7d2f\uff0c\u72b6\u6001\u5f88\u5dee\uff0c\u8fd8\u8981\u7ee7\u7eed\u7ec3\u5417",
+            "answerOnly",
+            {
+                ("recovery_node", "detected_signal", "fatigue_or_recovery"),
+                ("recovery_policy_node", "policy_answer_only", "fatigue_or_recovery"),
+                ("response_contract_validation_node", "passed", None),
+            },
+        ),
+        (
+            "\u4eca\u5929\u53ea\u670920\u5206\u949f\uff0c\u5e2e\u6211\u538b\u7f29\u8bad\u7ec3",
+            "compressWorkout",
+            {
+                ("recovery_node", "detected_signal", "time_constrained"),
+                ("recovery_policy_node", "delegate_explicit_mutation", "explicit_mutation_intent"),
+                ("native_response_node", "delegated_to_native", None),
+                ("response_contract_validation_node", "passed", None),
+            },
+        ),
+    ],
+)
+def test_langgraph_trace_records_node_decisions(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    message: str,
+    expected_intent: str,
+    expected_decisions: set[tuple[str, str, str | None]],
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+    monkeypatch.setenv("FITFORGE_AGENT_MODE", "mock")
+    monkeypatch.setenv("FITFORGE_AGENT_TRACE", "1")
+    caplog.set_level(logging.INFO, logger=_TRACE_LOGGER)
+
+    with orchestration_trace_scope("mock"):
+        response = LangGraphCoachAgentProvider().handle(_request(message))
+
+    payload = _trace_payload(caplog)
+
+    assert response.intent == expected_intent
+    assert _decision_pairs(payload) >= expected_decisions
+    assert message not in json.dumps(payload, ensure_ascii=False)
+    assert "trusted_hash" not in json.dumps(payload, ensure_ascii=False)
+
+
+def test_langgraph_trace_records_validator_fail_closed_decision(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setenv("FITFORGE_AGENT_TRACE", "1")
+    caplog.set_level(logging.INFO, logger=_TRACE_LOGGER)
+
+    with orchestration_trace_scope("mock"):
+        result = response_contract_validation_node(
+            {"request": _request(), "response": {"intent": "compressWorkout"}}
+        )
+
+    payload = _trace_payload(caplog)
+
+    assert result["response"].intent == "answerOnly"
+    assert (
+        "response_contract_validation_node",
+        "fail_closed",
+        "validator_contract_violation",
+    ) in _decision_pairs(payload)
 
 
 def test_recovery_node_noops_when_response_already_present() -> None:

@@ -4,8 +4,9 @@ FitForge Coach Agent is a provider-agnostic structured-action agent.
 The backend may use the native provider or the optional experimental
 LangGraph orchestrator, but every path must return the existing
 `AgentResponse` / `AgentAction` contract.
-Phase C adds a recovery policy node to the optional LangGraph path; LangGraph
-remains optional and orchestration-only, and native remains the default path.
+Phase D adds privacy-safe node-level decision tracing and smoke scorecards for
+the optional LangGraph path; LangGraph remains optional and orchestration-only,
+and native remains the default path.
 
 ## Current architecture
 
@@ -36,7 +37,7 @@ behavior. `langgraph` is optional and experimental; it wraps native
 behavior through a minimal graph and falls back safely when LangGraph is
 not installed.
 
-Phase C node responsibilities:
+Current node responsibilities:
 
 | Node | Responsibility | Can mutate app state? |
 |---|---|---|
@@ -73,6 +74,23 @@ actions that are missing confirmation or carry an unsafe hash.
 structural orchestration metadata and does not alter the `AgentResponse`
 contract or expose any debug payload to Flutter.
 
+Phase D adds metadata-only node decisions so evals can explain which node made
+the structural decision:
+
+```json
+{
+  "decisions": [
+    {"node": "safety_precheck_node", "decision": "pass_through"},
+    {"node": "recovery_node", "decision": "detected_signal", "reason": "fatigue_or_recovery"},
+    {"node": "recovery_policy_node", "decision": "policy_answer_only", "reason": "fatigue_or_recovery"}
+  ]
+}
+```
+
+These traces never include raw prompts, raw context, payload contents, raw
+model output, full `sourceContextHash` values, API keys, or secrets. They are
+for eval/debug evidence, not product UI.
+
 ## Smoke matrix
 
 `agent_backend/evals/run_orchestration_smoke.py` provides a mock-only
@@ -88,7 +106,8 @@ python -m evals.run_orchestration_smoke \
 It verifies native and optional LangGraph routing, trace off / on behavior,
 safety response, mutation confirmation, prompt-injection no-direct-mutation,
 unknown orchestrator fallback, and LangGraph unavailable fallback. The report
-omits raw prompts, raw responses, raw context, payload contents, and full
+also includes a concise decision summary for trace-on runs. It omits raw
+prompts, raw responses, raw context, payload contents, and full
 `sourceContextHash` values.
 
 ## Supported actions
@@ -124,7 +143,7 @@ runtime behavior.
 
 Unknown orchestrator values fall back to native behavior.
 
-## Phase C non-goals
+## Phase D non-goals
 
 - not a fully autonomous agent
 - not long-term memory
@@ -136,6 +155,8 @@ Unknown orchestrator values fall back to native behavior.
 - not a Flutter UI rewrite
 - not real LLM CI
 - not replacing the native default path
+- not adding Planner or Nutrition behavior
+- not exposing trace scorecards in Flutter
 
 ## Release scorecard
 

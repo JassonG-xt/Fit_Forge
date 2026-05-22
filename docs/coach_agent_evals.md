@@ -25,6 +25,8 @@ which provider is wired up:
   closed to `answerOnly` with no actions)
 - Phase C recovery policy coverage (ambiguous fatigue / overtraining requests
   in the optional LangGraph path return non-mutating `answerOnly` advice)
+- Phase D node-level decision scorecards (trace-on LangGraph smoke rows show
+  which node short-circuited, delegated, fail-closed, or passed validation)
 - The agent never auto-executes; mutations always go through
   `AgentAction → preview → user confirmation → LocalAgentActionExecutor → AppState`
 
@@ -186,7 +188,22 @@ precheck remains first and still wins over recovery policy.
 `FITFORGE_AGENT_TRACE=1` does not change eval expectations. The eval suite
 still asserts the structured `AgentResponse` / `AgentAction` contract only;
 privacy-safe trace logging is backend observability and is covered by unit
-tests, not by eval JSON.
+tests and the smoke scorecard, not by eval JSON.
+
+Phase D adds metadata-only node decisions:
+
+```json
+{
+  "decisions": [
+    {"node": "safety_precheck_node", "decision": "pass_through"},
+    {"node": "recovery_node", "decision": "detected_signal", "reason": "fatigue_or_recovery"},
+    {"node": "recovery_policy_node", "decision": "policy_answer_only", "reason": "fatigue_or_recovery"}
+  ]
+}
+```
+
+The trace never logs raw prompts, raw context, payload contents, raw model
+output, full `sourceContextHash` values, API keys, or secrets.
 
 ## Release scorecard
 
@@ -211,8 +228,10 @@ structured `weeklyReview`, `safetyResponse`, prompt-injection no-direct
 mutation, unknown-orchestrator fallback, LangGraph unavailable fallback, and
 validator fallback probes. Phase C adds strict optional-LangGraph recovery
 policy probes for fatigue / overtraining answer-only advice and safety
-precedence. The same smoke matrix now runs in GitHub Actions CI as a backend
-safety gate.
+precedence. Phase D adds decision-aware assertions for safety short-circuit,
+recovery policy answer-only, explicit mutation delegation to native, and
+validator fail-closed behavior. The same smoke matrix now runs in GitHub
+Actions CI as a backend safety gate.
 
 If the optional dependency is not installed, normal LangGraph graph rows are
 reported as `skip`, while the safe unavailable fallback remains testable:
@@ -227,9 +246,9 @@ python -m evals.run_orchestration_smoke \
 
 The scorecard records only structural metadata: case id, category,
 orchestrator, trace mode, intent, action type names, mutation action count,
-confirmation status, fallback reason, and safety flags. It does not store raw
-prompts, raw responses, raw context JSON, payload contents, raw LLM output, or
-full `sourceContextHash` values.
+confirmation status, fallback reason, safety flags, and decision node/decision
+reason enums. It does not store raw prompts, raw responses, raw context JSON,
+payload contents, raw LLM output, or full `sourceContextHash` values.
 
 ### Cross-run promotion of three paraphrases (history)
 

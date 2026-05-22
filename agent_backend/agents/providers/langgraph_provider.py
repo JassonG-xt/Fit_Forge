@@ -17,6 +17,7 @@ from typing import Any, TypedDict
 
 from agents.action_safety import MUTATION_ACTION_TYPES
 from agents.orchestration_trace import (
+    record_trace_decision,
     record_trace_error,
     record_trace_fallback_reason,
     record_trace_node,
@@ -58,48 +59,81 @@ def safety_precheck_node(state: LangGraphCoachState) -> LangGraphCoachState:
     record_trace_node("safety_precheck_node")
     request = state["request"]
     if assess_message_safety(request.message).has_medical_concern:
+        record_trace_decision(
+            "safety_precheck_node",
+            "safety_short_circuit",
+            "medical_concern",
+        )
         return {
             "route": "safety",
             "response": _safety_response(request.message),
         }
+    record_trace_decision("safety_precheck_node", "pass_through")
     return {"route": "native"}
 
 
 def intent_route_node(state: LangGraphCoachState) -> LangGraphCoachState:
     record_trace_node("intent_route_node")
     if "response" in state:
+        record_trace_decision("intent_route_node", "skipped_existing_response")
         return {}
     message = state["request"].message.strip()
     if not message:
+        record_trace_decision("intent_route_node", "fallback", "empty_message")
         return {"route": "fallback"}
+    record_trace_decision("intent_route_node", "native")
     return {"route": "native"}
 
 
 def recovery_node(state: LangGraphCoachState) -> LangGraphCoachState:
     record_trace_node("recovery_node")
     if "response" in state:
+        record_trace_decision("recovery_node", "skipped_existing_response")
         return {}
 
     request = state["request"]
     recovery = _detect_recovery_signal(request)
     if recovery is None:
+        record_trace_decision("recovery_node", "no_signal", "no_recovery_signal")
         return {}
+    record_trace_decision(
+        "recovery_node",
+        "detected_signal",
+        _recovery_signal_reason(recovery),
+    )
     return {"recovery": recovery}
 
 
 def recovery_policy_node(state: LangGraphCoachState) -> LangGraphCoachState:
     record_trace_node("recovery_policy_node")
     if "response" in state:
+        record_trace_decision("recovery_policy_node", "skipped_existing_response")
         return {}
 
     request = state["request"]
     if assess_message_safety(request.message).has_medical_concern:
+        record_trace_decision(
+            "recovery_policy_node",
+            "safety_passthrough",
+            "medical_concern",
+        )
         return {}
     recovery = state.get("recovery")
     if not isinstance(recovery, dict):
+        record_trace_decision("recovery_policy_node", "no_recovery_metadata")
         return {}
+    signal = _recovery_signal_reason(recovery)
     if not _should_recovery_policy_answer(recovery, request.message):
+        if _has_explicit_mutation_intent(request.message):
+            record_trace_decision(
+                "recovery_policy_node",
+                "delegate_explicit_mutation",
+                "explicit_mutation_intent",
+            )
+        else:
+            record_trace_decision("recovery_policy_node", "delegate_non_recovery")
         return {}
+    record_trace_decision("recovery_policy_node", "policy_answer_only", signal)
     return {"response": _recovery_policy_response()}
 
 
@@ -109,13 +143,16 @@ def native_response_node(
 ) -> LangGraphCoachState:
     record_trace_node("native_response_node")
     if "response" in state:
+        record_trace_decision("native_response_node", "skipped_existing_response")
         return {}
 
     route = state.get("route", "native")
     if route == "fallback":
+        record_trace_decision("native_response_node", "fallback_answer_only")
         return {"response": _langgraph_fallback_response()}
 
     provider = native_provider or NativeCoachAgentProvider()
+    record_trace_decision("native_response_node", "delegated_to_native")
     return {"response": provider.handle(state["request"])}
 
 
@@ -126,11 +163,22 @@ def response_contract_validation_node(
     response = _coerce_agent_response(state.get("response"))
     request = state.get("request")
     if response is None or not isinstance(request, AgentRequest):
+        record_trace_decision(
+            "response_contract_validation_node",
+            "fail_closed",
+            "validator_contract_violation",
+        )
         record_trace_fallback_reason("validator_contract_violation")
         return {"response": _langgraph_failure_response()}
     if not _is_safe_graph_response(response, request):
+        record_trace_decision(
+            "response_contract_validation_node",
+            "fail_closed",
+            "validator_contract_violation",
+        )
         record_trace_fallback_reason("validator_contract_violation")
         return {"response": _langgraph_failure_response()}
+    record_trace_decision("response_contract_validation_node", "passed")
     return {"response": response}
 
 
@@ -251,6 +299,18 @@ def _detect_recovery_signal(request: AgentRequest) -> dict[str, Any] | None:
     if _has_recovery_fatigue_signal(message) or _has_recovery_keywords(message):
         return {"signal": "fatigue_or_recovery", "reason": "recovery_keywords"}
 
+    return None
+
+
+def _recovery_signal_reason(recovery: dict[str, Any]) -> str | None:
+    signal = recovery.get("signal")
+    if signal in {
+        "time_constrained",
+        "fatigue_or_recovery",
+        "overtraining",
+        "schedule_recovery",
+    }:
+        return str(signal)
     return None
 
 

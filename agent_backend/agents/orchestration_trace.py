@@ -24,6 +24,48 @@ logger = logging.getLogger(__name__)
 
 _TRACE_ENV_TRUTHY = {"1", "true", "yes", "on"}
 
+_ALLOWED_DECISION_NODES = {
+    "safety_precheck_node",
+    "intent_route_node",
+    "recovery_node",
+    "recovery_policy_node",
+    "native_response_node",
+    "response_contract_validation_node",
+}
+
+_ALLOWED_DECISIONS = {
+    "pass_through",
+    "safety_short_circuit",
+    "native",
+    "fallback",
+    "skipped_existing_response",
+    "no_signal",
+    "detected_signal",
+    "no_recovery_metadata",
+    "policy_answer_only",
+    "delegate_explicit_mutation",
+    "delegate_non_recovery",
+    "safety_passthrough",
+    "delegated_to_native",
+    "fallback_answer_only",
+    "passed",
+    "fail_closed",
+}
+
+_ALLOWED_DECISION_REASONS = {
+    "medical_concern",
+    "empty_message",
+    "time_constrained",
+    "fatigue_or_recovery",
+    "overtraining",
+    "schedule_recovery",
+    "explicit_mutation_intent",
+    "no_recovery_signal",
+    "validator_contract_violation",
+    "malformed_graph_output",
+    "graph_execution_error",
+}
+
 
 def is_trace_enabled() -> bool:
     value = os.environ.get("FITFORGE_AGENT_TRACE", "0").strip().lower()
@@ -44,6 +86,7 @@ class OrchestrationTrace:
     agent_mode: str
     provider: str | None = None
     nodes: list[str] = field(default_factory=list)
+    decisions: list[dict[str, str]] = field(default_factory=list)
     fallback_reason: str | None = None
     fallback_happened: bool = False
     response_intent: str | None = None
@@ -58,6 +101,22 @@ class OrchestrationTrace:
 
     def record_node(self, node_name: str) -> None:
         self.nodes.append(node_name)
+
+    def record_decision(
+        self,
+        node: str,
+        decision: str,
+        reason: str | None = None,
+    ) -> None:
+        decision_payload = {
+            "node": node if node in _ALLOWED_DECISION_NODES else "unknown",
+            "decision": decision if decision in _ALLOWED_DECISIONS else "unknown",
+        }
+        if reason is not None:
+            decision_payload["reason"] = (
+                reason if reason in _ALLOWED_DECISION_REASONS else "unknown"
+            )
+        self.decisions.append(decision_payload)
 
     def record_provider(self, provider: str) -> None:
         self.provider = provider
@@ -104,6 +163,7 @@ class OrchestrationTrace:
             "agentMode": self.agent_mode,
             "provider": self.provider,
             "nodes": list(self.nodes),
+            "decisions": [dict(decision) for decision in self.decisions],
             "fallbackReason": self.fallback_reason,
             "fallbackHappened": self.fallback_happened,
             "responseIntent": self.response_intent,
@@ -135,6 +195,16 @@ def record_trace_node(node_name: str) -> None:
     trace = current_trace()
     if trace is not None:
         trace.record_node(node_name)
+
+
+def record_trace_decision(
+    node: str,
+    decision: str,
+    reason: str | None = None,
+) -> None:
+    trace = current_trace()
+    if trace is not None:
+        trace.record_decision(node, decision, reason)
 
 
 def record_trace_provider(provider: str) -> None:
