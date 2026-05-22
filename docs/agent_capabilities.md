@@ -1,31 +1,37 @@
 # FitForge Coach Agent Capabilities
 
-FitForge Coach Agent is a provider-agnostic structured-action agent.
-The backend may use the native provider or the optional experimental
-LangGraph orchestrator, but every path must return the existing
-`AgentResponse` / `AgentAction` contract.
-Phase D adds privacy-safe node-level decision tracing and smoke scorecards for
-the optional LangGraph path; LangGraph remains optional and orchestration-only,
-and native remains the default path.
+FitForge Coach Agent is a provider-agnostic structured-action agent. The
+backend may use the native provider or the optional experimental LangGraph
+orchestrator, but every path must return the existing `AgentResponse` /
+`AgentAction` contract.
 
-## Current architecture
+Phase D adds privacy-safe node-level decision tracing and smoke scorecards for
+the optional LangGraph path. Phase E consolidates that work into the release
+scorecard and interview narrative. LangGraph remains optional and
+orchestration-only, and native remains the default path.
+
+## Current Architecture
 
 ```text
 User message
-→ backend Coach Agent provider
-→ AgentResponse
-→ structured AgentAction
-→ deterministic validation / normalization / safety
-→ Flutter preview
-→ user confirmation
-→ LocalAgentActionExecutor
-→ AppState mutation
+-> Flutter AgentChatScreen
+-> AgentService
+-> AgentContextBuilder
+-> FastAPI /v1/coach/message
+-> CoachAgentProvider
+-> native OR optional LangGraph
+-> AgentResponse / AgentAction
+-> deterministic validation / normalization
+-> Flutter preview
+-> user confirmation
+-> LocalAgentActionExecutor
+-> AppState / PlanEngine / NutritionEngine
 ```
 
 No provider may directly mutate `AppState`, skip preview, bypass user
 confirmation, or trust LLM-generated `sourceContextHash` / `riskLevel`.
 
-## Provider modes
+## Provider Modes
 
 | Variable | Values | Default |
 |---|---|---|
@@ -33,22 +39,10 @@ confirmation, or trust LLM-generated `sourceContextHash` / `riskLevel`.
 | `FITFORGE_AGENT_MODE` | `mock`, `real` | `mock` |
 
 `native` is the default and preserves the existing FitForge provider
-behavior. `langgraph` is optional and experimental; it wraps native
-behavior through a minimal graph and falls back safely when LangGraph is
-not installed.
+behavior. `langgraph` is optional and experimental; it wraps native behavior
+through a minimal graph and falls back safely when LangGraph is not installed.
 
-Current node responsibilities:
-
-| Node | Responsibility | Can mutate app state? |
-|---|---|---|
-| `safety_precheck_node` | Deterministic high-risk symptom short-circuit | No |
-| `intent_route_node` | Coarse routing only | No |
-| `recovery_node` | Detects fatigue / recovery / time-constraint signals and records metadata | No |
-| `recovery_policy_node` | Consumes recovery metadata and may return safe non-mutating recovery advice | No |
-| `native_response_node` | Delegates explicit action generation to the native provider | No |
-| `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
-
-Current LangGraph node flow:
+## Current LangGraph Flow
 
 ```text
 input
@@ -61,14 +55,23 @@ input
 -> AgentResponse
 ```
 
-The graph is orchestration only. Ambiguous fatigue / overtraining requests
-may return `answerOnly` recovery advice with no actions. Explicit mutation
+| Node | Responsibility | Can mutate app state? |
+|---|---|---|
+| `safety_precheck_node` | Deterministic high-risk symptom short-circuit | No |
+| `intent_route_node` | Coarse routing only | No |
+| `recovery_node` | Detects fatigue / recovery / time-constraint signals and records metadata | No |
+| `recovery_policy_node` | Consumes recovery metadata and may return safe non-mutating recovery advice | No |
+| `native_response_node` | Delegates explicit action generation to the native provider | No |
+| `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
+
+The graph is orchestration only. Ambiguous fatigue / overtraining requests may
+return `answerOnly` recovery advice with no actions. Explicit mutation
 requests still delegate actual action generation to the native provider and
-cannot bypass confirmation or the trusted `sourceContextHash` boundary.
-It also fail-closes malformed output, safety-violating output, and mutation
+cannot bypass confirmation or the trusted `sourceContextHash` boundary. The
+graph also fail-closes malformed output, safety-violating output, and mutation
 actions that are missing confirmation or carry an unsafe hash.
 
-## Privacy-safe tracing
+## Privacy-Safe Tracing
 
 `FITFORGE_AGENT_TRACE=1` is a backend-only diagnostic switch. It logs only
 structural orchestration metadata and does not alter the `AgentResponse`
@@ -91,10 +94,10 @@ These traces never include raw prompts, raw context, payload contents, raw
 model output, full `sourceContextHash` values, API keys, or secrets. They are
 for eval/debug evidence, not product UI.
 
-## Smoke matrix
+## Smoke Matrix
 
-`agent_backend/evals/run_orchestration_smoke.py` provides a mock-only
-scorecard for the current orchestration boundary:
+`agent_backend/evals/run_orchestration_smoke.py` provides a mock-only scorecard
+for the current orchestration boundary:
 
 ```bash
 cd agent_backend
@@ -110,7 +113,7 @@ also includes a concise decision summary for trace-on runs. It omits raw
 prompts, raw responses, raw context, payload contents, and full
 `sourceContextHash` values.
 
-## Supported actions
+## Supported Actions
 
 | Action | Mutates local state | Requires user confirmation | Description |
 |---|---:|---:|---|
@@ -124,7 +127,7 @@ prompts, raw responses, raw context, payload contents, and full
 | `safetyResponse` | No | No | Deterministic safety short-circuit for high-risk symptoms. |
 | `answerOnly` | No | No | Clarification or explanation-only fallback. |
 
-## Safety model
+## Safety Model
 
 Safety is layered, not single-point:
 
@@ -135,15 +138,14 @@ Safety is layered, not single-point:
 5. Flutter previews the action before execution.
 6. `LocalAgentActionExecutor` is the only mutation boundary.
 
-## Orchestration boundary
+## Orchestration Boundary
 
-LangGraph is optional orchestration, not the authority for mutation.
-The native provider remains the default path and the source of current
-runtime behavior.
+LangGraph is optional orchestration, not the authority for mutation. The native
+provider remains the default path and the source of current runtime behavior.
 
 Unknown orchestrator values fall back to native behavior.
 
-## Phase D non-goals
+## Phase E Non-Goals
 
 - not a fully autonomous agent
 - not long-term memory
@@ -158,9 +160,11 @@ Unknown orchestrator values fall back to native behavior.
 - not adding Planner or Nutrition behavior
 - not exposing trace scorecards in Flutter
 
-## Release scorecard
+## Release Scorecard
 
-For a concise release-ready summary of the current orchestration architecture, validation evidence, limitations, and interview framing, see [`docs/agent_orchestration_release_scorecard.md`](agent_orchestration_release_scorecard.md).
+For the release-ready summary of the current orchestration architecture,
+validation evidence, limitations, and interview framing, see
+[`docs/agent_orchestration_release_scorecard.md`](agent_orchestration_release_scorecard.md).
 
 ## References
 

@@ -250,6 +250,12 @@ confirmation status, fallback reason, safety flags, and decision node/decision
 reason enums. It does not store raw prompts, raw responses, raw context JSON,
 payload contents, raw LLM output, or full `sourceContextHash` values.
 
+Phase D scorecards include the decision fields `traceDecisions`,
+`decisionNodes`, `decisions`, `decisionReasons`, `finalDecisionNode`, and
+`finalDecision`. These fields are metadata-only and exist so a reviewer can
+see which orchestration node made the structural decision without exposing the
+prompt, context, payload, model output, or full `sourceContextHash`.
+
 ### Cross-run promotion of three paraphrases (history)
 
 Three Chinese paraphrases were promoted from `expectedGap` to `active` after

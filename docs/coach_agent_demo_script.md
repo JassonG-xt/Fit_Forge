@@ -101,6 +101,15 @@ and optional LangGraph orchestration paths under trace off / on modes. The
 scorecard records only structural metadata, so it is useful as portfolio
 evidence without storing user text, context, payloads, or LLM completions.
 
+### Optional LangGraph orchestration demo
+
+1. Start backend with `FITFORGE_AGENT_ORCHESTRATOR=langgraph`
+2. Enable `FITFORGE_AGENT_TRACE=1`
+3. Try a safety prompt
+4. Try an ambiguous fatigue prompt
+5. Try an explicit compress prompt
+6. Show the smoke scorecard Decision Summary
+
 ## Demo prompts
 
 ### 1. Safety response
@@ -156,6 +165,8 @@ the optional adapter still produces the same structured contract:
 input
 -> safety_precheck_node
 -> intent_route_node
+-> recovery_node
+-> recovery_policy_node
 -> native_response_node
 -> response_contract_validation_node
 -> AgentResponse

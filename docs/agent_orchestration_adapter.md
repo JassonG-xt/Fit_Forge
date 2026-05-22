@@ -2,8 +2,10 @@
 
 FitForge remains a provider-agnostic structured-action agent system.
 Phase D keeps the optional LangGraph adapter experimental while adding
-privacy-safe node-level decision tracing and smoke scorecards. It is still
-not a full LangGraph migration and does not add Planner or Nutrition behavior.
+privacy-safe node-level decision tracing and smoke scorecards. Phase E
+consolidates the release narrative and demo/eval checklist without changing
+runtime behavior. It is still not a full LangGraph migration and does not add
+Planner or Nutrition behavior.
 
 ## Current architecture
 
@@ -220,6 +222,7 @@ unavailable in the current backend environment.
 - not new Planner / Nutrition behavior
 - not a product UI tracing surface
 
-Future phases may replace the coarse `intent_route_node` with dedicated
-Planner, Recovery, Nutrition, and Validator nodes, but those are not
-implemented in this phase.
+Recommended next phase: write the Planner/Nutrition node design doc and eval
+contract before implementation. Future phases may replace the coarse
+`intent_route_node` with dedicated Planner, Recovery, Nutrition, and Validator
+nodes, but those are not implemented in this phase.
