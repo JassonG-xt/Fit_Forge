@@ -356,8 +356,9 @@ def test_freeform_smoke_cases_cover_phase_g_routing() -> None:
 
     replace = results["freeform-replace-clarify-or-action"]
     assert replace["status"] == "pass"
-    assert replace["actionTypes"] == ["replaceExercise"]
-    assert replace["requiresConfirmationOk"] is True
+    assert replace["intent"] == "answerOnly"
+    assert replace["actionTypes"] == []
+    assert replace["mutationActionCount"] == 0
 
     nutrition = results["freeform-nutrition-protein"]
     assert nutrition["status"] == "pass"

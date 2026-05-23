@@ -326,7 +326,7 @@ def test_mock_compress_recognizes_half_hour_paraphrase() -> None:
 
 
 def test_mock_replace_recognizes_huan_cheng_paraphrase() -> None:
-    """`换成` joins the replace trigger list."""
+    """`换成` without a source exercise clarifies instead of guessing."""
     response = _run_mock_coach_agent(
         _request(
             "家里没有器械，能不能换成自重动作",
@@ -343,13 +343,10 @@ def test_mock_replace_recognizes_huan_cheng_paraphrase() -> None:
             ],
         )
     )
-    assert response.actions, "expected at least one action"
-    action = response.actions[0]
-    assert action.type == "replaceExercise"
-    assert "fromExerciseId" in action.payload
-    assert "toExerciseId" in action.payload
-    assert action.requiresConfirmation is True
-    assert action.sourceContextHash == _TRUSTED_HASH
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert "具体要替换哪个动作" in response.message
+    assert "可用的器械" in response.message
 
 
 # ── Promoted-from-expectedGap reschedule paraphrases (Run 4 + Run 5 + Run 6 stable) ──
@@ -561,10 +558,8 @@ def test_mock_free_form_compress_without_minutes_clarifies(message: str) -> None
 @pytest.mark.parametrize(
     "message",
     [
-        "这个动作我做不了，能换一个吗",
         "我没有杠铃，今天动作怎么改",
         "深蹲不舒服，能不能换成别的腿部动作",
-        "今天器械不方便，帮我调整一下动作",
     ],
 )
 def test_mock_free_form_replace_paraphrases_route_or_clarify(message: str) -> None:
@@ -578,10 +573,30 @@ def test_mock_free_form_replace_paraphrases_route_or_clarify(message: str) -> No
     assert {"fromExerciseId", "toExerciseId", "dayOfWeek"} <= set(action.payload)
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "这个动作我做不了，能换一个吗",
+        "这个动作做不了",
+        "动作不舒服",
+        "没有这个器械",
+        "今天器械不方便，帮我调整一下动作",
+    ],
+)
+def test_mock_free_form_replace_missing_details_clarifies(message: str) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert "具体要替换哪个动作" in response.message
+    assert "可用的器械" in response.message
+    assert "我可以帮你生成训练计划、调整训练日" not in response.message
+
+
 def test_mock_free_form_replace_missing_context_clarifies() -> None:
     response = _run_mock_coach_agent(
         _request(
-            "这个动作我做不了，能换一个吗",
+            "深蹲不舒服，能不能换成别的腿部动作",
             today_workout={"dayOfWeek": 1, "dayType": "push", "exercises": []},
             available_exercises=[],
         )
@@ -632,6 +647,9 @@ def test_mock_free_form_weekday_to_weekday_move_routes_to_move_session() -> None
     [
         "今天练不了了，能不能改到周三",
         "这周只有两天能练",
+        "这周训练有点乱",
+        "这周安排乱了",
+        "这周练不了了",
     ],
 )
 def test_mock_free_form_ambiguous_schedule_clarifies(message: str) -> None:
@@ -648,6 +666,11 @@ def test_mock_free_form_ambiguous_schedule_clarifies(message: str) -> None:
     "message",
     [
         "我最近有点累，还要继续练吗",
+        "最近有点累，是不是练多了",
+        "今天状态一般，还要继续练吗",
+        "腿还酸，今天怎么练",
+        "我最近训练安排有没有问题",
+        "最近训练怎么样",
         "连续练了好几天，今天应该休息还是继续",
         "我状态很差，但没有哪里疼，要不要降强度",
     ],
@@ -696,7 +719,7 @@ def test_mock_free_form_safety_priority_blocks_mutation(message: str) -> None:
 
 
 def test_mock_unrelated_free_form_still_uses_generic_fallback() -> None:
-    response = _run_mock_coach_agent(_request("今天天气怎么样"))
+    response = _run_mock_coach_agent(_request("上海天气怎么样"))
 
     assert response.intent == "answerOnly"
     assert response.actions == []
@@ -1230,7 +1253,7 @@ def test_mock_weekly_review_high_streak_emits_recovery_risk_note() -> None:
     assert any("连续训练天数较高" in note for note in payload["riskNotes"])
     suggestions = "\n".join(payload["nextWeekSuggestions"])
     assert "低强度" in suggestions
-    assert "避免高强度腿部" in suggestions
+    assert "休息" in suggestions
     assert "不会直接修改你的计划" in suggestions
 
 
@@ -1249,8 +1272,43 @@ def test_mock_weekly_review_over_weekly_frequency_suggests_lower_intensity() -> 
     payload = response.actions[0].payload
     assert any("超过计划频率" in note for note in payload["riskNotes"])
     suggestions = "\n".join(payload["nextWeekSuggestions"])
-    assert "恢复和技术动作" in suggestions
+    assert "恢复训练" in suggestions
     assert "不会直接修改你的计划" in suggestions
+
+
+def test_mock_weekly_review_sore_legs_with_lower_body_focus_stays_read_only() -> None:
+    sessions = [
+        {"id": "legs_1", "dayType": "legs"},
+        {"id": "lower_1", "dayType": "lower"},
+        {"id": "legs_2", "dayType": "legs"},
+        {"id": "push_1", "dayType": "push"},
+    ]
+    response = _run_mock_coach_agent(
+        _request_with_sessions(
+            "腿还酸，今天怎么练",
+            sessions=sessions,
+            completed_this_week=4,
+            streak=2,
+            weekly_frequency=4,
+        )
+    )
+
+    assert response.intent == "weeklyReview"
+    action = response.actions[0]
+    assert action.type == "weeklyReview"
+    assert action.requiresConfirmation is False
+    assert action.type not in {
+        "compressWorkout",
+        "replaceExercise",
+        "rescheduleWeek",
+        "moveWorkoutSession",
+        "generatePlan",
+    }
+    payload = action.payload
+    assert "腿" in "\n".join(payload["focusAreas"])
+    suggestions = "\n".join(payload["nextWeekSuggestions"])
+    assert "不建议继续高强度腿部训练" in suggestions
+    assert "上肢训练" in suggestions
 
 
 def test_mock_weekly_review_emits_risk_note_when_overtraining() -> None:

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:fit_forge/agent/agent_client.dart';
 import 'package:fit_forge/agent/agent_runtime.dart';
 import 'package:fit_forge/agent/agent_service.dart';
+import 'package:fit_forge/agent/intent/pending_clarification.dart';
 import 'package:fit_forge/agent/local_agent_action_executor.dart';
 import 'package:fit_forge/agent/mocks/mock_agent_client.dart';
 import 'package:fit_forge/agent/models/agent_action.dart';
@@ -327,6 +328,7 @@ class _StaticAgentClient implements AgentClient {
     required String message,
     required AgentContextSnapshot context,
     required List<AgentMessage> history,
+    PendingClarification? pendingClarification,
   }) async {
     return response;
   }
@@ -338,6 +340,7 @@ class _ValidCompressAgentClient implements AgentClient {
     required String message,
     required AgentContextSnapshot context,
     required List<AgentMessage> history,
+    PendingClarification? pendingClarification,
   }) async {
     return AgentResponse(
       message: '可以帮你压缩今日训练。',

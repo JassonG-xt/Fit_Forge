@@ -6,12 +6,20 @@ from typing import List, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from security import get_max_context_chars
+from .agent_action import AgentActionTypeLiteral
 from .fitforge_context import FitForgeContext
+
+
+class HistoryAction(BaseModel):
+    id: str | None = None
+    type: AgentActionTypeLiteral
+    requiresConfirmation: bool | None = None
 
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(..., min_length=1, max_length=2000)
+    actions: List[HistoryAction] = Field(default_factory=list, max_length=10)
 
 
 class AgentRequest(BaseModel):

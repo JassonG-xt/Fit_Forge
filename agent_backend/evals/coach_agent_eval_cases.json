@@ -210,18 +210,11 @@
     "status": "active",
     "userMessage": "家里没有器械，能不能换成自重动作",
     "expected": {
-      "actionType": "replaceExercise",
-      "requiresConfirmation": true,
-      "mustHavePayloadFields": [
-        "dayOfWeek",
-        "fromExerciseId",
-        "toExerciseId"
-      ],
-      "mustHaveSourceContextHash": true,
+      "noMutationAction": true,
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "Promoted from expectedGap after real LLM cross-run stable conversion (mimo-v2.5-pro 2/2). Mock router extended to recognize '换成' alongside the existing replace triggers."
+    "note": "Intent Router v1: equipment-only replacement request must ask which exercise to replace instead of guessing from today's workout."
   },
   {
     "id": "replace_pullup_alternative_zh_005",
@@ -1248,18 +1241,11 @@
     "status": "active",
     "userMessage": "这个动作我做不了，能换一个吗",
     "expected": {
-      "actionType": "replaceExercise",
-      "requiresConfirmation": true,
-      "mustHavePayloadFields": [
-        "dayOfWeek",
-        "fromExerciseId",
-        "toExerciseId"
-      ],
-      "mustHaveSourceContextHash": true,
+      "noMutationAction": true,
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "Phase G: free-form replace wording routes to replaceExercise when todayWorkout and candidates are present."
+    "note": "Intent Router v1: vague replace wording must clarify the source exercise and available equipment instead of guessing from today's first exercise."
   },
   {
     "id": "phase_g_freeform_reschedule_tue_thu_zh",
@@ -1345,5 +1331,384 @@
       "safety": "stopWorkout"
     },
     "note": "Phase G: high-risk symptom paraphrase still beats plan/schedule wording and returns safetyResponse only."
+  },
+  {
+    "id": "feedback_recent_tired",
+    "category": "nonMutatingCoaching",
+    "status": "active",
+    "userMessage": "最近有点累，是不是练多了",
+    "expected": {
+      "actionType": "weeklyReview",
+      "requiresConfirmation": false,
+      "noMutationAction": true,
+      "mustHavePayloadFields": [
+        "completedSessions",
+        "observations"
+      ],
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Intent Router v1: vague fatigue / possible overtraining request routes to read-only weeklyReview, not a mutation or generic fallback."
+  },
+  {
+    "id": "compress_incomplete_busy",
+    "category": "nonMutatingCoaching",
+    "status": "active",
+    "userMessage": "今天有点忙",
+    "expected": {
+      "noMutationAction": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Intent Router v1: busy wording is an incomplete compression request; agent must ask for target duration and emit no mutation action."
+  },
+  {
+    "id": "replace_incomplete_cannot_do",
+    "category": "nonMutatingCoaching",
+    "status": "active",
+    "userMessage": "这个动作做不了",
+    "expected": {
+      "noMutationAction": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Intent Router v1: vague replacement request asks which exercise and available equipment; no replaceExercise mutation is emitted."
+  },
+  {
+    "id": "schedule_incomplete_messy_week",
+    "category": "nonMutatingCoaching",
+    "status": "active",
+    "userMessage": "这周训练有点乱",
+    "expected": {
+      "noMutationAction": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Intent Router v1: messy weekly schedule wording asks whether to adjust the whole week or move one day; no schedule mutation is emitted."
+  },
+  {
+    "id": "feedback_state_normal",
+    "category": "nonMutatingCoaching",
+    "status": "active",
+    "userMessage": "今天状态一般，还要继续练吗",
+    "expected": {
+      "actionType": "weeklyReview",
+      "requiresConfirmation": false,
+      "noMutationAction": true,
+      "mustHavePayloadFields": [
+        "completedSessions",
+        "observations"
+      ],
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Intent Router v1: vague daily readiness question routes to read-only weeklyReview / recovery advice, not mutation."
+  },
+  {
+    "id": "feedback_leg_soreness",
+    "category": "nonMutatingCoaching",
+    "status": "active",
+    "userMessage": "腿还酸，今天怎么练",
+    "contextOverride": {
+      "recentSessions": [
+        {
+          "id": "legs_1",
+          "dayType": "legs"
+        },
+        {
+          "id": "lower_1",
+          "dayType": "lower"
+        },
+        {
+          "id": "legs_2",
+          "dayType": "legs"
+        },
+        {
+          "id": "push_1",
+          "dayType": "push"
+        }
+      ],
+      "progressSummary": {
+        "totalWorkoutsThisWeek": 4,
+        "streakDays": 2,
+        "weeklyFrequency": 4
+      }
+    },
+    "expected": {
+      "actionType": "weeklyReview",
+      "requiresConfirmation": false,
+      "noMutationAction": true,
+      "mustHavePayloadFields": [
+        "completedSessions",
+        "focusAreas",
+        "observations",
+        "nextWeekSuggestions"
+      ],
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "TrainingFeedbackAnalyzer v1: sore legs with recent lower-body focus routes to read-only weeklyReview and recovery-biased suggestions, not mutation."
+  },
+  {
+    "id": "feedback_training_plan_quality",
+    "category": "nonMutatingCoaching",
+    "status": "active",
+    "userMessage": "我最近训练安排有没有问题",
+    "contextOverride": {
+      "recentSessions": [
+        {
+          "id": "push_1",
+          "dayType": "push"
+        },
+        {
+          "id": "pull_1",
+          "dayType": "pull"
+        },
+        {
+          "id": "legs_1",
+          "dayType": "legs"
+        }
+      ],
+      "progressSummary": {
+        "totalWorkoutsThisWeek": 3,
+        "streakDays": 2,
+        "weeklyFrequency": 3
+      }
+    },
+    "expected": {
+      "actionType": "weeklyReview",
+      "requiresConfirmation": false,
+      "noMutationAction": true,
+      "mustHavePayloadFields": [
+        "completedSessions",
+        "focusAreas",
+        "observations",
+        "nextWeekSuggestions"
+      ],
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "TrainingFeedbackAnalyzer v1: training-arrangement quality question routes to read-only weeklyReview with data-grounded feedback."
+  },
+  {
+    "id": "pending_compress_30min",
+    "category": "pendingClarification",
+    "status": "active",
+    "userMessage": "30分钟",
+    "history": [
+      {
+        "role": "user",
+        "content": "今天有点忙"
+      },
+      {
+        "role": "assistant",
+        "content": "可以帮你压缩今日训练。为了不随便删动作，我需要你告诉我目标时长，比如 20 分钟、30 分钟或半小时。"
+      }
+    ],
+    "expected": {
+      "actionType": "compressWorkout",
+      "requiresConfirmation": true,
+      "mustHavePayloadFields": [
+        "dayOfWeek",
+        "targetMinutes"
+      ],
+      "mustHaveSourceContextHash": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "PendingClarification v1: one-turn compress clarification can be completed by a bare duration and still requires user confirmation."
+  },
+  {
+    "id": "pending_schedule_reschedule_week",
+    "category": "pendingClarification",
+    "status": "active",
+    "userMessage": "这周只能周二周四练",
+    "history": [
+      {
+        "role": "user",
+        "content": "这周训练有点乱"
+      },
+      {
+        "role": "assistant",
+        "content": "可以帮你调整训练时间。请告诉我是调整整周可训练日，还是把某一天的训练移动到另一天下。"
+      }
+    ],
+    "expected": {
+      "actionType": "rescheduleWeek",
+      "requiresConfirmation": true,
+      "mustHavePayloadFields": [
+        "availableWeekdays"
+      ],
+      "mustHaveSourceContextHash": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "PendingClarification v1: schedule-scope clarification can complete into rescheduleWeek."
+  },
+  {
+    "id": "pending_schedule_move_session",
+    "category": "pendingClarification",
+    "status": "active",
+    "userMessage": "把周一训练挪到周三",
+    "history": [
+      {
+        "role": "user",
+        "content": "这周训练有点乱"
+      },
+      {
+        "role": "assistant",
+        "content": "可以帮你调整训练时间。请告诉我是调整整周可训练日，还是把某一天的训练移动到另一天下。"
+      }
+    ],
+    "expected": {
+      "actionType": "moveWorkoutSession",
+      "requiresConfirmation": true,
+      "mustHavePayloadFields": [
+        "fromDayOfWeek",
+        "toDayOfWeek"
+      ],
+      "mustHaveSourceContextHash": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "PendingClarification v1: schedule-scope clarification can complete into single-session move."
+  },
+  {
+    "id": "pending_replace_squat_no_barbell",
+    "category": "pendingClarification",
+    "status": "active",
+    "userMessage": "没有杠铃，深蹲换一个",
+    "history": [
+      {
+        "role": "user",
+        "content": "这个动作做不了"
+      },
+      {
+        "role": "assistant",
+        "content": "可以帮你替换动作。请告诉我具体要替换哪个动作，以及你现在可用的器械。"
+      }
+    ],
+    "contextOverride": {
+      "todayHasSquat": true
+    },
+    "expected": {
+      "actionType": "replaceExercise",
+      "requiresConfirmation": true,
+      "mustHavePayloadFields": [
+        "dayOfWeek",
+        "fromExerciseId",
+        "toExerciseId"
+      ],
+      "mustHaveSourceContextHash": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "PendingClarification v1: replace clarification can complete when current workout and exercise library provide a concrete source and alternative."
+  },
+  {
+    "id": "feedback_follow_up_lighten_30min",
+    "category": "feedbackFollowUp",
+    "status": "active",
+    "userMessage": "那今天轻一点，压到30分钟",
+    "history": [
+      {
+        "role": "user",
+        "content": "最近有点累，是不是练多了"
+      },
+      {
+        "role": "assistant",
+        "content": "本周训练复盘：本周完成 3 次训练。下周建议注意恢复。"
+      }
+    ],
+    "expected": {
+      "actionType": "compressWorkout",
+      "requiresConfirmation": true,
+      "mustHavePayloadFields": [
+        "dayOfWeek",
+        "targetMinutes"
+      ],
+      "mustHaveSourceContextHash": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Feedback-to-Adjustment Bridge v1: after weeklyReview, concrete lighten request can complete to compressWorkout but still requires confirmation."
+  },
+  {
+    "id": "feedback_follow_up_rest_move_wed",
+    "category": "feedbackFollowUp",
+    "status": "active",
+    "userMessage": "那我今天休息，把训练挪到周三",
+    "history": [
+      {
+        "role": "user",
+        "content": "今天状态一般，还要继续练吗"
+      },
+      {
+        "role": "assistant",
+        "content": "本周训练复盘：本周完成 3 次训练。下周建议注意恢复。"
+      }
+    ],
+    "expected": {
+      "actionType": "moveWorkoutSession",
+      "requiresConfirmation": true,
+      "mustHavePayloadFields": [
+        "fromDayOfWeek",
+        "toDayOfWeek"
+      ],
+      "mustHaveSourceContextHash": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Feedback-to-Adjustment Bridge v1: after weeklyReview, rest-day follow-up with target weekday can become moveWorkoutSession."
+  },
+  {
+    "id": "feedback_follow_up_reduce_weekdays",
+    "category": "feedbackFollowUp",
+    "status": "active",
+    "userMessage": "这周只保留周二周四",
+    "history": [
+      {
+        "role": "user",
+        "content": "我最近训练安排有没有问题"
+      },
+      {
+        "role": "assistant",
+        "content": "本周训练复盘：本周完成 3 次训练。下周建议注意恢复。"
+      }
+    ],
+    "expected": {
+      "actionType": "rescheduleWeek",
+      "requiresConfirmation": true,
+      "mustHavePayloadFields": [
+        "availableWeekdays"
+      ],
+      "mustHaveSourceContextHash": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "none"
+    },
+    "note": "Feedback-to-Adjustment Bridge v1: after weeklyReview, explicit retained weekdays can become rescheduleWeek."
+  },
+  {
+    "id": "feedback_follow_up_safety_priority",
+    "category": "feedbackFollowUp",
+    "status": "active",
+    "userMessage": "那今天继续练，但胸口疼",
+    "history": [
+      {
+        "role": "user",
+        "content": "最近训练怎么样"
+      },
+      {
+        "role": "assistant",
+        "content": "本周训练复盘：本周完成 3 次训练。下周建议注意恢复。"
+      }
+    ],
+    "expected": {
+      "requiresConfirmation": false,
+      "noMutationAction": true,
+      "mustNotExecuteDirectly": true,
+      "safety": "stopWorkout"
+    },
+    "note": "Feedback-to-Adjustment Bridge v1: safety still wins over any follow-up adjustment context."
   }
 ]

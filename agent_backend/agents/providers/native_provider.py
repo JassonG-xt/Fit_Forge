@@ -19,6 +19,14 @@ from agents.action_safety import inject_action_safety
 from agents.generate_plan_policy import (
     has_sufficient_generate_plan_context as _has_sufficient_generate_plan_context,
 )
+from agents.feedback.feedback_follow_up_router import (
+    FeedbackFollowUpResult,
+    route_feedback_follow_up,
+)
+from agents.feedback.training_feedback_analyzer import analyze_training_feedback
+from agents.intent.clarification_policy import message_for as _clarification_for
+from agents.intent.coach_intent import CoachIntentType, IntentCandidate
+from agents.intent.intent_router import route as _route_intent
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -49,6 +57,7 @@ _DAY_LOOKUP = {
 }
 
 _WEEKDAY_NAMES = {1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五", 6: "周六", 7: "周日"}
+_PENDING_LOOKBACK_LIMIT = 4
 
 
 def _action_id(prefix: str) -> str:
@@ -161,8 +170,8 @@ def _compress_response(message: str, request: AgentRequest) -> AgentResponse:
     }
     return AgentResponse(
         message=(
-            "可以。我会保留核心复合动作，减少辅助动作，"
-            f"并适当缩短组间休息，把训练压缩到约 {target} 分钟。"
+            f"可以，我会把今天训练压缩到约 {target} 分钟。"
+            "下方是计划修改建议，点击应用后才会写入。"
         ),
         intent="compressWorkout",
         confidence=0.9,
@@ -540,7 +549,7 @@ def _move_session_response(message: str) -> AgentResponse:
     return AgentResponse(
         message=(
             f"可以把 {from_name} 的训练移到 {to_name}。"
-            "目标日如果已有训练会被拒绝，不会自动合并或交换。"
+            "目标日如果已有训练，应用时会被拒绝，不会自动合并或交换。"
         ),
         intent="moveWorkoutSession",
         confidence=0.85,
@@ -552,6 +561,38 @@ def _move_session_response(message: str) -> AgentResponse:
                 summary=f"把 {from_name} 的训练完整移到 {to_name}，源日转为休息。",
                 requiresConfirmation=True,
                 payload=payload,
+            )
+        ],
+    )
+
+
+def _move_today_workout_response(request: AgentRequest, to_day_of_week: int) -> AgentResponse:
+    from_day_of_week = _today_workout_day_of_week(request.context.todayWorkout)
+    if from_day_of_week is None:
+        return _feedback_move_clarification_response(request)
+
+    from_name = _WEEKDAY_NAMES[from_day_of_week]
+    to_name = _WEEKDAY_NAMES[to_day_of_week]
+
+    return AgentResponse(
+        message=(
+            f"可以把今天的训练移到{to_name}。"
+            "目标日如果已有训练，应用时会被拒绝，不会自动合并或交换。"
+        ),
+        intent="moveWorkoutSession",
+        confidence=0.85,
+        actions=[
+            AgentAction(
+                id=_action_id("move"),
+                type="moveWorkoutSession",
+                title=f"移动 {from_name} 训练到{to_name}",
+                summary=f"把 {from_name} 的训练完整移到{to_name}，源日转为休息。",
+                requiresConfirmation=True,
+                payload={
+                    "fromDayOfWeek": from_day_of_week,
+                    "toDayOfWeek": to_day_of_week,
+                    "reason": "今天需要休息或降低训练压力",
+                },
             )
         ],
     )
@@ -596,6 +637,8 @@ def _is_reschedule(message: str) -> bool:
         return True
     if _matches_only_single_weekday(message, _extract_weekdays(message)):
         return True
+    if _extract_weekdays(message) and _has_any(message, ("只保留", "只练")):
+        return True
     return False
 
 
@@ -605,7 +648,7 @@ def _reschedule_response(message: str) -> AgentResponse | None:
         return None
     label = "、".join(_WEEKDAY_NAMES[d] for d in weekdays)
     return AgentResponse(
-        message=f"可以把本周训练安排到{label}，其余日期设为休息。",
+        message=f"可以把本周训练安排到{label}，其余日期作为休息。点击应用后才会写入。",
         intent="rescheduleWeek",
         confidence=0.9,
         actions=[
@@ -634,6 +677,77 @@ def _schedule_clarification_response() -> AgentResponse:
         confidence=0.7,
         actions=[],
     )
+
+
+def _feedback_compress_clarification_response(request: AgentRequest) -> AgentResponse:
+    if not request.context.todayWorkout:
+        return AgentResponse(
+            message="今天没有可压缩的训练。你可以先休息、散步或做低强度活动，我不会直接修改你的计划。",
+            intent="answerOnly",
+            confidence=0.72,
+            actions=[],
+        )
+    return AgentResponse(
+        message="可以帮你把今天训练调轻一点。目标时长想控制在 20 分钟、30 分钟还是 45 分钟？",
+        intent="answerOnly",
+        confidence=0.78,
+        actions=[],
+    )
+
+
+def _feedback_move_clarification_response(request: AgentRequest) -> AgentResponse:
+    if not request.context.todayWorkout:
+        return AgentResponse(
+            message="今天没有可移动的训练。你可以把今天作为恢复日，或做散步、拉伸这类低强度活动；我不会直接修改你的计划。",
+            intent="answerOnly",
+            confidence=0.72,
+            actions=[],
+        )
+    return AgentResponse(
+        message="可以把今天的训练移到另一天下。你想移到周几？目标日如果已有训练，应用时会被拒绝，不会自动合并。",
+        intent="answerOnly",
+        confidence=0.78,
+        actions=[],
+    )
+
+
+def _feedback_reschedule_clarification_response() -> AgentResponse:
+    return AgentResponse(
+        message="可以减少这周训练日。你想保留哪几天训练？例如周二、周四。",
+        intent="answerOnly",
+        confidence=0.78,
+        actions=[],
+    )
+
+
+def _feedback_adjustment_choice_clarification_response() -> AgentResponse:
+    return AgentResponse(
+        message="可以。你可以选择三种调整：压缩今天训练、把今天训练移到另一天下，或重新安排本周训练日。告诉我你想用哪一种。",
+        intent="answerOnly",
+        confidence=0.78,
+        actions=[],
+    )
+
+
+def _clarification_response(message: str, confidence: float) -> AgentResponse:
+    return AgentResponse(
+        message=message,
+        intent="answerOnly",
+        confidence=confidence,
+        actions=[],
+    )
+
+
+def _should_clarify_before_legacy_routing(candidate: IntentCandidate) -> bool:
+    if not candidate.has_missing_slots:
+        return False
+    if candidate.type == CoachIntentType.compressWorkout:
+        return True
+    if candidate.type == CoachIntentType.replaceExercise:
+        return "sourceExercise" in candidate.missing_slots
+    if candidate.type in {CoachIntentType.rescheduleWeek, CoachIntentType.moveWorkoutSession}:
+        return True
+    return False
 
 
 def _replace_response(message: str, request: AgentRequest) -> AgentResponse | None:
@@ -778,135 +892,12 @@ def _extract_target_minutes_for_generate(message: str) -> int | None:
 
 
 def _weekly_review_response(request: AgentRequest) -> AgentResponse:
-    """Deterministic weekly review.
-
-    Counts come from `progressSummary` and `recentSessions`. Focus areas and
-    risk notes are derived from the session-summary `dayType` distribution and
-    streak/frequency heuristics. No fabrication: when there are no completed
-    sessions in `recentSessions`, we say so explicitly and return a limited
-    review rather than inventing numbers.
-    """
-    progress = request.context.progressSummary or {}
-    completed = progress.get("totalWorkoutsThisWeek", 0)
-    streak = progress.get("streakDays", 0)
-    weekly_frequency = progress.get("weeklyFrequency")
-    recent_sessions = request.context.recentSessions or []
-    recent = len(recent_sessions)
-    suggestion_footer = (
-        "我不会直接修改你的计划；如果之后想调整今天或下周的训练，需要你明确说一句，并经过确认。"
+    summary = analyze_training_feedback(
+        context=request.context,
+        user_message=request.message,
     )
-
-    if recent == 0:
-        message = "最近还没有完成的训练记录，先完成几次训练后我可以给出更具体的复盘和建议。"
-        summary = "暂无近期训练数据，无法做有意义的复盘。"
-        payload = {
-            "summary": "暂无近期训练数据。",
-            "completedSessions": 0,
-            "observations": [
-                "最近没有已完成的训练记录。",
-                "也没有睡眠、酸痛、主观疲劳等数据，所以不能判断你目前的真实恢复状态。",
-            ],
-            "nextWeekSuggestions": [
-                "目前缺少最近训练记录，恢复判断有限。先完成几次训练后可以给出更具体建议。",
-                suggestion_footer,
-            ],
-        }
-        return AgentResponse(
-            message=message,
-            intent="weeklyReview",
-            confidence=0.85,
-            actions=[
-                AgentAction(
-                    id=_action_id("review"),
-                    type="weeklyReview",
-                    title="本周训练复盘",
-                    summary=summary,
-                    requiresConfirmation=False,
-                    payload=payload,
-                )
-            ],
-        )
-
-    # Focus areas: dayType distribution from recentSessions, top 3 non-rest.
-    day_type_counts: dict[str, int] = {}
-    for session in recent_sessions:
-        day_type = session.get("dayType")
-        if not day_type or day_type == "rest":
-            continue
-        day_type_counts[day_type] = day_type_counts.get(day_type, 0) + 1
-    focus_areas = [
-        _day_type_label(key)
-        for key, _ in sorted(
-            day_type_counts.items(), key=lambda kv: -kv[1]
-        )[:3]
-    ]
-
-    observations: list[str] = [f"近期已记录 {recent} 次训练。"]
-    if focus_areas:
-        observations.append(f"训练集中在：{'、'.join(focus_areas)}。")
-    if streak >= 3:
-        observations.append(f"已经连续训练 {streak} 天。")
-
-    risk_notes: list[str] = []
-    if weekly_frequency is not None and completed > weekly_frequency:
-        risk_notes.append(
-            f"本周完成 {completed} 次，已经超过计划频率 {weekly_frequency} 次，注意恢复。"
-        )
-    if streak >= 4:
-        risk_notes.append("最近连续训练天数较高，注意安排恢复日。")
-
-    next_week: list[str] = []
-    if weekly_frequency is not None:
-        if completed < weekly_frequency:
-            next_week.append(f"下周尽量补足到每周 {weekly_frequency} 次训练。")
-        elif completed == weekly_frequency:
-            next_week.append("本周训练频率已经达标，接下来优先保证恢复和动作质量。")
-        else:
-            next_week.append("本周已经超过计划频率，下一次训练建议以恢复和技术动作为主，不再额外加大强度。")
-    else:
-        next_week.append("维持当前训练频率。")
-    if focus_areas:
-        next_week.append(f"继续保证 {focus_areas[0]} 训练日的复合动作质量。")
-    if streak >= 4:
-        next_week.append(
-            "今天可以优先休息或做低强度活动（如散步、动态拉伸）。如果仍想训练，建议降低强度、缩短时长，避免高强度腿部训练。"
-        )
-    if not risk_notes:
-        next_week.append("感觉疲劳时优先降低训练量，不要硬加重量。")
-    if (
-        streak >= 4
-        or (
-            weekly_frequency is not None
-            and completed >= weekly_frequency
-        )
-    ):
-        next_week.append(suggestion_footer)
-
-    focus_clause = (
-        f"训练集中在 {'、'.join(focus_areas)}。" if focus_areas else ""
-    )
-    summary = f"近期 {recent} 次训练，本周完成 {completed} 次。{focus_clause}"
-    message = (
-        f"近期 {recent} 次训练，本周完成 {completed} 次，连续 {streak} 天。"
-        f"{focus_clause}"
-        f"{('下周建议：' + next_week[0]) if next_week else ''}"
-    )
-
-    payload: dict[str, object] = {
-        "summary": summary,
-        "completedSessions": completed,
-    }
-    if focus_areas:
-        payload["focusAreas"] = focus_areas
-    if observations:
-        payload["observations"] = observations
-    if next_week:
-        payload["nextWeekSuggestions"] = next_week
-    if risk_notes:
-        payload["riskNotes"] = risk_notes
-
     return AgentResponse(
-        message=message,
+        message=summary.message_text,
         intent="weeklyReview",
         confidence=0.85,
         actions=[
@@ -914,24 +905,35 @@ def _weekly_review_response(request: AgentRequest) -> AgentResponse:
                 id=_action_id("review"),
                 type="weeklyReview",
                 title="本周训练复盘",
-                summary=summary,
+                summary=summary.summary_text,
                 requiresConfirmation=False,
-                payload=payload,
+                payload=summary.to_payload(),
             )
         ],
     )
 
 
-def _day_type_label(key: str) -> str:
-    return {
-        "push": "推（胸 / 肩 / 三头）",
-        "pull": "拉（背 / 二头）",
-        "legs": "腿",
-        "upper": "上肢",
-        "lower": "下肢",
-        "fullBody": "全身",
-        "cardio": "有氧",
-    }.get(key, key)
+def _feedback_follow_up_response(
+    request: AgentRequest,
+    result: FeedbackFollowUpResult | None,
+) -> AgentResponse | None:
+    if result is None:
+        return None
+    if result.intent == CoachIntentType.compressWorkout:
+        if result.target_minutes is None:
+            return _feedback_compress_clarification_response(request)
+        return _compress_response(f"压缩训练到 {result.target_minutes} 分钟", request)
+    if result.intent == CoachIntentType.moveWorkoutSession:
+        if result.to_day_of_week is None:
+            return _feedback_move_clarification_response(request)
+        return _move_today_workout_response(request, result.to_day_of_week)
+    if result.intent == CoachIntentType.rescheduleWeek:
+        if not result.available_weekdays:
+            return _feedback_reschedule_clarification_response()
+        return _reschedule_response(request.message)
+    if result.intent == CoachIntentType.clarification:
+        return _feedback_adjustment_choice_clarification_response()
+    return None
 
 
 def _nutrition_response() -> AgentResponse:
@@ -1016,6 +1018,34 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
     if assess_message_safety(message).has_medical_concern:
         return _safety_response(message)
 
+    pending_response = _resolve_pending_clarification(request)
+    if pending_response is not None:
+        return pending_response
+
+    feedback_follow_up = _feedback_follow_up_response(
+        request,
+        route_feedback_follow_up(request),
+    )
+    if feedback_follow_up is not None:
+        return feedback_follow_up
+
+    candidate = _route_intent(message)
+    if (
+        candidate.type == CoachIntentType.compressWorkout
+        and candidate.has_missing_slots
+        and "rawTargetMinutes" in candidate.slots
+    ):
+        return _compress_minutes_clarification_response(candidate.slots["rawTargetMinutes"])
+    clarification = _clarification_for(candidate)
+    if clarification and _should_clarify_before_legacy_routing(candidate):
+        return _clarification_response(clarification, candidate.score)
+    if candidate.type in {CoachIntentType.trainingFeedback, CoachIntentType.recoveryAdvice}:
+        return _weekly_review_response(request)
+    if candidate.type == CoachIntentType.rescheduleWeek and "availableWeekdays" in candidate.slots:
+        rescheduled = _reschedule_response(message)
+        if rescheduled is not None:
+            return rescheduled
+
     # generatePlan must win over compress when the user asks to generate a plan
     # AND happens to mention preferences like `每次 45 分钟` — the minutes are
     # a generatePlan preference, not a request to compress today's workout.
@@ -1052,6 +1082,48 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
         return _nutrition_response()
 
     return _fallback_response()
+
+
+def _resolve_pending_clarification(request: AgentRequest) -> AgentResponse | None:
+    pending = _pending_kind_from_history(request)
+    if pending is None:
+        return None
+
+    message = request.message
+    if pending == "compressWorkout":
+        if not has_explicit_target_minutes(message):
+            return None
+        return _compress_response(f"压缩训练到 {message}", request)
+
+    if pending == "schedule":
+        if _is_move_session(message):
+            return _move_session_response(message)
+        if _is_reschedule(message):
+            return _reschedule_response(message)
+        return None
+
+    if pending == "replaceExercise":
+        if not (_has_replace_intent(message) or _has_equipment_constraint(message)):
+            return None
+        return _replace_response(message, request)
+
+    return None
+
+
+def _pending_kind_from_history(request: AgentRequest) -> str | None:
+    for item in reversed(request.history[-_PENDING_LOOKBACK_LIMIT:]):
+        if item.role != "assistant":
+            continue
+
+        content = item.content
+        if "目标时长" in content and ("20 分钟" in content or "半小时" in content):
+            return "compressWorkout"
+        if "整周" in content and "某一天" in content:
+            return "schedule"
+        if "哪个动作" in content and "可用" in content:
+            return "replaceExercise"
+        return None
+    return None
 
 
 # ──────────────────────────────────────────────

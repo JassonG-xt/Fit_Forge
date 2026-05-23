@@ -38,6 +38,34 @@ def test_agent_request_with_full_context() -> None:
     assert req.history[0].role == "user"
 
 
+def test_agent_request_history_accepts_optional_action_metadata() -> None:
+    req = AgentRequest.model_validate(
+        {
+            "message": "那今天轻一点",
+            "history": [
+                {"role": "user", "content": "最近训练怎么样"},
+                {
+                    "role": "assistant",
+                    "content": "训练反馈文案可能以后会变",
+                    "actions": [
+                        {
+                            "id": "review_1",
+                            "type": "weeklyReview",
+                            "requiresConfirmation": False,
+                            "sourceContextHash": "ignored_history_hash",
+                        }
+                    ],
+                },
+            ],
+        }
+    )
+
+    assert req.history[0].actions == []
+    assert len(req.history[1].actions) == 1
+    assert req.history[1].actions[0].type == "weeklyReview"
+    assert req.history[1].actions[0].requiresConfirmation is False
+
+
 def test_agent_action_unknown_type_rejected() -> None:
     with pytest.raises(ValidationError):
         AgentAction.model_validate({

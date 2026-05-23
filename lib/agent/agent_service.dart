@@ -5,9 +5,12 @@ import '../services/app_state.dart';
 import 'agent_client.dart';
 import 'agent_context_builder.dart';
 import 'agent_event_log.dart';
+import 'intent/coach_intent.dart';
+import 'intent/pending_clarification.dart';
 import 'local_agent_action_executor.dart';
 import 'models/agent_action.dart';
 import 'models/agent_action_result.dart';
+import 'models/agent_intent.dart';
 import 'models/agent_message.dart';
 import 'models/agent_response.dart';
 
@@ -39,6 +42,7 @@ class AgentService extends ChangeNotifier {
   final List<AgentMessage> _messages = <AgentMessage>[];
   final Set<String> _processedActionIds = <String>{};
   final Set<String> _processingActionIds = <String>{};
+  PendingClarification? _pendingClarification;
   bool _isSending = false;
   String? _lastError;
 
@@ -72,6 +76,11 @@ class AgentService extends ChangeNotifier {
         message: trimmed,
         context: context,
         history: List.unmodifiable(_messages),
+        pendingClarification: _activePendingClarification(),
+      );
+      _pendingClarification = _nextPendingClarification(
+        userMessage: trimmed,
+        response: response,
       );
       final assistantMessage = _assistantMessageFor(response);
       _messages.add(assistantMessage);
@@ -149,9 +158,84 @@ class AgentService extends ChangeNotifier {
     _messages.clear();
     _processedActionIds.clear();
     _processingActionIds.clear();
+    _pendingClarification = null;
     _lastError = null;
     notifyListeners();
   }
+
+  PendingClarification? _activePendingClarification() {
+    final pending = _pendingClarification;
+    if (pending == null) return null;
+    if (pending.isExpired(DateTime.now())) {
+      _pendingClarification = null;
+      return null;
+    }
+    return pending;
+  }
+
+  PendingClarification? _nextPendingClarification({
+    required String userMessage,
+    required AgentResponse response,
+  }) {
+    if (response.intent != AgentIntent.answerOnly ||
+        response.actions.isNotEmpty) {
+      return null;
+    }
+    if (_isGenericFallback(response.message)) return null;
+    if (response.message.contains('目标时长')) {
+      return PendingClarification(
+        intent: CoachIntentType.compressWorkout,
+        filledSlots: const {},
+        missingSlots: const ['targetDuration'],
+        createdAt: DateTime.now(),
+      );
+    }
+    if (response.message.contains('移到周几')) {
+      return PendingClarification(
+        intent: CoachIntentType.moveWorkoutSession,
+        filledSlots: const {},
+        missingSlots: const ['toDayOfWeek'],
+        createdAt: DateTime.now(),
+      );
+    }
+    if (response.message.contains('保留哪几天')) {
+      return PendingClarification(
+        intent: CoachIntentType.rescheduleWeek,
+        filledSlots: const {},
+        missingSlots: const ['availableWeekdays'],
+        createdAt: DateTime.now(),
+      );
+    }
+    if (response.message.contains('压缩今天训练') &&
+        response.message.contains('重新安排本周训练日')) {
+      return PendingClarification(
+        intent: CoachIntentType.feedbackAdjustment,
+        filledSlots: const {},
+        missingSlots: const ['adjustmentChoice'],
+        createdAt: DateTime.now(),
+      );
+    }
+    if (response.message.contains('哪个动作') && response.message.contains('可用')) {
+      return PendingClarification(
+        intent: CoachIntentType.replaceExercise,
+        filledSlots: const {},
+        missingSlots: const ['sourceExercise', 'availableEquipment'],
+        createdAt: DateTime.now(),
+      );
+    }
+    if (response.message.contains('整周') && response.message.contains('某一天')) {
+      return PendingClarification(
+        intent: CoachIntentType.rescheduleWeek,
+        filledSlots: const {},
+        missingSlots: const ['scheduleScope'],
+        createdAt: DateTime.now(),
+      );
+    }
+    return null;
+  }
+
+  bool _isGenericFallback(String message) =>
+      message.contains('我可以帮你生成训练计划、调整训练日、替换动作、压缩今日训练');
 
   AgentMessage _assistantMessageFor(AgentResponse response) {
     return AgentMessage(
