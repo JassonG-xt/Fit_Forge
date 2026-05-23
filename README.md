@@ -96,7 +96,8 @@ Flutter 本地执行器也会再次检查 mutation action 的 `requiresConfirmat
 | FastAPI mock 后端（关键字路由）| ✅ implemented |
 | Mock vs HTTP 模式切换 | ✅ implemented |
 | 真实 LLM Coach Agent（provider-agnostic） | ✅ implemented |
-| 多 Agent 编排（Planner / Recovery / Nutrition）| 📋 planned |
+| 可选 LangGraph Recovery 编排（安全 / 恢复策略 / 校验） | ✅ experimental |
+| Planner / Nutrition 节点编排 | 📋 planned |
 
 默认 **mock / 离线模式**，不需要联网，不需要后端。可选启动 FastAPI 后端 + real provider 模式接入真实 LLM（OpenAI / Claude / MiMo / 其他 OpenAI-compatible endpoint）。详见 [`agent_backend/README.md`](agent_backend/README.md)。
 
@@ -115,7 +116,8 @@ The Coach Agent is a **human-in-the-loop fitness coaching MVP** with a stable B-
 - structured weekly review insights with a read-only UI panel (no plan mutation), now with recovery-aware suggestion-only signals (high streak / over-frequency / no-data fallback)
 - recovery-context mutation routing for `compressWorkout` (concrete minutes) and `rescheduleWeek` (concrete weekdays) — still confirmed mutations with trusted `sourceContextHash`; vague recovery questions and "today→tomorrow" single-session moves remain non-mutating
 - deterministic safety handling for high-risk requests (Chinese keyword guardrail short-circuits before LLM; safety precedence preserved over recovery mutation routing)
-- mock + back-end eval coverage for B-stage and recovery-routing behavior contracts (eval suite: 58 cases / 54 active / 4 expectedGap)
+- mock + back-end eval coverage for B-stage, recovery-routing, moveWorkoutSession, orchestration-boundary, and free-form behavior contracts (eval suite: 77 cases / 73 active / 4 expectedGap)
+- audit-backed hardening after G.3/H.1/H.2: backend malformed mutation payloads fail closed, invalid mutation previews show `无法应用` instead of an enabled apply CTA, and user-facing parser/executor/LangGraph fallback copy is localized and non-technical
 - four sanitized real-provider smoke scorecards (initial 20/20 smoke, plus E-2 / E-4 / E-5 focused recovery-routing runs) — see [`docs/real_llm_scorecards/`](docs/real_llm_scorecards/)
 
 The recovery-routing phase is feature-complete for the current stage. The phase summary at [`docs/recovery_routing_phase_summary.md`](docs/recovery_routing_phase_summary.md) consolidates capabilities, mutation/safety boundaries, eval coverage, the full real-provider scorecard chain, milestone tags, and known limitations.
@@ -144,6 +146,7 @@ Current orchestration evidence:
 - optional experimental LangGraph orchestration adapter
 - privacy-safe tracing
 - mock-only orchestration smoke matrix enforced in CI
+- consolidated audit status with no known P0/P1 findings after G.3/H.1/H.2
 
 ### Running Coach Agent
 

@@ -309,26 +309,36 @@ safety_recovery_chest_pain_dizzy_zh_008. The Agent does not diagnose; it
 advises stopping and consulting a professional.
 ```
 
-## Future scenario (not on camera yet): moveWorkoutSession
+## Optional scenario: moveWorkoutSession
 
-Stage 3-3 added deterministic Flutter mock routing for explicit
-weekday-to-weekday `moveWorkoutSession` requests (e.g. `把周一训练挪到周三`,
-`把周二的训练改到周五`). The action is a confirmed mutation requiring trusted
-`sourceContextHash`; `LocalAgentActionExecutor` still owns the AppState
-write and rejects target-day conflicts without auto-merge / swap / append.
+Use this only if the recording has time after the six core scenarios.
 
-This scenario is intentionally **not** part of the recorded demo yet:
+### User prompt
 
-- Backend prompt routing for `moveWorkoutSession` is still deferred.
-- Real-provider routing is still deferred.
-- No backend / eval / real-provider coverage exists for this action.
-- Today→tomorrow single-session moves stay non-mutating in this phase
-  because the mock has no deterministic current-date source.
+```text
+把周一训练挪到周三
+```
 
-Putting `moveWorkoutSession` on camera in mock mode would conflate
-mock-routability with provider capability, which contradicts the demo's
-"real-provider integration is experimental" framing. The right gate for
-recording is when backend / real-provider routing and eval coverage land.
+### Expected action
+
+```text
+moveWorkoutSession
+requiresConfirmation=true
+fromDayOfWeek=1
+toDayOfWeek=3
+sourceContextHash=<trusted, re-stamped by backend>
+```
+
+### What the viewer should notice
+
+```text
+- This is true weekday-to-weekday single-session movement, not a weekly
+  availability reschedule.
+- The action is still previewed and confirmed before `LocalAgentActionExecutor`
+  writes to AppState.
+- Today→tomorrow wording remains non-mutating because the agent must not infer
+  dates from wall-clock time.
+```
 
 ## Closing narrative
 
@@ -337,9 +347,8 @@ Five sentences to wrap the recording:
 1. **Fit_Forge does not let the LLM directly rewrite user state.** The
    Agent proposes structured actions; the user confirms; deterministic
    local code applies the change.
-2. **The action space is small and explicit.** Five mutation action types
-   (one — `moveWorkoutSession` — is currently mock-only; backend /
-   real-provider routing is deferred), four non-mutating actions; anything
+2. **The action space is small and explicit.** Five mutation action types,
+   four non-mutating actions; anything
    else is rejected by `output_validation` and `LocalAgentActionExecutor`.
 3. **Recovery routing reuses existing mutation actions.** No new action
    types, no new wearable signals, no auto-execution path.

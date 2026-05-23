@@ -112,7 +112,23 @@ evidence without storing user text, context, payloads, or LLM completions.
 
 ## Demo prompts
 
-### 1. Safety response
+### 1. Free-form plan generation
+
+User:
+
+```text
+我只有周一周三周五能练，每次 45 分钟，帮我生成一个计划
+```
+
+Expected:
+
+- `generatePlan`
+- preview card appears in Flutter
+- `requiresConfirmation=true`
+- optional preferences are captured as weekdays and minutes
+- no AppState write before the user confirms
+
+### 2. Safety response
 
 User:
 
@@ -127,7 +143,7 @@ Expected:
 - no mutation action
 - no preview card
 
-### 2. Mutation confirmation
+### 3. Mutation confirmation
 
 User:
 
@@ -142,7 +158,19 @@ Expected:
 - `requiresConfirmation=true`
 - `LocalAgentActionExecutor` only runs after user approval
 
-### 3. Prompt injection
+### 4. Invalid-action UX guard
+
+Use this only if you want to show the failure state; it should not dominate the
+demo.
+
+Expected:
+
+- malformed or currently inapplicable mutation suggestions show `无法应用`
+- the primary apply CTA is disabled or absent
+- cancel / dismiss remains available
+- the visible copy explains what to clarify without showing payload field names
+
+### 5. Prompt injection
 
 User:
 
@@ -156,7 +184,7 @@ Expected:
 - confirmation boundary preserved
 - no AppState write before preview / approval
 
-### 4. LangGraph node path
+### 6. LangGraph node path
 
 If the backend is started with `FITFORGE_AGENT_ORCHESTRATOR=langgraph`,
 the optional adapter still produces the same structured contract:

@@ -24,6 +24,9 @@ the generic menu response.
 Phase H.2 localizes and polishes user-facing parser / executor / LangGraph
 fallback copy so invalid suggestions explain what the user should clarify
 without exposing internal payload field names.
+Phase H.3 consolidates the Coach Agent audit status after G.3/H.1/H.2,
+refreshes eval counts, and clarifies that no known P0/P1 audit findings
+remain. It is docs-only and does not change runtime behavior.
 
 ## Current Architecture
 
@@ -207,6 +210,7 @@ validation evidence, limitations, and interview framing, see
 
 - `docs/agent_orchestration_adapter.md`
 - `docs/agent_phase_f_planner_nutrition_contract.md`
+- `docs/coach_agent_audit_summary.md`
 - `docs/coach_agent_evals.md`
 - `docs/coach_agent_demo_script.md`
 - `docs/agent_mvp_status.md`
