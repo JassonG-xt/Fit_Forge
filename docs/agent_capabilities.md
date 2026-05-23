@@ -127,6 +127,9 @@ prompts, raw responses, raw context, payload contents, and full
 Phase G adds representative free-form smoke cases so user-written Chinese
 messages are checked against the same structured-action boundary instead of
 only preset chip prompts.
+Phase G.3 aligns backend compress payload behavior with Flutter parser
+strictness and extends optional LangGraph validation to reject malformed
+mutation payloads before returning final responses.
 
 ## Supported Actions
 
