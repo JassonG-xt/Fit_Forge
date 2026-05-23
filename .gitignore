@@ -17,6 +17,11 @@ build/
 .codex/
 .learnings/
 
+# Local agent workspace files
+.agents/
+docs/agents/
+skills-lock.json
+
 # macOS
 .DS_Store
 *.swp
