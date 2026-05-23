@@ -115,8 +115,7 @@ void main() {
     });
 
     test('compress detects target minutes', () async {
-      final state = await primedAppStateWithProfile();
-      final context = const AgentContextBuilder().build(state);
+      const context = _compressContextWithDay;
       final response = await client.sendMessage(
         message: '今天只有 25 分钟，帮我压缩训练',
         context: context,
@@ -157,7 +156,7 @@ void main() {
     );
 
     test('Phase G.1 free-form compress extracts explicit duration', () async {
-      final context = await _contextWithActivePlan();
+      const context = _compressContextWithDay;
       final cases = {'今天只有20分钟，帮我搞一个短一点的版本': 20, '我赶时间，今天训练能不能压到半小时': 30};
 
       for (final entry in cases.entries) {
@@ -176,6 +175,56 @@ void main() {
       }
     });
 
+    test(
+      'Phase G.2 free-form compress with dayOfWeek emits valid action',
+      () async {
+        const context = _compressContextWithDay;
+        final response = await client.sendMessage(
+          message: '今天只有20分钟，帮我搞一个短一点的版本',
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.compressWorkout);
+        expect(response.actions, hasLength(1));
+        final action = response.actions.single;
+        expect(action.type, AgentActionType.compressWorkout);
+        expect(action.requiresConfirmation, true);
+        expect(action.sourceContextHash, context.planContextHash);
+        expect(action.payload['targetMinutes'], 20);
+        expect(action.payload['dayOfWeek'], isA<int>());
+        expect(action.payload['dayOfWeek'], inInclusiveRange(1, 7));
+      },
+    );
+
+    test(
+      'Phase G.2 free-form compress without dayOfWeek asks for target day',
+      () async {
+        const context = AgentContextSnapshot(
+          locale: 'zh-CN',
+          profile: {'weeklyFrequency': 3},
+          activePlan: {'id': 'missing_day_plan'},
+          todayWorkout: null,
+          recentSessions: [],
+          bodyMetrics: [],
+          progressSummary: {},
+          availableExerciseSummary: [],
+          planContextHash: 'missing_day_hash',
+        );
+        final response = await client.sendMessage(
+          message: '今天只有20分钟，帮我搞一个短一点的版本',
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.answerOnly);
+        expect(response.actions, isEmpty);
+        expect(response.message, contains('哪一天'));
+        expect(response.message, anyOf(contains('20 分钟'), contains('20分钟')));
+        expect(response.message, isNot(contains('我可以帮你生成训练计划')));
+      },
+    );
+
     test('Phase G.1 vague compress asks for target duration', () async {
       final state = await primedAppStateWithProfile();
       final context = const AgentContextBuilder().build(state);
@@ -192,8 +241,7 @@ void main() {
     });
 
     test('recovery compress with minutes routes to compressWorkout', () async {
-      final state = await primedAppStateWithProfile();
-      final context = const AgentContextBuilder().build(state);
+      const context = _compressContextWithDay;
       final response = await client.sendMessage(
         message: '今天有点累，帮我把今天训练缩短到 30 分钟',
         context: context,
@@ -559,8 +607,7 @@ void main() {
     test(
       'compress without generate keyword still routes to compress',
       () async {
-        final state = await primedAppStateWithProfile();
-        final context = const AgentContextBuilder().build(state);
+        const context = _compressContextWithDay;
         final response = await client.sendMessage(
           message: '今天只有 25 分钟，帮我压缩训练',
           context: context,
@@ -1024,4 +1071,28 @@ WorkoutPlan _seedMovePlan() => WorkoutPlan(
     for (var d = 2; d <= 7; d++)
       WorkoutDay(dayOfWeek: d, dayType: WorkoutDayType.rest),
   ],
+);
+
+const _compressContextWithDay = AgentContextSnapshot(
+  locale: 'zh-CN',
+  profile: {'weeklyFrequency': 3},
+  activePlan: {'id': 'compress_plan'},
+  todayWorkout: {
+    'dayOfWeek': 3,
+    'dayType': 'upper',
+    'exercises': [
+      {
+        'exerciseId': 'bench',
+        'exerciseName': 'Bench',
+        'targetSets': 3,
+        'targetReps': 8,
+        'restSeconds': 90,
+      },
+    ],
+  },
+  recentSessions: [],
+  bodyMetrics: [],
+  progressSummary: {},
+  availableExerciseSummary: [],
+  planContextHash: 'trusted_compress_hash',
 );

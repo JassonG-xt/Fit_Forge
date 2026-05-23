@@ -81,12 +81,28 @@ void main() {
   testWidgets('compress request renders an action card with confirm button', (
     tester,
   ) async {
-    await pumpChat(tester);
+    await pumpChat(tester, withPlan: true);
     await tester.tap(find.text('今天只有 30 分钟，帮我压缩训练'));
     await tester.pumpAndSettle();
     expect(find.text('压缩今日训练'), findsOneWidget);
     expect(find.text('应用修改'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
+  });
+
+  testWidgets('compress request without dayOfWeek renders clarification only', (
+    tester,
+  ) async {
+    await pumpChat(tester);
+    final input = find.byType(TextField);
+    await tester.enterText(input, '今天只有20分钟，帮我搞一个短一点的版本');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('dayOfWeek 缺失'), findsNothing);
+    expect(find.text('应用修改'), findsNothing);
+    expect(find.textContaining('哪一天'), findsOneWidget);
+    expect(find.textContaining('20 分钟'), findsWidgets);
   });
 
   testWidgets('free-form safety paraphrase does not render generic fallback', (
@@ -106,7 +122,7 @@ void main() {
   });
 
   testWidgets('cancelling an action disables the buttons', (tester) async {
-    await pumpChat(tester);
+    await pumpChat(tester, withPlan: true);
     await tester.tap(find.text('今天只有 30 分钟，帮我压缩训练'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('取消'));
@@ -228,40 +244,30 @@ void main() {
   });
 }
 
-WorkoutPlan _seedPlan() => WorkoutPlan(
-  id: 'seed',
-  name: 'Seed',
-  goal: FitnessGoal.buildMuscle,
-  split: TrainingSplit.upperLower,
-  weeklyFrequency: 2,
-  days: [
-    WorkoutDay(
-      dayOfWeek: 1,
-      dayType: WorkoutDayType.upper,
-      exercises: [
-        PlannedExercise(
-          exerciseId: 'bench_press',
-          exerciseName: 'Bench Press',
-          targetSets: 4,
-          targetReps: 8,
-          restSeconds: 90,
-        ),
-      ],
-    ),
-    for (var d = 2; d <= 6; d++)
-      WorkoutDay(dayOfWeek: d, dayType: WorkoutDayType.rest),
-    WorkoutDay(
-      dayOfWeek: 7,
-      dayType: WorkoutDayType.lower,
-      exercises: [
-        PlannedExercise(
-          exerciseId: 'squat',
-          exerciseName: 'Squat',
-          targetSets: 4,
-          targetReps: 8,
-          restSeconds: 120,
-        ),
-      ],
-    ),
-  ],
-);
+WorkoutPlan _seedPlan() {
+  final today = DateTime.now().weekday;
+  return WorkoutPlan(
+    id: 'seed',
+    name: 'Seed',
+    goal: FitnessGoal.buildMuscle,
+    split: TrainingSplit.upperLower,
+    weeklyFrequency: 2,
+    days: [
+      WorkoutDay(
+        dayOfWeek: today,
+        dayType: WorkoutDayType.upper,
+        exercises: [
+          PlannedExercise(
+            exerciseId: 'bench_press',
+            exerciseName: 'Bench Press',
+            targetSets: 4,
+            targetReps: 8,
+            restSeconds: 90,
+          ),
+        ],
+      ),
+      for (var d = 1; d <= 7; d++)
+        if (d != today) WorkoutDay(dayOfWeek: d, dayType: WorkoutDayType.rest),
+    ],
+  );
+}
