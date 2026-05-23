@@ -21,6 +21,9 @@ Phase G.1 aligns the Flutter local `MockAgentClient` with that backend Phase G
 coverage so offline demo/development mode in the Coach Agent UI handles the
 same representative free-form Chinese paraphrases instead of falling back to
 the generic menu response.
+Phase H.2 localizes and polishes user-facing parser / executor / LangGraph
+fallback copy so invalid suggestions explain what the user should clarify
+without exposing internal payload field names.
 
 ## Current Architecture
 

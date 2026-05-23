@@ -15,31 +15,36 @@ void main() {
     test('rejects null', () {
       final result = parseDayOfWeek(null);
       expect(result, isA<PayloadParseFailure<int>>());
-      expect(result.message, contains('缺失'));
+      expect(result.message, contains('哪一天'));
+      expect(result.message, isNot(contains('dayOfWeek')));
     });
 
     test('rejects double', () {
       final result = parseDayOfWeek(1.5);
       expect(result, isA<PayloadParseFailure<int>>());
-      expect(result.message, contains('整数'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('dayOfWeek')));
     });
 
     test('rejects String', () {
       final result = parseDayOfWeek('1');
       expect(result, isA<PayloadParseFailure<int>>());
-      expect(result.message, contains('整数'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('dayOfWeek')));
     });
 
     test('rejects 0', () {
       final result = parseDayOfWeek(0);
       expect(result, isA<PayloadParseFailure<int>>());
-      expect(result.message, contains('1-7'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('dayOfWeek')));
     });
 
     test('rejects 8', () {
       final result = parseDayOfWeek(8);
       expect(result, isA<PayloadParseFailure<int>>());
-      expect(result.message, contains('1-7'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('dayOfWeek')));
     });
 
     test('rejects negative', () {
@@ -58,11 +63,15 @@ void main() {
     test('rejects non-List', () {
       final result = parseAvailableWeekdays('not a list');
       expect(result, isA<PayloadParseFailure<List<int>>>());
+      expect(result.message, contains('可训练的星期几'));
+      expect(result.message, isNot(contains('availableWeekdays')));
     });
 
     test('rejects null', () {
       final result = parseAvailableWeekdays(null);
       expect(result, isA<PayloadParseFailure<List<int>>>());
+      expect(result.message, contains('可训练的星期几'));
+      expect(result.message, isNot(contains('availableWeekdays')));
     });
 
     test('rejects empty list', () {
@@ -74,25 +83,29 @@ void main() {
     test('rejects list with double element', () {
       final result = parseAvailableWeekdays([1, 2.5, 3]);
       expect(result, isA<PayloadParseFailure<List<int>>>());
-      expect(result.message, contains('第 2 个'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('availableWeekdays')));
     });
 
     test('rejects list with String element', () {
       final result = parseAvailableWeekdays([2, 'bad', 5]);
       expect(result, isA<PayloadParseFailure<List<int>>>());
-      expect(result.message, contains('第 2 个'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('availableWeekdays')));
     });
 
     test('rejects list with 0', () {
       final result = parseAvailableWeekdays([0, 3]);
       expect(result, isA<PayloadParseFailure<List<int>>>());
-      expect(result.message, contains('第 1 个'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('availableWeekdays')));
     });
 
     test('rejects list with 8', () {
       final result = parseAvailableWeekdays([2, 8]);
       expect(result, isA<PayloadParseFailure<List<int>>>());
-      expect(result.message, contains('第 2 个'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('availableWeekdays')));
     });
 
     test('rejects duplicates', () {
@@ -123,6 +136,8 @@ void main() {
         'toExerciseId': 'incline',
       });
       expect(result, isA<PayloadParseFailure<ReplaceExercisePayload>>());
+      expect(result.message, contains('哪一天'));
+      expect(result.message, isNot(contains('dayOfWeek')));
     });
 
     test('rejects double dayOfWeek', () {
@@ -132,7 +147,8 @@ void main() {
         'toExerciseId': 'incline',
       });
       expect(result, isA<PayloadParseFailure<ReplaceExercisePayload>>());
-      expect(result.message, contains('整数'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('dayOfWeek')));
     });
 
     test('rejects missing fromExerciseId', () {
@@ -141,7 +157,8 @@ void main() {
         'toExerciseId': 'incline',
       });
       expect(result, isA<PayloadParseFailure<ReplaceExercisePayload>>());
-      expect(result.message, contains('fromExerciseId'));
+      expect(result.message, contains('原动作'));
+      expect(result.message, isNot(contains('fromExerciseId')));
     });
 
     test('rejects empty fromExerciseId', () {
@@ -159,7 +176,8 @@ void main() {
         'fromExerciseId': 'bench',
       });
       expect(result, isA<PayloadParseFailure<ReplaceExercisePayload>>());
-      expect(result.message, contains('toExerciseId'));
+      expect(result.message, contains('替换后的动作'));
+      expect(result.message, isNot(contains('toExerciseId')));
     });
 
     test('rejects same from and to', () {
@@ -189,8 +207,9 @@ void main() {
     test('rejects missing dayOfWeek', () {
       final result = parseCompressWorkoutPayload({'targetMinutes': 20});
       expect(result, isA<PayloadParseFailure<CompressWorkoutPayload>>());
-      expect(result.message, contains('dayOfWeek'));
-      expect(result.message, contains('缺失'));
+      expect(result.message, contains('压缩哪一天'));
+      expect(result.message, contains('周三'));
+      expect(result.message, isNot(contains('dayOfWeek')));
     });
 
     test('rejects double dayOfWeek', () {
@@ -199,13 +218,15 @@ void main() {
         'targetMinutes': 20,
       });
       expect(result, isA<PayloadParseFailure<CompressWorkoutPayload>>());
-      expect(result.message, contains('整数'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('dayOfWeek')));
     });
 
     test('rejects missing targetMinutes', () {
       final result = parseCompressWorkoutPayload({'dayOfWeek': 1});
       expect(result, isA<PayloadParseFailure<CompressWorkoutPayload>>());
-      expect(result.message, contains('targetMinutes'));
+      expect(result.message, contains('目标训练时长'));
+      expect(result.message, isNot(contains('targetMinutes')));
     });
 
     test('rejects double targetMinutes', () {
@@ -214,7 +235,8 @@ void main() {
         'targetMinutes': 15.5,
       });
       expect(result, isA<PayloadParseFailure<CompressWorkoutPayload>>());
-      expect(result.message, contains('正整数'));
+      expect(result.message, contains('整数分钟数'));
+      expect(result.message, isNot(contains('targetMinutes')));
     });
 
     test('rejects String targetMinutes', () {
@@ -223,7 +245,8 @@ void main() {
         'targetMinutes': '20',
       });
       expect(result, isA<PayloadParseFailure<CompressWorkoutPayload>>());
-      expect(result.message, contains('正整数'));
+      expect(result.message, contains('整数分钟数'));
+      expect(result.message, isNot(contains('targetMinutes')));
     });
 
     test('rejects zero targetMinutes', () {
@@ -232,7 +255,8 @@ void main() {
         'targetMinutes': 0,
       });
       expect(result, isA<PayloadParseFailure<CompressWorkoutPayload>>());
-      expect(result.message, contains('正数'));
+      expect(result.message, contains('大于 0 分钟'));
+      expect(result.message, isNot(contains('targetMinutes')));
     });
 
     test('rejects negative targetMinutes', () {
@@ -241,7 +265,8 @@ void main() {
         'targetMinutes': -5,
       });
       expect(result, isA<PayloadParseFailure<CompressWorkoutPayload>>());
-      expect(result.message, contains('正数'));
+      expect(result.message, contains('大于 0 分钟'));
+      expect(result.message, isNot(contains('targetMinutes')));
     });
   });
 
@@ -293,7 +318,8 @@ void main() {
         'availableWeekdays': [1, 'bad', 5],
       });
       expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
-      expect(result.message, contains('不是整数'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('availableWeekdays')));
     });
 
     test('rejects availableWeekdays out of range', () {
@@ -301,7 +327,8 @@ void main() {
         'availableWeekdays': [0, 8],
       });
       expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
-      expect(result.message, contains('1-7'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('availableWeekdays')));
     });
 
     test('rejects duplicate availableWeekdays', () {
@@ -323,25 +350,29 @@ void main() {
     test('rejects double targetMinutes', () {
       final result = parseGeneratePlanPayload(const {'targetMinutes': 45.5});
       expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
-      expect(result.message, contains('正整数'));
+      expect(result.message, contains('整数分钟数'));
+      expect(result.message, isNot(contains('targetMinutes')));
     });
 
     test('rejects String targetMinutes', () {
       final result = parseGeneratePlanPayload(const {'targetMinutes': '45'});
       expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
-      expect(result.message, contains('正整数'));
+      expect(result.message, contains('整数分钟数'));
+      expect(result.message, isNot(contains('targetMinutes')));
     });
 
     test('rejects targetMinutes below lower bound', () {
       final result = parseGeneratePlanPayload(const {'targetMinutes': 4});
       expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
-      expect(result.message, contains('5-180'));
+      expect(result.message, contains('5 到 180 分钟'));
+      expect(result.message, isNot(contains('targetMinutes')));
     });
 
     test('rejects targetMinutes above upper bound', () {
       final result = parseGeneratePlanPayload(const {'targetMinutes': 200});
       expect(result, isA<PayloadParseFailure<GeneratePlanPayload>>());
-      expect(result.message, contains('5-180'));
+      expect(result.message, contains('5 到 180 分钟'));
+      expect(result.message, isNot(contains('targetMinutes')));
     });
 
     test('treats null preference fields as absent', () {
@@ -498,15 +529,15 @@ void main() {
     test('rejects missing fromDayOfWeek', () {
       final result = parseMoveWorkoutSessionPayload(const {'toDayOfWeek': 2});
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('fromDayOfWeek'));
-      expect(result.message, contains('缺失'));
+      expect(result.message, contains('移动哪一天'));
+      expect(result.message, isNot(contains('fromDayOfWeek')));
     });
 
     test('rejects missing toDayOfWeek', () {
       final result = parseMoveWorkoutSessionPayload(const {'fromDayOfWeek': 1});
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('toDayOfWeek'));
-      expect(result.message, contains('缺失'));
+      expect(result.message, contains('移动到哪一天'));
+      expect(result.message, isNot(contains('toDayOfWeek')));
     });
 
     test('rejects double fromDayOfWeek', () {
@@ -515,8 +546,8 @@ void main() {
         'toDayOfWeek': 2,
       });
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('fromDayOfWeek'));
-      expect(result.message, contains('整数'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('fromDayOfWeek')));
     });
 
     test('rejects String fromDayOfWeek', () {
@@ -525,8 +556,8 @@ void main() {
         'toDayOfWeek': 2,
       });
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('fromDayOfWeek'));
-      expect(result.message, contains('整数'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('fromDayOfWeek')));
     });
 
     test('rejects double toDayOfWeek', () {
@@ -535,8 +566,8 @@ void main() {
         'toDayOfWeek': 2.5,
       });
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('toDayOfWeek'));
-      expect(result.message, contains('整数'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('toDayOfWeek')));
     });
 
     test('rejects String toDayOfWeek', () {
@@ -545,8 +576,8 @@ void main() {
         'toDayOfWeek': '2',
       });
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('toDayOfWeek'));
-      expect(result.message, contains('整数'));
+      expect(result.message, contains('训练日期格式不正确'));
+      expect(result.message, isNot(contains('toDayOfWeek')));
     });
 
     test('rejects fromDayOfWeek below range', () {
@@ -555,8 +586,8 @@ void main() {
         'toDayOfWeek': 2,
       });
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('fromDayOfWeek'));
-      expect(result.message, contains('1-7'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('fromDayOfWeek')));
     });
 
     test('rejects fromDayOfWeek above range', () {
@@ -565,8 +596,8 @@ void main() {
         'toDayOfWeek': 2,
       });
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('fromDayOfWeek'));
-      expect(result.message, contains('1-7'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('fromDayOfWeek')));
     });
 
     test('rejects toDayOfWeek below range', () {
@@ -575,8 +606,8 @@ void main() {
         'toDayOfWeek': 0,
       });
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('toDayOfWeek'));
-      expect(result.message, contains('1-7'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('toDayOfWeek')));
     });
 
     test('rejects toDayOfWeek above range', () {
@@ -585,8 +616,8 @@ void main() {
         'toDayOfWeek': 9,
       });
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('toDayOfWeek'));
-      expect(result.message, contains('1-7'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('toDayOfWeek')));
     });
 
     test('rejects same fromDayOfWeek and toDayOfWeek', () {
@@ -595,7 +626,9 @@ void main() {
         'toDayOfWeek': 3,
       });
       expect(result, isA<PayloadParseFailure<MoveWorkoutSessionPayload>>());
-      expect(result.message, contains('必须不同'));
+      expect(result.message, contains('不能相同'));
+      expect(result.message, isNot(contains('fromDayOfWeek')));
+      expect(result.message, isNot(contains('toDayOfWeek')));
     });
 
     test('rejects non-string reason', () {

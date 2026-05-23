@@ -59,7 +59,8 @@ void main() {
         }, sourceContextHash: hash1),
       );
       expect(result.success, false);
-      expect(result.message, contains('已经发生变化'));
+      expect(result.message, contains('当前训练计划已变化'));
+      expect(result.message, isNot(contains('sourceContextHash')));
     });
 
     test('stale action does not modify AppState', () async {
@@ -97,7 +98,8 @@ void main() {
         }, sourceContextHash: hash1),
       );
       expect(result.success, false);
-      expect(result.message, contains('已经发生变化'));
+      expect(result.message, contains('当前训练计划已变化'));
+      expect(result.message, isNot(contains('sourceContextHash')));
     });
 
     test('replaceExercise stale rejection', () async {
@@ -118,7 +120,8 @@ void main() {
         }, sourceContextHash: hash1),
       );
       expect(result.success, false);
-      expect(result.message, contains('已经发生变化'));
+      expect(result.message, contains('当前训练计划已变化'));
+      expect(result.message, isNot(contains('sourceContextHash')));
     });
 
     test('legacy mutation action without hash is rejected', () async {
@@ -134,7 +137,8 @@ void main() {
         }),
       );
       expect(result.success, false);
-      expect(result.message, contains('校验信息'));
+      expect(result.message, contains('当前训练计划已变化'));
+      expect(result.message, isNot(contains('sourceContextHash')));
       expect(state.activePlan!.toJson(), before);
     });
 

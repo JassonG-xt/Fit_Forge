@@ -118,8 +118,10 @@ def test_langgraph_orchestrator_does_not_crash_without_langgraph(
     assert isinstance(response, AgentResponse)
     assert response.intent == "answerOnly"
     assert response.actions == []
-    assert "LangGraph" in response.message
-    assert "unavailable" in response.message
+    assert "智能编排暂时不可用" in response.message
+    assert "基础教练模式" in response.message
+    assert "LangGraph" not in response.message
+    assert "unavailable" not in response.message
 
 
 def test_langgraph_provider_imports_langgraph_lazily(
