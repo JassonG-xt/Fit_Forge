@@ -259,6 +259,9 @@ precedence. Phase D adds decision-aware assertions for safety short-circuit,
 recovery policy answer-only, explicit mutation delegation to native, and
 validator fail-closed behavior. Phase G adds representative free-form Chinese
 paraphrase cases for plan, compress, replace, nutrition, and safety priority.
+Phase G.3 adds pytest coverage for backend compress clarification and
+LangGraph mutation payload fail-closed validation, aligning backend/LangGraph
+behavior with Flutter parser strictness.
 The same smoke matrix now runs in GitHub
 Actions CI as a backend safety gate.
 

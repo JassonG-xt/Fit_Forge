@@ -30,11 +30,17 @@ def test_safety_short_circuits_other_intents() -> None:
 def test_compress_extracts_minutes() -> None:
     response = client.post(
         "/v1/coach/message",
-        json={"message": "今天只有 25 分钟，帮我压缩训练"},
+        json={
+            "message": "今天只有 25 分钟，帮我压缩训练",
+            "context": {
+                "todayWorkout": {"dayOfWeek": 1, "dayType": "push"},
+            },
+        },
     )
     body = response.json()
     assert body["intent"] == "compressWorkout"
     payload = body["actions"][0]["payload"]
+    assert payload["dayOfWeek"] == 1
     assert payload["targetMinutes"] == 25
 
 

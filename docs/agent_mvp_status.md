@@ -50,6 +50,8 @@
 
 > Phase G.1 Flutter mock parity: `lib/agent/mocks/mock_agent_client.dart` now mirrors the Phase G deterministic free-form routing coverage for local Coach Agent UI mock mode. It adds safety paraphrases (`胸口有点疼`, `头很晕`), free-form plan / compress / replace / schedule / recovery / nutrition keyword coverage, and specific clarification replies for under-specified compress / replace / schedule requests. Mutation actions still require confirmation and trusted `sourceContextHash`; safety still wins first; unrelated messages such as weather remain generic fallback. No backend behavior, action schema, executor, Planner/Nutrition node, real LLM, or Flutter UI surface change was introduced.
 
+> Phase G.3 backend payload guard: backend native compress routing now clarifies instead of emitting malformed `compressWorkout` actions when `todayWorkout.dayOfWeek` is missing or target minutes fall outside 5-180. Optional LangGraph response validation now checks mutation payload schema before returning final responses. This aligns backend behavior with Flutter parser strictness without changing Flutter UI, action types, confirmation, `sourceContextHash`, native default routing, or real-LLM behavior.
+
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
 ### 历史稳定点

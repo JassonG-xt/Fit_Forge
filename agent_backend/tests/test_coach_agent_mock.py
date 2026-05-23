@@ -68,6 +68,22 @@ def _request(
     return AgentRequest(message=message, context=context)
 
 
+def _request_with_exact_today_workout(
+    message: str,
+    today_workout: Optional[Dict[str, Any]],
+) -> AgentRequest:
+    context: Dict[str, Any] = {
+        "locale": "zh-CN",
+        "todayWorkout": today_workout,
+        "availableExerciseSummary": [
+            {"id": "leg_press", "name": "Leg Press", "equipment": "machine", "bodyPart": "legs"},
+        ],
+        "planContextHash": _TRUSTED_HASH,
+        "profile": _COMPLETE_PROFILE,
+    }
+    return AgentRequest(message=message, context=context)
+
+
 # ── Mock provider injects sourceContextHash on each mutation type ──
 
 
@@ -476,9 +492,53 @@ def test_mock_free_form_compress_with_minutes_routes_to_compress(
     assert response.intent == "compressWorkout"
     action = response.actions[0]
     assert action.type == "compressWorkout"
+    assert action.payload["dayOfWeek"] == 1
     assert action.payload["targetMinutes"] == target_minutes
     assert action.requiresConfirmation is True
     assert action.sourceContextHash == _TRUSTED_HASH
+
+
+@pytest.mark.parametrize(
+    "today_workout",
+    [
+        None,
+        {"dayType": "push", "exercises": []},
+        {"dayOfWeek": None, "dayType": "push", "exercises": []},
+    ],
+)
+def test_mock_compress_missing_day_clarifies(today_workout: Optional[Dict[str, Any]]) -> None:
+    response = _run_mock_coach_agent(
+        _request_with_exact_today_workout(
+            "今天只有20分钟，帮我搞一个短一点的版本",
+            today_workout=today_workout,
+        )
+    )
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert "哪一天" in response.message
+    assert ("20 分钟" in response.message) or ("20分钟" in response.message)
+    assert "我可以帮你生成训练计划、调整训练日" not in response.message
+
+
+@pytest.mark.parametrize(
+    ("message", "target_minutes"),
+    [
+        ("今天只有4分钟，帮我压缩训练", 4),
+        ("今天只有999分钟，帮我压缩训练", 999),
+    ],
+)
+def test_mock_compress_invalid_target_minutes_clarifies(
+    message: str,
+    target_minutes: int,
+) -> None:
+    response = _run_mock_coach_agent(_request(message))
+
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert str(target_minutes) in response.message
+    assert "5-180" in response.message
+    assert "我可以帮你生成训练计划、调整训练日" not in response.message
 
 
 @pytest.mark.parametrize(

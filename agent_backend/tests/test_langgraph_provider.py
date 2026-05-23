@@ -59,6 +59,30 @@ def _request(message: str = "今天只有20分钟，帮我压缩训练") -> Agen
     )
 
 
+def _mutation_response_state(
+    action_type: str,
+    payload: dict[str, Any],
+    *,
+    intent: str | None = None,
+    source_context_hash: str = "trusted_hash",
+) -> dict[str, Any]:
+    return {
+        "message": "validator probe",
+        "intent": intent or action_type,
+        "actions": [
+            {
+                "id": "probe_action",
+                "type": action_type,
+                "title": "t",
+                "summary": "s",
+                "requiresConfirmation": True,
+                "sourceContextHash": source_context_hash,
+                "payload": payload,
+            }
+        ],
+    }
+
+
 _EXPECTED_NODE_ORDER = (
     "safety_precheck_node",
     "intent_route_node",
@@ -643,6 +667,74 @@ def test_langgraph_response_contract_validation_rejects_missing_hash() -> None:
 
     assert result["response"].intent == "answerOnly"
     assert result["response"].actions == []
+
+
+@pytest.mark.parametrize(
+    "response_state",
+    [
+        _mutation_response_state(
+            "compressWorkout",
+            {"targetMinutes": 20},
+        ),
+        _mutation_response_state(
+            "compressWorkout",
+            {"dayOfWeek": 1, "targetMinutes": 4},
+        ),
+        _mutation_response_state(
+            "replaceExercise",
+            {"dayOfWeek": 1, "toExerciseId": "incline_press"},
+        ),
+        _mutation_response_state(
+            "rescheduleWeek",
+            {"availableWeekdays": [1, 1, 5]},
+        ),
+        _mutation_response_state(
+            "moveWorkoutSession",
+            {"fromDayOfWeek": 3, "toDayOfWeek": 3},
+        ),
+        _mutation_response_state(
+            "generatePlan",
+            {"targetMinutes": 4},
+        ),
+    ],
+)
+def test_langgraph_response_contract_validation_rejects_malformed_payloads(
+    response_state: dict[str, Any],
+) -> None:
+    result = response_contract_validation_node(
+        {"request": _request(), "response": response_state}
+    )
+
+    assert result["response"].intent == "answerOnly"
+    assert result["response"].actions == []
+
+
+def test_langgraph_response_contract_validation_records_payload_fail_closed_trace(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setenv("FITFORGE_AGENT_TRACE", "1")
+    caplog.set_level(logging.INFO, logger=_TRACE_LOGGER)
+
+    with orchestration_trace_scope("mock"):
+        result = response_contract_validation_node(
+            {
+                "request": _request(),
+                "response": _mutation_response_state(
+                    "compressWorkout",
+                    {"targetMinutes": 20},
+                ),
+            }
+        )
+
+    payload = _trace_payload(caplog)
+
+    assert result["response"].intent == "answerOnly"
+    assert (
+        "response_contract_validation_node",
+        "fail_closed",
+        "validator_contract_violation",
+    ) in _decision_pairs(payload)
 
 
 def test_langgraph_response_contract_validation_rejects_unknown_intent() -> None:

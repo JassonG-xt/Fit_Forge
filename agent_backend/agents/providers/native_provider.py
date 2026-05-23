@@ -143,14 +143,22 @@ def has_explicit_target_minutes(message: str) -> bool:
 
 
 def _compress_response(message: str, request: AgentRequest) -> AgentResponse:
-    target = _is_compress(message) or 25
+    target = _is_compress(message)
+    if target is None:
+        return _compress_clarification_response()
+    if target < 5 or target > 180:
+        return _compress_minutes_clarification_response(target)
+
     today = request.context.todayWorkout
+    day_of_week = _today_workout_day_of_week(today)
+    if day_of_week is None:
+        return _compress_day_clarification_response(target)
+
     payload: dict = {
+        "dayOfWeek": day_of_week,
         "targetMinutes": target,
         "strategy": "keep_compounds_reduce_accessories",
     }
-    if today and today.get("dayOfWeek"):
-        payload["dayOfWeek"] = today["dayOfWeek"]
     return AgentResponse(
         message=(
             "可以。我会保留核心复合动作，减少辅助动作，"
@@ -168,6 +176,41 @@ def _compress_response(message: str, request: AgentRequest) -> AgentResponse:
                 payload=payload,
             )
         ],
+    )
+
+
+def _today_workout_day_of_week(today_workout: dict | None) -> int | None:
+    if not today_workout:
+        return None
+    day = today_workout.get("dayOfWeek")
+    if type(day) is not int or day < 1 or day > 7:
+        return None
+    return day
+
+
+def _compress_day_clarification_response(target_minutes: int) -> AgentResponse:
+    return AgentResponse(
+        message=(
+            f"可以帮你压缩训练到 {target_minutes} 分钟，"
+            "但我需要知道要压缩哪一天的训练。"
+            f"请明确说“压缩周三训练到{target_minutes}分钟”这类信息。"
+        ),
+        intent="answerOnly",
+        confidence=0.7,
+        actions=[],
+    )
+
+
+def _compress_minutes_clarification_response(target_minutes: int) -> AgentResponse:
+    return AgentResponse(
+        message=(
+            f"你这次说的是 {target_minutes} 分钟。"
+            "压缩训练的目标时长需要在 5-180 分钟之间，"
+            "请重新给一个合理的目标时长。"
+        ),
+        intent="answerOnly",
+        confidence=0.7,
+        actions=[],
     )
 
 

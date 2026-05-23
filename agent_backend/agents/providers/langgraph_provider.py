@@ -16,6 +16,7 @@ from functools import partial
 from typing import Any, TypedDict
 
 from agents.action_safety import MUTATION_ACTION_TYPES
+from agents.output_validation import _sanitize_payload
 from agents.orchestration_trace import (
     record_trace_decision,
     record_trace_error,
@@ -442,6 +443,8 @@ def _is_safe_graph_response(
         if not action.requiresConfirmation:
             return False
         if not action.sourceContextHash or action.sourceContextHash != trusted_hash:
+            return False
+        if _sanitize_payload(action.type, action.payload) is None:
             return False
 
     return True
