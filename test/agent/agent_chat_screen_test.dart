@@ -2,10 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:fit_forge/agent/agent_client.dart';
 import 'package:fit_forge/agent/agent_runtime.dart';
 import 'package:fit_forge/agent/agent_service.dart';
 import 'package:fit_forge/agent/local_agent_action_executor.dart';
 import 'package:fit_forge/agent/mocks/mock_agent_client.dart';
+import 'package:fit_forge/agent/models/agent_action.dart';
+import 'package:fit_forge/agent/models/agent_context_snapshot.dart';
+import 'package:fit_forge/agent/models/agent_intent.dart';
+import 'package:fit_forge/agent/models/agent_message.dart';
+import 'package:fit_forge/agent/models/agent_response.dart';
 import 'package:fit_forge/models/models.dart';
 import 'package:fit_forge/screens/agent/agent_chat_screen.dart';
 import 'package:fit_forge/services/app_state.dart';
@@ -22,6 +28,7 @@ void main() {
   Future<_ChatHarness> pumpChat(
     WidgetTester tester, {
     bool withPlan = false,
+    AgentClient? client,
     AgentMode mode = AgentMode.mock,
     String baseUrl = '',
   }) async {
@@ -40,7 +47,7 @@ void main() {
     }
     final service = AgentService(
       appState: state,
-      client: MockAgentClient(delay: Duration.zero),
+      client: client ?? MockAgentClient(delay: Duration.zero),
       executor: LocalAgentActionExecutor(state),
     );
     await tester.pumpWidget(
@@ -103,6 +110,71 @@ void main() {
     expect(find.text('应用修改'), findsNothing);
     expect(find.textContaining('哪一天'), findsOneWidget);
     expect(find.textContaining('20 分钟'), findsWidgets);
+  });
+
+  testWidgets('invalid compress action disables apply but keeps cancel', (
+    tester,
+  ) async {
+    await pumpChat(
+      tester,
+      withPlan: true,
+      client: _StaticAgentClient(
+        AgentResponse(
+          message: '可以帮你压缩训练，但这个修改缺少必要信息。',
+          intent: AgentIntent.compressWorkout,
+          confidence: 0.8,
+          actions: [
+            AgentAction(
+              id: 'bad-compress',
+              type: AgentActionType.compressWorkout,
+              title: '压缩今日训练',
+              summary: '目标 20 分钟左右。',
+              requiresConfirmation: true,
+              riskLevel: AgentActionRiskLevel.medium,
+              payload: const {'targetMinutes': 20},
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final input = find.byType(TextField);
+    await tester.enterText(input, '今天只有20分钟');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('dayOfWeek'), findsOneWidget);
+    expect(find.text('应用修改'), findsNothing);
+    expect(find.text('无法应用'), findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('无法应用'));
+    await tester.tap(find.text('无法应用'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已处理'), findsNothing);
+  });
+
+  testWidgets('valid compress action still allows apply', (tester) async {
+    await pumpChat(tester, withPlan: true, client: _ValidCompressAgentClient());
+
+    final input = find.byType(TextField);
+    await tester.enterText(input, '今天只有20分钟');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('dayOfWeek 缺失'), findsNothing);
+    expect(find.text('应用修改'), findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
+    expect(find.text('无法应用'), findsNothing);
+
+    await tester.ensureVisible(find.text('应用修改'));
+    await tester.tap(find.text('应用修改'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已处理'), findsOneWidget);
   });
 
   testWidgets('free-form safety paraphrase does not render generic fallback', (
@@ -242,6 +314,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.arrow_forward), findsNothing);
   });
+}
+
+class _StaticAgentClient implements AgentClient {
+  const _StaticAgentClient(this.response);
+
+  final AgentResponse response;
+
+  @override
+  Future<AgentResponse> sendMessage({
+    required String message,
+    required AgentContextSnapshot context,
+    required List<AgentMessage> history,
+  }) async {
+    return response;
+  }
+}
+
+class _ValidCompressAgentClient implements AgentClient {
+  @override
+  Future<AgentResponse> sendMessage({
+    required String message,
+    required AgentContextSnapshot context,
+    required List<AgentMessage> history,
+  }) async {
+    return AgentResponse(
+      message: '可以帮你压缩今日训练。',
+      intent: AgentIntent.compressWorkout,
+      confidence: 0.9,
+      actions: [
+        AgentAction(
+          id: 'valid-compress',
+          type: AgentActionType.compressWorkout,
+          title: '压缩今日训练',
+          summary: '目标 20 分钟左右。',
+          requiresConfirmation: true,
+          riskLevel: AgentActionRiskLevel.medium,
+          sourceContextHash: context.planContextHash,
+          payload: {'dayOfWeek': DateTime.now().weekday, 'targetMinutes': 20},
+        ),
+      ],
+    );
+  }
 }
 
 WorkoutPlan _seedPlan() {
