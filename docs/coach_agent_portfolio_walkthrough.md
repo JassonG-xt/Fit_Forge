@@ -54,6 +54,9 @@ Three notes that matter for understanding the surface:
 - **Real mode is optional / experimental.** The backend talks to an
   OpenAI-compatible endpoint only when explicitly configured. The real path
   has manual smoke evidence, not a production-readiness claim.
+- **LangGraph is optional orchestration.** It can expose safety, recovery,
+  routing, native delegation, and validation nodes with privacy-safe traces,
+  but it is not mutation authority.
 - **The backend is an LLM adapter, not the source of user state.** All user
   state (profile, plan, sessions, history) lives in local
   `SharedPreferences`; the backend only relays structured suggestions and
@@ -95,6 +98,7 @@ Mutation actions (require confirmation, require trusted `sourceContextHash`):
 - `compressWorkout`
 - `replaceExercise`
 - `rescheduleWeek`
+- `moveWorkoutSession`
 
 Non-mutating actions (no confirmation, no `sourceContextHash`):
 
@@ -202,13 +206,19 @@ phase does not claim — lives in
 The Agent's behavior is locked by a three-layer eval contract:
 
 - **`agent_backend/evals/coach_agent_eval_cases.json`** is the eval contract.
-  Current counts: **58 total / 54 active / 4 expectedGap**. The 4
+  Current counts: **77 total / 73 active / 4 expectedGap**. The 4
   `expectedGap` cases are kept on purpose as regression signals; they are not
   failures to "fix" by loosening the mock router.
 - **`tests/test_coach_agent_mock.py`** locks the specific values the mock
   keyword router produces.
 - **Pydantic `extra="forbid"`** and `tests/test_output_validation.py` lock
   the action / payload schema.
+
+The audit closeout after G.3/H.1/H.2 added three reviewer-relevant guarantees:
+malformed backend mutation payloads fail closed, invalid mutation previews do
+not expose an enabled apply CTA, and visible parser/executor/LangGraph fallback
+copy is localized without leaking payload field names. No known P0/P1 audit
+findings remain in the current summary.
 
 Four sanitized real-provider scorecards live in
 [`docs/real_llm_scorecards/`](real_llm_scorecards/):
@@ -244,9 +254,9 @@ This project, and this walkthrough, does **not** claim:
 - autonomous medical coaching;
 - autonomous plan mutation (every mutation continues to require user
   confirmation);
-- true single-session movement support (today→tomorrow single-session moves
-  remain non-mutating; a future feature would require a separate design
-  proposal, not an overload of `rescheduleWeek`).
+- inferred today→tomorrow single-session movement (weekday-to-weekday
+  `moveWorkoutSession` exists, but the agent must not infer dates from
+  wall-clock time or overload `rescheduleWeek`).
 
 If any committed text in this repo implies one of the above, treat it as a
 bug and file an issue.
@@ -261,15 +271,17 @@ A pragmatic reading path for a reviewer with limited time:
 2. **[`docs/agent_capabilities.md`](agent_capabilities.md)** — supported
    modes, action table (mutation vs read-only), safety model, privacy model,
    current limitations, explicit out-of-scope list.
-3. **[`docs/recovery_routing_phase_summary.md`](recovery_routing_phase_summary.md)**
+3. **[`docs/coach_agent_audit_summary.md`](coach_agent_audit_summary.md)**
+   — consolidated audit findings and current post-G.3/H.1/H.2 status.
+4. **[`docs/recovery_routing_phase_summary.md`](recovery_routing_phase_summary.md)**
    — the canonical phase narrative for PRs #43–#54, including the
    real-provider scorecard chain.
-4. **[`docs/coach_agent_portfolio_walkthrough.md`](coach_agent_portfolio_walkthrough.md)**
+5. **[`docs/coach_agent_portfolio_walkthrough.md`](coach_agent_portfolio_walkthrough.md)**
    — this document.
-5. **[`docs/coach_agent_final_demo_script.md`](coach_agent_final_demo_script.md)**
+6. **[`docs/coach_agent_final_demo_script.md`](coach_agent_final_demo_script.md)**
    — video-ready walkthrough script with six scenarios, including recovery
    routing and safety-over-mutation.
-6. **[`docs/real_llm_eval_harness.md`](real_llm_eval_harness.md)** —
+7. **[`docs/real_llm_eval_harness.md`](real_llm_eval_harness.md)** —
    configuration, dry-run vs real, selected-case runs, and the explicit
    "this is not in CI" rationale.
 

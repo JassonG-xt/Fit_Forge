@@ -30,6 +30,13 @@ which provider is wired up:
 - Phase G free-form Chinese paraphrase coverage for deterministic mock/native
   routing, including specific clarification behavior instead of overusing the
   generic menu fallback
+- Phase G.3 backend payload guard coverage for malformed compression payloads
+  and optional LangGraph mutation payload fail-closed validation
+- Phase H.1 invalid mutation preview coverage: a blocking preview failure does
+  not expose an enabled apply CTA
+- Phase H.2 copy coverage: user-facing parser, executor, and LangGraph
+  fallback failures stay actionable and do not expose internal payload field
+  names
 - The agent never auto-executes; mutations always go through
   `AgentAction → preview → user confirmation → LocalAgentActionExecutor → AppState`
 
@@ -97,7 +104,8 @@ records the case so we can flip it to `active` once a real LLM is wired up."*
 
 ## Active vs. gap distribution (current)
 
-This is the pinned baseline after Phase G free-form paraphrase coverage:
+This is the pinned baseline after G.3/H.1/H.2, computed from
+`agent_backend/evals/coach_agent_eval_cases.json`:
 
 ```
 compressWorkout   : 8 active / 1 expectedGap
@@ -262,6 +270,10 @@ paraphrase cases for plan, compress, replace, nutrition, and safety priority.
 Phase G.3 adds pytest coverage for backend compress clarification and
 LangGraph mutation payload fail-closed validation, aligning backend/LangGraph
 behavior with Flutter parser strictness.
+Phase H.1 adds Flutter widget coverage for invalid mutation cards that must
+show `无法应用` instead of an enabled apply CTA. Phase H.2 adds parser,
+executor, widget, and LangGraph tests that keep visible error/fallback copy
+localized and non-technical.
 The same smoke matrix now runs in GitHub
 Actions CI as a backend safety gate.
 
@@ -545,7 +557,9 @@ production readiness. It locks the deterministic offline behavior contract.
 
 ### Cases that remain `expectedGap` (and why)
 
-After this round, the remaining 4 expectedGap cases are stable gaps and one volatile case:
+After G.3/H.1/H.2, the remaining 4 expectedGap cases are stable gaps and one
+volatile case. They remain in the JSON because changing them would alter the
+eval contract, not because the app should guess missing mutation payloads:
 
 | caseId | reason it is NOT promoted |
 |--------|----------------------------|

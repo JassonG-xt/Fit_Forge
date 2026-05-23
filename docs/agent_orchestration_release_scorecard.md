@@ -2,8 +2,8 @@
 
 ## Snapshot
 
-- Current stage: Phase G free-form mock/native routing hardening
-- Latest milestone tag: `agent-phase-e-orchestration-scorecard-v1`
+- Current stage: Phase H.3 audit/docs/eval status consolidation
+- Latest milestone tag: `agent-phase-h2-localized-error-copy-v1`
 - Default orchestrator: `native`
 - Optional orchestrator: `langgraph`
 - Real LLM mode: optional/manual only
@@ -17,9 +17,11 @@ boundaries, decision trace enums, and eval contracts before implementation.
 It does not add runtime behavior, Flutter UI changes, Planner nodes,
 Nutrition nodes, real LLM calls, dependencies, or a new default orchestrator.
 Phase G adds deterministic free-form Chinese paraphrase eval coverage and
-mock/native routing hardening. It reduces generic fallback overuse for common
-user-written messages while keeping the structured-action safety boundary
-unchanged.
+mock/native routing hardening. Phase G.3 closes the backend payload-contract
+gap found by audit Part 1. Phase H.1 disables invalid mutation apply CTAs, and
+Phase H.2 localizes user-facing parser, executor, and LangGraph fallback copy.
+After G.3/H.1/H.2, no known P0/P1 audit findings remain. Phase H.3 is docs-only
+status consolidation.
 
 ## Phase Timeline
 
@@ -31,7 +33,11 @@ unchanged.
 | D | `agent-phase-d-decision-scorecard-v1` | Decision tracing/scorecard | Metadata-only observability |
 | E | `agent-phase-e-orchestration-scorecard-v1` | Release narrative consolidation | Docs only |
 | F | `agent-phase-f-planner-nutrition-contract-v1` | Planner/Nutrition design and eval contract | Docs only |
-| G | pending | Free-form Chinese paraphrase coverage and mock/native router hardening | Deterministic mock/native routing only |
+| G | `agent-phase-g-free-form-routing-v1` | Free-form Chinese paraphrase coverage and mock/native router hardening | Deterministic mock/native routing only |
+| G.3 | `agent-phase-g3-backend-payload-guard-v1` | Backend payload contract guard | Backend validation parity only |
+| H.1 | `agent-phase-h1-invalid-action-cta-v1` | Invalid mutation apply CTA disabled | Flutter UX guard only |
+| H.2 | `agent-phase-h2-localized-error-copy-v1` | User-facing error/fallback copy localized | Copy only |
+| H.3 | pending | Audit/docs/eval status consolidation | Docs only |
 
 ## Current Architecture
 
@@ -112,7 +118,22 @@ AgentResponse / AgentAction
 
 ## Evaluation Evidence
 
-Latest known local validation from Phase D:
+Current eval case snapshot from `agent_backend/evals/coach_agent_eval_cases.json`:
+
+- Eval cases: 77 total
+- Active: 73
+- expectedGap: 4
+
+Latest known local validation from the Phase H.2 PR:
+
+- Flutter analyze: passed
+- Flutter test: passed
+- Backend pytest: passed
+- Orchestration smoke: passed
+- `git diff --check`: passed
+- CI: green before merge
+
+Historical Phase D local validation:
 
 - Backend pytest: 554 passed, 4 skipped
 - Orchestration smoke: 50 pass, 0 fail, 2 skip
@@ -121,7 +142,7 @@ Latest known local validation from Phase D:
 - Flutter test: all tests passed
 - CI: green before merge
 
-These numbers are release evidence for the Phase D milestone, not a production
+These numbers are release evidence for scoped milestones, not a production
 readiness claim.
 
 To generate a local metadata-only scorecard:
@@ -157,6 +178,11 @@ Phase G is not a full semantic NLU system. It adds small, explicit
 deterministic helper groups and clarification responses for common Chinese
 paraphrases. Unrelated messages still use the generic fallback, and mutation
 actions still require confirmation plus trusted `sourceContextHash`.
+
+Phase G.3/H.1/H.2 close the known audit P1 items and the main P2 copy issue:
+backend malformed mutation payloads fail closed, invalid previews no longer
+offer an apply CTA, and visible parser/executor/LangGraph fallback copy is
+localized and non-technical.
 
 ## Interview Explanation
 
@@ -219,15 +245,8 @@ Is not:
 
 ## Next Recommended Phase
 
-After Phase F, implement nothing until the Planner/Nutrition eval categories,
-smoke matrix cases, decision trace enums, and safety boundaries in
-[`docs/agent_phase_f_planner_nutrition_contract.md`](agent_phase_f_planner_nutrition_contract.md)
-are agreed.
-
-Planner/Nutrition work should remain design/eval contract only until that
-gate is satisfied.
-
-After Phase G, the next recommended step is to inspect remaining expected-gap
-phrases and product telemetry manually before extending deterministic routing
-again. Do not turn the mock router into broad NLU, and do not promote real LLM
-mode or Planner/Nutrition runtime behavior on the basis of this phase.
+After Phase H.3, the next recommended step is a narrow eval-status PR for any
+remaining expected-gap cases whose product contract should now be clarification
+rather than mutation. Do not turn the mock router into broad NLU, and do not
+promote real LLM mode or Planner/Nutrition runtime behavior on the basis of
+this documentation cleanup.
