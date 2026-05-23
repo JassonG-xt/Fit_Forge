@@ -503,6 +503,9 @@ class MockAgentClient implements AgentClient {
     final targetMinutes = _extractTargetMinutesFromMessage(message) ?? 25;
     final today = context.todayWorkout;
     final dayOfWeek = today != null ? today['dayOfWeek'] as int? : null;
+    if (dayOfWeek == null) {
+      return _compressDayClarificationResponse(targetMinutes);
+    }
     return AgentResponse(
       message:
           '可以。我会保留核心复合动作，减少辅助动作，'
@@ -518,12 +521,23 @@ class MockAgentClient implements AgentClient {
           requiresConfirmation: true,
           sourceContextHash: context.planContextHash,
           payload: {
-            'dayOfWeek': ?dayOfWeek,
+            'dayOfWeek': dayOfWeek,
             'targetMinutes': targetMinutes,
             'strategy': 'keep_compounds_reduce_accessories',
           },
         ),
       ],
+    );
+  }
+
+  AgentResponse _compressDayClarificationResponse(int targetMinutes) {
+    return AgentResponse(
+      message:
+          '可以帮你压缩训练到 $targetMinutes 分钟，但我需要知道要压缩哪一天的训练。'
+          '请明确说“压缩周三训练到$targetMinutes分钟”这类信息。',
+      intent: AgentIntent.answerOnly,
+      confidence: 0.7,
+      actions: const [],
     );
   }
 
