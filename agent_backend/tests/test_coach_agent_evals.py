@@ -126,6 +126,7 @@ def test_active_case_against_mock_provider(case: Dict[str, Any]) -> None:
     request = AgentRequest(
         message=case["userMessage"],
         context=_build_context(case),
+        history=case.get("history") or [],
     )
 
     # Force mock mode for this run (eval is deterministic).
@@ -276,7 +277,7 @@ def test_eval_suite_covers_required_categories() -> None:
 
     required = {
         "compressWorkout": 8,
-        "replaceExercise": 6,
+        "replaceExercise": 5,
         "rescheduleWeek": 8,
         "generatePlan": 6,
         "moveWorkoutSession": 2,
@@ -284,6 +285,7 @@ def test_eval_suite_covers_required_categories() -> None:
         "safety": 11,
         "promptInjection": 6,
         "orchestrationBoundary": 4,
+        "feedbackFollowUp": 4,
     }
     for category, minimum in required.items():
         assert counts.get(category, 0) >= minimum, (

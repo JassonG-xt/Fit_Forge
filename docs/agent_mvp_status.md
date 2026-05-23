@@ -4,7 +4,7 @@
 
 - Tag: `agent-coach-portfolio-readiness-v1`
 - Latest tagged commit: `470855f65d81d1a8855f436d6063cfbee23ce5c2`
-- 状态：Coach Agent MVP + eval suite (73 active / 4 expectedGap, 77 total) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ recovery-routing phase summary（详见 `docs/recovery_routing_phase_summary.md`）+ moveWorkoutSession end-to-end support + optional orchestration smoke/CI coverage + Phase G/G.1 free-form routing parity + G.3 backend payload guard + H.1 invalid mutation CTA guard + H.2 localized error/fallback copy + Phase H.3 audit/docs consolidation
+- 状态：Coach Agent MVP + eval suite (88 active / 4 expectedGap, 92 total) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ recovery-routing phase summary（详见 `docs/recovery_routing_phase_summary.md`）+ moveWorkoutSession end-to-end support + optional orchestration smoke/CI coverage + Phase G/G.1 free-form routing parity + G.3 backend payload guard + H.1 invalid mutation CTA guard + H.2 localized error/fallback copy + Phase H.3 audit/docs consolidation
 
 > Recovery-routing 当前阶段已收尾：四个功能步骤（E-1A 文案、E-1B 压缩路由、E-1C 周度日程路由 + D-1/D-2 基础信号）+ 一个 prompt-first 硬化步骤（E-3）+ 四份脱敏 real-provider scorecard（E-2/E-4/E-5 focused）。Provider 仍是 **experimental**：不作为 production-readiness 证据，不作为 provider promotion，不进 per-PR CI。Single-session "把今天训练挪到明天" 类需求保持 non-mutating，未来若要做需要另起设计提案，不应通过扩 `rescheduleWeek` 实现。
 

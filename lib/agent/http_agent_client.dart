@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'agent_client.dart';
+import 'intent/pending_clarification.dart';
 import 'models/agent_context_snapshot.dart';
 import 'models/agent_message.dart';
 import 'models/agent_response.dart';
@@ -43,14 +44,13 @@ class HttpAgentClient implements AgentClient {
     required String message,
     required AgentContextSnapshot context,
     required List<AgentMessage> history,
+    PendingClarification? pendingClarification,
   }) async {
     final uri = Uri.parse('$baseUrl$path');
     final body = jsonEncode({
       'message': message,
       'context': context.toJson(),
-      'history': history
-          .map((m) => {'role': m.role.name, 'content': m.content})
-          .toList(),
+      'history': history.map(_historyMessageToJson).toList(),
     });
 
     try {
@@ -82,6 +82,26 @@ class HttpAgentClient implements AgentClient {
     } on http.ClientException catch (e) {
       throw HttpAgentException('网络无法连接 Coach 后端：${e.message}');
     }
+  }
+
+  Map<String, dynamic> _historyMessageToJson(AgentMessage message) {
+    final json = <String, dynamic>{
+      'role': message.role.name,
+      'content': message.content,
+    };
+    if (message.role == AgentMessageRole.assistant &&
+        message.actions.isNotEmpty) {
+      json['actions'] = message.actions
+          .map(
+            (action) => {
+              'id': action.id,
+              'type': action.type.name,
+              'requiresConfirmation': action.requiresConfirmation,
+            },
+          )
+          .toList();
+    }
+    return json;
   }
 }
 

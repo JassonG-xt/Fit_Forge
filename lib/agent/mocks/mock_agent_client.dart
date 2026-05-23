@@ -1,6 +1,12 @@
 import 'dart:math';
 
 import '../agent_client.dart';
+import '../feedback/feedback_follow_up_router.dart';
+import '../feedback/training_feedback_analyzer.dart';
+import '../intent/clarification_policy.dart';
+import '../intent/coach_intent.dart';
+import '../intent/coach_intent_router.dart';
+import '../intent/pending_clarification.dart';
 import '../models/agent_action.dart';
 import '../models/agent_context_snapshot.dart';
 import '../models/agent_intent.dart';
@@ -12,12 +18,24 @@ import '../models/agent_response.dart';
 /// 后端就绪前，用关键字识别用户意图并返回固定结构化 AgentAction。
 /// 这里的判断只覆盖几个核心 demo 场景，不是完整 NLU。
 class MockAgentClient implements AgentClient {
-  MockAgentClient({Duration delay = const Duration(milliseconds: 450)})
-    : _delay = delay,
-      _random = Random();
+  MockAgentClient({
+    Duration delay = const Duration(milliseconds: 450),
+    CoachIntentRouter intentRouter = const CoachIntentRouter(),
+    CoachClarificationPolicy clarificationPolicy =
+        const CoachClarificationPolicy(),
+    FeedbackFollowUpRouter feedbackFollowUpRouter =
+        const FeedbackFollowUpRouter(),
+  }) : _delay = delay,
+       _random = Random(),
+       _intentRouter = intentRouter,
+       _clarificationPolicy = clarificationPolicy,
+       _feedbackFollowUpRouter = feedbackFollowUpRouter;
 
   final Duration _delay;
   final Random _random;
+  final CoachIntentRouter _intentRouter;
+  final CoachClarificationPolicy _clarificationPolicy;
+  final FeedbackFollowUpRouter _feedbackFollowUpRouter;
 
   String _newId(String prefix) =>
       '${prefix}_${DateTime.now().millisecondsSinceEpoch}_${_random.nextInt(0xffff)}';
@@ -27,6 +45,7 @@ class MockAgentClient implements AgentClient {
     required String message,
     required AgentContextSnapshot context,
     required List<AgentMessage> history,
+    PendingClarification? pendingClarification,
   }) async {
     await Future<void>.delayed(_delay);
 
@@ -34,6 +53,43 @@ class MockAgentClient implements AgentClient {
 
     if (_isSafetyRisk(message)) {
       return _safetyResponse(message);
+    }
+
+    final pendingResponse = _resolvePendingClarification(
+      message,
+      context,
+      pendingClarification,
+    );
+    if (pendingResponse != null) {
+      return pendingResponse;
+    }
+
+    final feedbackFollowUp = _feedbackFollowUpRouter.route(
+      message: message,
+      context: context,
+      history: history,
+    );
+    final feedbackFollowUpResponse = _responseForFeedbackFollowUp(
+      message,
+      context,
+      feedbackFollowUp,
+    );
+    if (feedbackFollowUpResponse != null) {
+      return feedbackFollowUpResponse;
+    }
+
+    final candidate = _intentRouter.route(message);
+    final clarification = _clarificationPolicy.messageFor(candidate);
+    if (clarification != null && _shouldClarifyBeforeLegacyRouting(candidate)) {
+      return _clarificationResponse(clarification, confidence: candidate.score);
+    }
+    if (candidate.type == CoachIntentType.trainingFeedback ||
+        candidate.type == CoachIntentType.recoveryAdvice) {
+      return _weeklyReviewResponse(context, userMessage: message);
+    }
+    if (candidate.type == CoachIntentType.rescheduleWeek &&
+        candidate.slots.containsKey('availableWeekdays')) {
+      return _rescheduleResponse(message, context);
     }
 
     // generatePlan 优先于 compress：当用户在「生成计划」请求里同时给出
@@ -69,7 +125,7 @@ class MockAgentClient implements AgentClient {
     }
 
     if (_isWeeklyReviewIntent(lower) || _isRecoveryIntent(message)) {
-      return _weeklyReviewResponse(context);
+      return _weeklyReviewResponse(context, userMessage: message);
     }
 
     if (_looksLikeScheduleRequest(message)) {
@@ -81,6 +137,142 @@ class MockAgentClient implements AgentClient {
     }
 
     return _fallbackResponse();
+  }
+
+  bool _shouldClarifyBeforeLegacyRouting(IntentCandidate candidate) {
+    if (!candidate.hasMissingSlots) return false;
+    return switch (candidate.type) {
+      CoachIntentType.compressWorkout => true,
+      CoachIntentType.replaceExercise => candidate.missingSlots.contains(
+        'sourceExercise',
+      ),
+      CoachIntentType.rescheduleWeek ||
+      CoachIntentType.moveWorkoutSession => true,
+      _ => false,
+    };
+  }
+
+  AgentResponse? _resolvePendingClarification(
+    String message,
+    AgentContextSnapshot context,
+    PendingClarification? pending,
+  ) {
+    if (pending == null || pending.isExpired(DateTime.now())) return null;
+    return switch (pending.intent) {
+      CoachIntentType.compressWorkout => _resolveCompressPending(
+        message,
+        context,
+      ),
+      CoachIntentType.rescheduleWeek => _resolveSchedulePending(
+        message,
+        context,
+      ),
+      CoachIntentType.moveWorkoutSession => _resolveMovePending(
+        message,
+        context,
+      ),
+      CoachIntentType.replaceExercise => _resolveReplacePending(
+        message,
+        context,
+      ),
+      CoachIntentType.feedbackAdjustment => _resolveFeedbackAdjustmentPending(
+        message,
+        context,
+      ),
+      _ => null,
+    };
+  }
+
+  AgentResponse? _resolveCompressPending(
+    String message,
+    AgentContextSnapshot context,
+  ) {
+    if (!_hasExplicitTargetMinutes(message)) return null;
+    return _compressResponse('压缩训练到 $message', context);
+  }
+
+  AgentResponse? _resolveSchedulePending(
+    String message,
+    AgentContextSnapshot context,
+  ) {
+    if (_isMoveSessionIntent(message)) {
+      return _moveSessionResponse(message, context);
+    }
+    if (_isRescheduleIntent(message)) {
+      final response = _rescheduleResponse(message, context);
+      if (response.intent != AgentIntent.answerOnly) return response;
+    }
+    final weekdays = _extractWeekdaysFromMessage(message);
+    if (weekdays.isNotEmpty &&
+        ['只保留', '只练', '只能', '只有'].any(message.contains)) {
+      return _rescheduleResponse(message, context);
+    }
+    return null;
+  }
+
+  AgentResponse? _resolveMovePending(
+    String message,
+    AgentContextSnapshot context,
+  ) {
+    if (_isMoveSessionIntent(message)) {
+      return _moveSessionResponse(message, context);
+    }
+    final weekdays = _extractWeekdaysFromMessage(message);
+    if (weekdays.isNotEmpty) {
+      return _moveTodayWorkoutResponse(message, context, weekdays.last);
+    }
+    return null;
+  }
+
+  AgentResponse? _resolveReplacePending(
+    String message,
+    AgentContextSnapshot context,
+  ) {
+    if (!_isReplaceIntent(message)) return null;
+    return _replaceResponse(message, context);
+  }
+
+  AgentResponse? _resolveFeedbackAdjustmentPending(
+    String message,
+    AgentContextSnapshot context,
+  ) {
+    if (_hasExplicitTargetMinutes(message)) {
+      return _compressResponse('压缩训练到 $message', context);
+    }
+    final weekdays = _extractWeekdaysFromMessage(message);
+    if (weekdays.isNotEmpty &&
+        ['这周', '本周', '下周', '训练日'].any(message.contains)) {
+      return _rescheduleResponse(message, context);
+    }
+    if (weekdays.isNotEmpty) {
+      return _moveTodayWorkoutResponse(message, context, weekdays.last);
+    }
+    return null;
+  }
+
+  AgentResponse? _responseForFeedbackFollowUp(
+    String message,
+    AgentContextSnapshot context,
+    FeedbackFollowUpResult? result,
+  ) {
+    if (result == null) return null;
+    return switch (result.intent) {
+      CoachIntentType.compressWorkout =>
+        result.targetMinutes == null
+            ? _feedbackCompressClarificationResponse(context)
+            : _compressResponse('压缩训练到 ${result.targetMinutes} 分钟', context),
+      CoachIntentType.moveWorkoutSession =>
+        result.toDayOfWeek == null
+            ? _feedbackMoveClarificationResponse(context)
+            : _moveTodayWorkoutResponse(message, context, result.toDayOfWeek!),
+      CoachIntentType.rescheduleWeek =>
+        result.availableWeekdays.isEmpty
+            ? _feedbackRescheduleClarificationResponse()
+            : _rescheduleResponse(message, context),
+      CoachIntentType.feedbackAdjustment =>
+        _feedbackAdjustmentChoiceClarificationResponse(),
+      _ => null,
+    };
   }
 
   // ──── intent matchers ────
@@ -508,8 +700,8 @@ class MockAgentClient implements AgentClient {
     }
     return AgentResponse(
       message:
-          '可以。我会保留核心复合动作，减少辅助动作，'
-          '并适当缩短组间休息，把训练压缩到约 $targetMinutes 分钟。',
+          '可以，我会把今天训练压缩到约 $targetMinutes 分钟。'
+          '下方是计划修改建议，点击应用后才会写入。',
       intent: AgentIntent.compressWorkout,
       confidence: 0.9,
       actions: [
@@ -547,6 +739,74 @@ class MockAgentClient implements AgentClient {
       intent: AgentIntent.answerOnly,
       confidence: 0.7,
       actions: [],
+    );
+  }
+
+  AgentResponse _feedbackCompressClarificationResponse(
+    AgentContextSnapshot context,
+  ) {
+    if (context.todayWorkout == null) {
+      return const AgentResponse(
+        message: '今天没有可压缩的训练。你可以先休息、散步或做低强度活动，我不会直接修改你的计划。',
+        intent: AgentIntent.answerOnly,
+        confidence: 0.72,
+        actions: [],
+      );
+    }
+    return const AgentResponse(
+      message: '可以帮你把今天训练调轻一点。目标时长想控制在 20 分钟、30 分钟还是 45 分钟？',
+      intent: AgentIntent.answerOnly,
+      confidence: 0.78,
+      actions: [],
+    );
+  }
+
+  AgentResponse _feedbackMoveClarificationResponse(
+    AgentContextSnapshot context,
+  ) {
+    if (context.todayWorkout == null) {
+      return const AgentResponse(
+        message: '今天没有可移动的训练。你可以把今天作为恢复日，或做散步、拉伸这类低强度活动；我不会直接修改你的计划。',
+        intent: AgentIntent.answerOnly,
+        confidence: 0.72,
+        actions: [],
+      );
+    }
+    return const AgentResponse(
+      message: '可以把今天的训练移到另一天下。你想移到周几？目标日如果已有训练，应用时会被拒绝，不会自动合并。',
+      intent: AgentIntent.answerOnly,
+      confidence: 0.78,
+      actions: [],
+    );
+  }
+
+  AgentResponse _feedbackRescheduleClarificationResponse() {
+    return const AgentResponse(
+      message: '可以减少这周训练日。你想保留哪几天训练？例如周二、周四。',
+      intent: AgentIntent.answerOnly,
+      confidence: 0.78,
+      actions: [],
+    );
+  }
+
+  AgentResponse _feedbackAdjustmentChoiceClarificationResponse() {
+    return const AgentResponse(
+      message: '可以。你可以选择三种调整：压缩今天训练、把今天训练移到另一天下，或重新安排本周训练日。告诉我你想用哪一种。',
+      intent: AgentIntent.answerOnly,
+      confidence: 0.78,
+      actions: [],
+    );
+  }
+
+  AgentResponse _clarificationResponse(
+    String message, {
+    required double confidence,
+  }) {
+    return AgentResponse(
+      message: message,
+      intent: AgentIntent.answerOnly,
+      confidence: confidence,
+      actions: const [],
     );
   }
 
@@ -671,7 +931,7 @@ class MockAgentClient implements AgentClient {
     }
     final names = weekdays.map(_weekdayName).join('、');
     return AgentResponse(
-      message: '可以把本周训练安排到$names，其余日期设为休息。',
+      message: '可以把本周训练安排到$names，其余日期作为休息。点击应用后才会写入。',
       intent: AgentIntent.rescheduleWeek,
       confidence: 0.9,
       actions: [
@@ -716,7 +976,7 @@ class MockAgentClient implements AgentClient {
     return AgentResponse(
       message:
           '可以把 $fromName 的训练移到 $toName。'
-          '目标日如果已有训练会被拒绝，不会自动合并或交换。',
+          '目标日如果已有训练，应用时会被拒绝，不会自动合并或交换。',
       intent: AgentIntent.moveWorkoutSession,
       confidence: 0.85,
       actions: [
@@ -731,6 +991,43 @@ class MockAgentClient implements AgentClient {
             'fromDayOfWeek': pair.from,
             'toDayOfWeek': pair.to,
             'reason': ?reason,
+          },
+        ),
+      ],
+    );
+  }
+
+  AgentResponse _moveTodayWorkoutResponse(
+    String message,
+    AgentContextSnapshot context,
+    int toDayOfWeek,
+  ) {
+    final today = context.todayWorkout;
+    final fromDayOfWeek = today != null ? today['dayOfWeek'] as int? : null;
+    if (fromDayOfWeek == null) {
+      return _feedbackMoveClarificationResponse(context);
+    }
+
+    final fromName = _weekdayName(fromDayOfWeek);
+    final toName = _weekdayName(toDayOfWeek);
+    return AgentResponse(
+      message:
+          '可以把今天的训练移到$toName。'
+          '目标日如果已有训练，应用时会被拒绝，不会自动合并或交换。',
+      intent: AgentIntent.moveWorkoutSession,
+      confidence: 0.85,
+      actions: [
+        AgentAction(
+          id: _newId('move'),
+          type: AgentActionType.moveWorkoutSession,
+          title: '移动 $fromName 训练到$toName',
+          summary: '把 $fromName 的训练完整移到$toName，源日转为休息。',
+          requiresConfirmation: true,
+          sourceContextHash: context.planContextHash,
+          payload: {
+            'fromDayOfWeek': fromDayOfWeek,
+            'toDayOfWeek': toDayOfWeek,
+            'reason': '今天需要休息或降低训练压力',
           },
         ),
       ],
@@ -813,10 +1110,16 @@ class MockAgentClient implements AgentClient {
     return null;
   }
 
-  AgentResponse _weeklyReviewResponse(AgentContextSnapshot context) {
-    final insights = _buildWeeklyReviewInsights(context);
+  AgentResponse _weeklyReviewResponse(
+    AgentContextSnapshot context, {
+    String? userMessage,
+  }) {
+    final summary = const TrainingFeedbackAnalyzer().analyze(
+      context: context,
+      userMessage: userMessage,
+    );
     return AgentResponse(
-      message: insights.message,
+      message: summary.messageText,
       intent: AgentIntent.weeklyReview,
       confidence: 0.85,
       actions: [
@@ -824,142 +1127,13 @@ class MockAgentClient implements AgentClient {
           id: _newId('review'),
           type: AgentActionType.weeklyReview,
           title: '本周训练复盘',
-          summary: insights.summary,
+          summary: summary.summaryText,
           requiresConfirmation: false,
-          payload: insights.payload,
+          payload: summary.toPayload(),
         ),
       ],
     );
   }
-
-  /// Deterministic weekly review builder. Counts come from `recentSessions` and
-  /// `progressSummary`; focus areas come from `dayType` distribution; risk
-  /// notes from training-density / streak heuristics. No fabrication: when the
-  /// context has no completed sessions we say so explicitly.
-  _WeeklyReviewInsights _buildWeeklyReviewInsights(
-    AgentContextSnapshot context,
-  ) {
-    final progress = context.progressSummary;
-    final completedThisWeek = (progress['totalWorkoutsThisWeek'] as int?) ?? 0;
-    final streak = (progress['streakDays'] as int?) ?? 0;
-    final recentSessions = context.recentSessions;
-    final recent = recentSessions.length;
-    final weeklyFrequency = progress['weeklyFrequency'] as int?;
-    const suggestionFooter = '我不会直接修改你的计划；如果之后想调整今天或下周的训练，需要你明确说一句，并经过确认。';
-
-    if (recent == 0) {
-      return const _WeeklyReviewInsights(
-        message: '最近还没有完成的训练记录，先完成几次训练后我可以给出更具体的复盘和建议。',
-        summary: '暂无近期训练数据，无法做有意义的复盘。',
-        payload: {
-          'summary': '暂无近期训练数据。',
-          'completedSessions': 0,
-          'observations': [
-            '最近没有已完成的训练记录。',
-            '也没有睡眠、酸痛、主观疲劳等数据，所以不能判断你目前的真实恢复状态。',
-          ],
-          'nextWeekSuggestions': [
-            '目前缺少最近训练记录，恢复判断有限。先完成几次训练后可以给出更具体建议。',
-            '我不会直接修改你的计划；如果之后想调整今天或下周的训练，需要你明确说一句，并经过确认。',
-          ],
-        },
-      );
-    }
-
-    // Focus areas: workout-day-type distribution from recentSessions.
-    final dayTypeCounts = <String, int>{};
-    for (final s in recentSessions) {
-      final type = s['dayType'] as String?;
-      if (type == null || type == 'rest') continue;
-      dayTypeCounts[type] = (dayTypeCounts[type] ?? 0) + 1;
-    }
-    final focusAreas =
-        (dayTypeCounts.entries.toList()
-              ..sort((a, b) => b.value.compareTo(a.value)))
-            .take(3)
-            .map((e) => _dayTypeLabel(e.key))
-            .toList();
-
-    final observations = <String>[];
-    observations.add('近期已记录 $recent 次训练。');
-    if (focusAreas.isNotEmpty) {
-      observations.add('训练集中在：${focusAreas.join('、')}。');
-    }
-    if (streak >= 3) {
-      observations.add('已经连续训练 $streak 天。');
-    }
-
-    // Risk: training density vs profile target frequency.
-    final riskNotes = <String>[];
-    if (weeklyFrequency != null && completedThisWeek > weeklyFrequency) {
-      riskNotes.add(
-        '本周完成 $completedThisWeek 次，已经超过计划频率 $weeklyFrequency 次，注意恢复。',
-      );
-    }
-    if (streak >= 4) {
-      riskNotes.add('最近连续训练天数较高，注意安排恢复日。');
-    }
-
-    final nextWeekSuggestions = <String>[];
-    if (weeklyFrequency != null) {
-      if (completedThisWeek < weeklyFrequency) {
-        nextWeekSuggestions.add('下周尽量补足到每周 $weeklyFrequency 次训练。');
-      } else if (completedThisWeek == weeklyFrequency) {
-        nextWeekSuggestions.add('本周训练频率已经达标，接下来优先保证恢复和动作质量。');
-      } else {
-        nextWeekSuggestions.add('本周已经超过计划频率，下一次训练建议以恢复和技术动作为主，不再额外加大强度。');
-      }
-    } else {
-      nextWeekSuggestions.add('维持当前训练频率。');
-    }
-    if (focusAreas.isNotEmpty) {
-      nextWeekSuggestions.add('继续保证 ${focusAreas.first} 训练日的复合动作质量。');
-    }
-    if (streak >= 4) {
-      nextWeekSuggestions.add(
-        '今天可以优先休息或做低强度活动（如散步、动态拉伸）。如果仍想训练，建议降低强度、缩短时长，避免高强度腿部训练。',
-      );
-    }
-    if (riskNotes.isEmpty) {
-      nextWeekSuggestions.add('感觉疲劳时优先降低训练量，不要硬加重量。');
-    }
-    if (streak >= 4 ||
-        (weeklyFrequency != null && completedThisWeek >= weeklyFrequency)) {
-      nextWeekSuggestions.add(suggestionFooter);
-    }
-
-    final summary =
-        '近期 $recent 次训练，本周完成 $completedThisWeek 次。'
-        '${focusAreas.isEmpty ? '' : '训练集中在 ${focusAreas.join('、')}。'}';
-
-    return _WeeklyReviewInsights(
-      message:
-          '近期 $recent 次训练，本周完成 $completedThisWeek 次，连续 $streak 天。'
-          '${focusAreas.isEmpty ? '' : '训练集中在 ${focusAreas.join('、')}。'}'
-          '${nextWeekSuggestions.isNotEmpty ? '下周建议：${nextWeekSuggestions.first}' : ''}',
-      summary: summary,
-      payload: {
-        'summary': summary,
-        'completedSessions': completedThisWeek,
-        if (focusAreas.isNotEmpty) 'focusAreas': focusAreas,
-        if (observations.isNotEmpty) 'observations': observations,
-        if (nextWeekSuggestions.isNotEmpty)
-          'nextWeekSuggestions': nextWeekSuggestions,
-        if (riskNotes.isNotEmpty) 'riskNotes': riskNotes,
-      },
-    );
-  }
-
-  String _dayTypeLabel(String key) => switch (key) {
-    'push' => '推（胸 / 肩 / 三头）',
-    'pull' => '拉（背 / 二头）',
-    'legs' => '腿',
-    'upper' => '上肢',
-    'lower' => '下肢',
-    'fullBody' => '全身',
-    'cardio' => '有氧',
-    _ => key,
-  };
 
   AgentResponse _nutritionResponse() {
     return AgentResponse(
@@ -1008,18 +1182,4 @@ class MockAgentClient implements AgentClient {
     };
     return names[weekday] ?? '周$weekday';
   }
-}
-
-/// Internal carrier for [MockAgentClient._buildWeeklyReviewInsights] output.
-/// Keeps the response builder signature small.
-class _WeeklyReviewInsights {
-  const _WeeklyReviewInsights({
-    required this.message,
-    required this.summary,
-    required this.payload,
-  });
-
-  final String message;
-  final String summary;
-  final Map<String, dynamic> payload;
 }

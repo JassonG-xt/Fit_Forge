@@ -1,6 +1,7 @@
 import 'models/agent_context_snapshot.dart';
 import 'models/agent_message.dart';
 import 'models/agent_response.dart';
+import 'intent/pending_clarification.dart';
 
 /// Coach Agent 通信接口。
 ///
@@ -10,5 +11,6 @@ abstract class AgentClient {
     required String message,
     required AgentContextSnapshot context,
     required List<AgentMessage> history,
+    PendingClarification? pendingClarification,
   });
 }

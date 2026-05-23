@@ -222,9 +222,8 @@ def build_smoke_cases() -> list[SmokeCase]:
             case_id="freeform-replace-clarify-or-action",
             category="freeFormRouting",
             prompt=RAW_PROMPTS[9],
-            expected_intent="replaceExercise",
-            expected_action_type="replaceExercise",
-            require_mutation_confirmation=True,
+            expected_intent="answerOnly",
+            expect_no_mutation=True,
         ),
         SmokeCase(
             case_id="freeform-nutrition-protein",

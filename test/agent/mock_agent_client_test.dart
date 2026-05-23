@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fit_forge/agent/agent_context_builder.dart';
+import 'package:fit_forge/agent/intent/coach_intent.dart';
+import 'package:fit_forge/agent/intent/pending_clarification.dart';
 import 'package:fit_forge/agent/mocks/mock_agent_client.dart';
 import 'package:fit_forge/agent/models/agent_context_snapshot.dart';
 import 'package:fit_forge/agent/models/agent_intent.dart';
@@ -127,6 +129,31 @@ void main() {
     });
 
     test(
+      'pending compress clarification accepts bare target minutes',
+      () async {
+        const context = _compressContextWithDay;
+        final response = await client.sendMessage(
+          message: '30分钟',
+          context: context,
+          history: const [],
+          pendingClarification: PendingClarification(
+            intent: CoachIntentType.compressWorkout,
+            filledSlots: const {},
+            missingSlots: const ['targetDuration'],
+            createdAt: DateTime.now(),
+          ),
+        );
+
+        expect(response.intent, AgentIntent.compressWorkout);
+        final action = response.actions.single;
+        expect(action.type, AgentActionType.compressWorkout);
+        expect(action.requiresConfirmation, true);
+        expect(action.sourceContextHash, context.planContextHash);
+        expect(action.payload['targetMinutes'], 30);
+      },
+    );
+
+    test(
       'Phase G.1 free-form plan paraphrases route to generatePlan',
       () async {
         final context = await _contextWithActivePlan();
@@ -228,16 +255,22 @@ void main() {
     test('Phase G.1 vague compress asks for target duration', () async {
       final state = await primedAppStateWithProfile();
       final context = const AgentContextBuilder().build(state);
-      final response = await client.sendMessage(
-        message: '今天时间不多，简单练一下',
-        context: context,
-        history: const [],
-      );
+      final messages = ['今天有点忙', '今天时间不太够', '帮我短一点'];
 
-      expect(response.intent, AgentIntent.answerOnly);
-      expect(response.actions, isEmpty);
-      expect(response.message, contains('目标时长'));
-      expect(response.message, isNot(contains('我可以帮你生成训练计划')));
+      for (final message in messages) {
+        final response = await client.sendMessage(
+          message: message,
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.answerOnly, reason: message);
+        expect(response.actions, isEmpty, reason: message);
+        expect(response.message, contains('目标时长'), reason: message);
+        expect(response.message, contains('20 分钟'), reason: message);
+        expect(response.message, contains('30 分钟'), reason: message);
+        expect(response.message, isNot(contains('我可以帮你生成训练计划')));
+      }
     });
 
     test('recovery compress with minutes routes to compressWorkout', () async {
@@ -258,28 +291,46 @@ void main() {
     test('vague recovery question does not mutate', () async {
       final state = await primedAppStateWithProfile();
       final context = const AgentContextBuilder().build(state);
-      final response = await client.sendMessage(
-        message: '我有点累，要不要休息？',
-        context: context,
-        history: const [],
-      );
+      final messages = [
+        '我有点累，要不要休息？',
+        '最近有点累，是不是练多了',
+        '今天状态一般，还要继续练吗',
+        '腿还酸，今天怎么练',
+        '我最近训练安排有没有问题',
+        '最近训练怎么样',
+      ];
 
-      expect(
-        response.actions.map((a) => a.type),
-        isNot(
-          contains(
-            isIn({
-              AgentActionType.compressWorkout,
-              AgentActionType.replaceExercise,
-              AgentActionType.rescheduleWeek,
-              AgentActionType.generatePlan,
-            }),
+      for (final message in messages) {
+        final response = await client.sendMessage(
+          message: message,
+          context: context,
+          history: const [],
+        );
+
+        expect(
+          response.intent,
+          anyOf(AgentIntent.weeklyReview, AgentIntent.answerOnly),
+          reason: message,
+        );
+        expect(
+          response.actions.map((a) => a.type),
+          isNot(
+            contains(
+              isIn({
+                AgentActionType.compressWorkout,
+                AgentActionType.replaceExercise,
+                AgentActionType.rescheduleWeek,
+                AgentActionType.generatePlan,
+              }),
+            ),
           ),
-        ),
-      );
-      for (final action in response.actions) {
-        expect(action.requiresConfirmation, false);
-        expect(action.sourceContextHash, isNull);
+          reason: message,
+        );
+        expect(response.message, isNot(contains('我可以帮你生成训练计划')));
+        for (final action in response.actions) {
+          expect(action.requiresConfirmation, false, reason: message);
+          expect(action.sourceContextHash, isNull, reason: message);
+        }
       }
     });
 
@@ -480,7 +531,7 @@ void main() {
       final state = await primedAppStateWithProfile();
       final context = const AgentContextBuilder().build(state);
       final response = await client.sendMessage(
-        message: '今天天气怎么样',
+        message: '上海天气怎么样',
         context: context,
         history: const [],
       );
@@ -543,6 +594,9 @@ void main() {
         final context = const AgentContextBuilder().build(state);
         final messages = [
           '这个动作我做不了，能换一个吗',
+          '这个动作做不了',
+          '动作不舒服',
+          '没有这个器械',
           '我没有杠铃，今天动作怎么改',
           '今天器械不方便，帮我调整一下动作',
         ];
@@ -556,7 +610,8 @@ void main() {
 
           expect(response.intent, AgentIntent.answerOnly, reason: message);
           expect(response.actions, isEmpty, reason: message);
-          expect(response.message, contains('替换动作'), reason: message);
+          expect(response.message, contains('哪个动作'), reason: message);
+          expect(response.message, contains('可用的器械'), reason: message);
           expect(
             response.message,
             isNot(contains('我可以帮你生成训练计划')),
@@ -565,6 +620,27 @@ void main() {
         }
       },
     );
+
+    test('vague weekly schedule wording asks for schedule scope', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final messages = ['这周训练有点乱', '这周安排乱了', '这周练不了了'];
+
+      for (final message in messages) {
+        final response = await client.sendMessage(
+          message: message,
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.answerOnly, reason: message);
+        expect(response.actions, isEmpty, reason: message);
+        expect(response.message, contains('整周'), reason: message);
+        expect(response.message, contains('某一天'), reason: message);
+        expect(response.message, contains('移动'), reason: message);
+        expect(response.message, isNot(contains('我可以帮你生成训练计划')));
+      }
+    });
 
     test('Phase G.1 weekly availability paraphrases reschedule week', () async {
       final context = await _contextWithActivePlan();
@@ -774,7 +850,7 @@ void main() {
       );
       expect(
         (action.payload['nextWeekSuggestions'] as List).join('\n'),
-        contains('避免高强度腿部'),
+        contains('休息'),
       );
       expect(
         (action.payload['nextWeekSuggestions'] as List).join('\n'),
@@ -811,13 +887,75 @@ void main() {
       expect((payload['riskNotes'] as List).join('\n'), contains('超过计划频率'));
       expect(
         (payload['nextWeekSuggestions'] as List).join('\n'),
-        contains('恢复和技术动作'),
+        contains('恢复训练'),
       );
       expect(
         (payload['nextWeekSuggestions'] as List).join('\n'),
         contains('不会直接修改你的计划'),
       );
     });
+
+    test(
+      'sore legs with lower-body focus stays read-only and recovery-biased',
+      () async {
+        final state = await primedAppStateWithProfile(
+          profile: UserProfile(weeklyFrequency: 4),
+        );
+        final now = DateTime.now();
+        final dayTypes = [
+          WorkoutDayType.legs,
+          WorkoutDayType.lower,
+          WorkoutDayType.legs,
+          WorkoutDayType.push,
+        ];
+        for (var i = 0; i < dayTypes.length; i++) {
+          state.saveSession(
+            WorkoutSession(
+              id: 'leg_sore_$i',
+              date: now.subtract(Duration(minutes: i)),
+              dayType: dayTypes[i],
+              durationMinutes: 45,
+              isCompleted: true,
+            ),
+          );
+        }
+
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '腿还酸，今天怎么练',
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.weeklyReview);
+        expect(response.actions.single.type, AgentActionType.weeklyReview);
+        expect(response.actions.single.requiresConfirmation, false);
+        expect(
+          response.actions.map((a) => a.type),
+          isNot(
+            contains(
+              isIn({
+                AgentActionType.compressWorkout,
+                AgentActionType.replaceExercise,
+                AgentActionType.rescheduleWeek,
+                AgentActionType.moveWorkoutSession,
+                AgentActionType.generatePlan,
+              }),
+            ),
+          ),
+        );
+        final payload = response.actions.single.payload;
+        expect((payload['focusAreas'] as List).join('\n'), contains('腿'));
+        expect(
+          (payload['nextWeekSuggestions'] as List).join('\n'),
+          contains('不建议继续高强度腿部训练'),
+        );
+        expect(
+          (payload['nextWeekSuggestions'] as List).join('\n'),
+          contains('上肢训练'),
+        );
+      },
+    );
 
     test(
       'weekly review request with chest pain routes to safety, not review',

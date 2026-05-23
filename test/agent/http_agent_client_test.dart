@@ -8,6 +8,7 @@ import 'package:fit_forge/agent/agent_context_builder.dart';
 import 'package:fit_forge/agent/http_agent_client.dart';
 import 'package:fit_forge/agent/models/agent_action.dart';
 import 'package:fit_forge/agent/models/agent_intent.dart';
+import 'package:fit_forge/agent/models/agent_message.dart';
 
 import '../helpers/app_state_fixtures.dart';
 
@@ -78,6 +79,82 @@ void main() {
         expect(response.actions.first.payload['availableWeekdays'], [2, 4, 7]);
       },
     );
+
+    test('serializes assistant history actions as minimal metadata', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+
+      late Map<String, dynamic> capturedBody;
+      final mockHttp = MockClient((http.Request request) async {
+        capturedBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({
+            'message': 'ok',
+            'intent': 'answerOnly',
+            'confidence': 0.5,
+            'actions': <Map<String, dynamic>>[],
+            'safety': {
+              'hasMedicalConcern': false,
+              'shouldStopWorkout': false,
+              'disclaimer': 'no medical advice',
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final client = HttpAgentClient(
+        baseUrl: 'http://example.com',
+        httpClient: mockHttp,
+      );
+
+      await client.sendMessage(
+        message: '那今天轻一点',
+        context: context,
+        history: [
+          AgentMessage(
+            id: 'user-1',
+            role: AgentMessageRole.user,
+            content: '最近训练怎么样',
+            createdAt: DateTime(2026, 1, 1, 10),
+          ),
+          AgentMessage(
+            id: 'assistant-1',
+            role: AgentMessageRole.assistant,
+            content: '本周训练复盘',
+            createdAt: DateTime(2026, 1, 1, 10, 1),
+            actions: [
+              AgentAction(
+                id: 'review-1',
+                type: AgentActionType.weeklyReview,
+                title: '本周训练复盘',
+                summary: '本周完成 3 次训练。',
+                requiresConfirmation: false,
+                payload: const {'summary': '本周完成 3 次训练。'},
+                sourceContextHash: 'should_not_be_sent',
+              ),
+            ],
+          ),
+        ],
+      );
+
+      final history = capturedBody['history'] as List<dynamic>;
+      expect(history.first, isNot(contains('actions')));
+
+      final assistant = history.last as Map<String, dynamic>;
+      final actions = assistant['actions'] as List<dynamic>;
+      expect(actions, hasLength(1));
+      expect(actions.single, {
+        'id': 'review-1',
+        'type': 'weeklyReview',
+        'requiresConfirmation': false,
+      });
+      expect(actions.single, isNot(contains('payload')));
+      expect(actions.single, isNot(contains('sourceContextHash')));
+      expect(actions.single, isNot(contains('title')));
+      expect(actions.single, isNot(contains('summary')));
+    });
 
     test('non-2xx status throws HttpAgentException with status code', () async {
       final state = await primedAppStateWithProfile();
