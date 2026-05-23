@@ -93,7 +93,8 @@ void main() {
           appState: state,
         );
         expect(result, isA<PreviewFailure>());
-        expect((result as PreviewFailure).message, contains('1-7'));
+        expect((result as PreviewFailure).message, contains('周一到周日'));
+        expect(result.message, isNot(contains('availableWeekdays')));
       });
     });
 
@@ -239,7 +240,8 @@ void main() {
           appState: state,
         );
         expect(result, isA<PreviewFailure>());
-        expect((result as PreviewFailure).message, contains('dayOfWeek'));
+        expect((result as PreviewFailure).message, contains('压缩哪一天'));
+        expect(result.message, isNot(contains('dayOfWeek')));
       });
 
       test('returns PreviewFailure for double targetMinutes', () async {
@@ -412,7 +414,9 @@ void main() {
           appState: state,
         );
         expect(result, isA<PreviewFailure>());
-        expect((result as PreviewFailure).message, contains('必须不同'));
+        expect((result as PreviewFailure).message, contains('不能相同'));
+        expect(result.message, isNot(contains('fromDayOfWeek')));
+        expect(result.message, isNot(contains('toDayOfWeek')));
       });
 
       test('returns PreviewFailure for missing fromDayOfWeek', () async {
@@ -424,7 +428,8 @@ void main() {
           appState: state,
         );
         expect(result, isA<PreviewFailure>());
-        expect((result as PreviewFailure).message, contains('fromDayOfWeek'));
+        expect((result as PreviewFailure).message, contains('移动哪一天'));
+        expect(result.message, isNot(contains('fromDayOfWeek')));
       });
     });
   });

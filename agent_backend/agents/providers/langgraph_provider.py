@@ -170,7 +170,7 @@ def response_contract_validation_node(
             "validator_contract_violation",
         )
         record_trace_fallback_reason("validator_contract_violation")
-        return {"response": _langgraph_failure_response()}
+        return {"response": _langgraph_validator_failure_response()}
     if not _is_safe_graph_response(response, request):
         record_trace_decision(
             "response_contract_validation_node",
@@ -178,7 +178,7 @@ def response_contract_validation_node(
             "validator_contract_violation",
         )
         record_trace_fallback_reason("validator_contract_violation")
-        return {"response": _langgraph_failure_response()}
+        return {"response": _langgraph_validator_failure_response()}
     record_trace_decision("response_contract_validation_node", "passed")
     return {"response": response}
 
@@ -454,8 +454,7 @@ def _safety_response(message: str) -> AgentResponse:
     assessment = assess_message_safety(message)
     return AgentResponse(
         message=(
-            "I do not recommend continuing training with these symptoms. "
-            "Please stop the workout and seek professional medical help."
+            "不建议在这些症状下继续训练。请先停止训练，并尽快寻求专业医疗帮助。"
         ),
         intent="safetyResponse",
         confidence=0.95,
@@ -463,11 +462,8 @@ def _safety_response(message: str) -> AgentResponse:
             AgentAction(
                 id="safety_langgraph",
                 type="safetyResponse",
-                title="Potential health risk detected",
-                summary=(
-                    "Stop training and seek professional medical help. "
-                    "FitForge does not provide medical diagnosis."
-                ),
+                title="检测到潜在健康风险",
+                summary="请停止训练并寻求专业帮助。FitForge 不提供医疗诊断。",
                 requiresConfirmation=False,
                 riskLevel="high",
                 payload={
@@ -487,8 +483,8 @@ def _safety_response(message: str) -> AgentResponse:
 def _langgraph_unavailable_response() -> AgentResponse:
     response = AgentResponse(
         message=(
-            "Experimental LangGraph orchestration is unavailable in "
-            "this backend environment. The request was not executed."
+            "当前智能编排暂时不可用。我仍可以用基础教练模式帮你生成训练计划、"
+            "调整训练日、替换动作、压缩训练或给出营养建议。"
         ),
         intent="answerOnly",
         confidence=0.0,
@@ -501,8 +497,22 @@ def _langgraph_unavailable_response() -> AgentResponse:
 def _langgraph_failure_response() -> AgentResponse:
     response = AgentResponse(
         message=(
-            "Experimental LangGraph orchestration could not complete safely. "
-            "Please retry with the native orchestrator."
+            "这次教练编排没有成功完成。你可以换一种说法，或明确告诉我想生成计划、"
+            "压缩训练、替换动作还是调整训练日。"
+        ),
+        intent="answerOnly",
+        confidence=0.0,
+        actions=[],
+    )
+    record_trace_response(response)
+    return response
+
+
+def _langgraph_validator_failure_response() -> AgentResponse:
+    response = AgentResponse(
+        message=(
+            "这次建议没有通过安全校验，所以我不会直接给出可应用修改。"
+            "请重新说明你的目标、训练日期或限制条件。"
         ),
         intent="answerOnly",
         confidence=0.0,
@@ -515,9 +525,8 @@ def _langgraph_failure_response() -> AgentResponse:
 def _langgraph_fallback_response() -> AgentResponse:
     response = AgentResponse(
         message=(
-            "I can help with workout plans, schedule changes, exercise swaps, "
-            "compressing today's workout, or nutrition guidance. Tell me your goal, "
-            "training frequency, and today's constraints."
+            "我可以帮你生成训练计划、调整训练日、替换动作、压缩今日训练，"
+            "或给出营养建议。请告诉我你的目标、训练频率和今天的限制。"
         ),
         intent="answerOnly",
         confidence=0.5,

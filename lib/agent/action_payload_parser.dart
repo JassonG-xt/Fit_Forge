@@ -93,14 +93,14 @@ class WeeklyReviewPayload {
 /// 不接受 double / num 的 toInt() 截断，不接受 String。
 PayloadParseResult<int> parseDayOfWeek(dynamic raw) {
   if (raw == null) {
-    return const PayloadParseFailure('dayOfWeek 缺失。');
+    return const PayloadParseFailure('请明确要调整哪一天的训练。');
   }
   if (raw is! int) {
     // 拒绝 double、String、num 等非 int 类型
-    return const PayloadParseFailure('dayOfWeek 必须是整数（1-7），不接受小数或文本。');
+    return const PayloadParseFailure('训练日期格式不正确，请使用周一到周日中的一天。');
   }
   if (raw < 1 || raw > 7) {
-    return PayloadParseFailure('dayOfWeek 必须在 1-7 之间，当前值为 $raw。');
+    return const PayloadParseFailure('训练日期必须在周一到周日之间。');
   }
   return PayloadParseSuccess(raw);
 }
@@ -109,19 +109,19 @@ PayloadParseResult<int> parseDayOfWeek(dynamic raw) {
 /// 不静默丢弃非法元素。
 PayloadParseResult<List<int>> parseAvailableWeekdays(dynamic raw) {
   if (raw is! List) {
-    return const PayloadParseFailure('availableWeekdays 字段缺失或格式不正确。');
+    return const PayloadParseFailure('请提供可训练的星期几，例如周二、周四。');
   }
   if (raw.isEmpty) {
-    return const PayloadParseFailure('训练日期不能为空。');
+    return const PayloadParseFailure('训练日期不能为空，请提供可训练的星期几，例如周二、周四。');
   }
   // 逐个检查元素类型，不静默丢弃
   for (var i = 0; i < raw.length; i++) {
     final element = raw[i];
     if (element is! int) {
-      return PayloadParseFailure('训练日期列表中第 ${i + 1} 个值不是整数：$element');
+      return const PayloadParseFailure('训练日期格式不正确，请使用周一到周日。');
     }
     if (element < 1 || element > 7) {
-      return PayloadParseFailure('训练日期必须在 1-7 之间，第 ${i + 1} 个值为 $element。');
+      return const PayloadParseFailure('训练日期必须在周一到周日之间。');
     }
   }
   final weekdays = List<int>.from(raw);
@@ -142,12 +142,12 @@ PayloadParseResult<ReplaceExercisePayload> parseReplaceExercisePayload(
 
   final fromId = payload['fromExerciseId'];
   if (fromId is! String || fromId.isEmpty) {
-    return const PayloadParseFailure('fromExerciseId 缺失。');
+    return const PayloadParseFailure('请明确要替换的原动作。');
   }
 
   final toId = payload['toExerciseId'];
   if (toId is! String || toId.isEmpty) {
-    return const PayloadParseFailure('toExerciseId 缺失。');
+    return const PayloadParseFailure('请明确替换后的动作。');
   }
 
   if (fromId == toId) {
@@ -170,7 +170,7 @@ PayloadParseResult<CompressWorkoutPayload> parseCompressWorkoutPayload(
 ) {
   final dayOfWeekRaw = payload['dayOfWeek'];
   if (dayOfWeekRaw == null) {
-    return const PayloadParseFailure('dayOfWeek 缺失，请明确指定要压缩哪天的训练。');
+    return const PayloadParseFailure('请明确要压缩哪一天的训练，例如“压缩周三训练到20分钟”。');
   }
   final dayResult = parseDayOfWeek(dayOfWeekRaw);
   if (dayResult is PayloadParseFailure) {
@@ -179,13 +179,13 @@ PayloadParseResult<CompressWorkoutPayload> parseCompressWorkoutPayload(
 
   final targetMinutesRaw = payload['targetMinutes'];
   if (targetMinutesRaw == null) {
-    return const PayloadParseFailure('targetMinutes 缺失。');
+    return const PayloadParseFailure('请明确目标训练时长，例如 20 分钟或 30 分钟。');
   }
   if (targetMinutesRaw is! int) {
-    return const PayloadParseFailure('targetMinutes 必须是正整数，不接受小数或文本。');
+    return const PayloadParseFailure('训练时长格式不正确，请使用整数分钟数。');
   }
   if (targetMinutesRaw <= 0) {
-    return PayloadParseFailure('targetMinutes 必须为正数，当前值为 $targetMinutesRaw。');
+    return const PayloadParseFailure('训练时长必须大于 0 分钟。');
   }
 
   return PayloadParseSuccess(
@@ -222,10 +222,10 @@ PayloadParseResult<GeneratePlanPayload> parseGeneratePlanPayload(
       payload['targetMinutes'] != null) {
     final raw = payload['targetMinutes'];
     if (raw is! int) {
-      return const PayloadParseFailure('targetMinutes 必须是正整数，不接受小数或文本。');
+      return const PayloadParseFailure('训练时长格式不正确，请使用整数分钟数。');
     }
     if (raw < 5 || raw > 180) {
-      return PayloadParseFailure('targetMinutes 必须在 5-180 之间，当前值为 $raw。');
+      return const PayloadParseFailure('训练时长需要在 5 到 180 分钟之间。');
     }
     minutes = raw;
   }
@@ -366,28 +366,28 @@ PayloadParseResult<MoveWorkoutSessionPayload> parseMoveWorkoutSessionPayload(
 ) {
   final fromRaw = payload['fromDayOfWeek'];
   if (fromRaw == null) {
-    return const PayloadParseFailure('fromDayOfWeek 缺失。');
+    return const PayloadParseFailure('请明确要移动哪一天的训练。');
   }
   if (fromRaw is! int) {
-    return const PayloadParseFailure('fromDayOfWeek 必须是整数（1-7），不接受小数或文本。');
+    return const PayloadParseFailure('训练日期格式不正确，请使用周一到周日中的一天。');
   }
   if (fromRaw < 1 || fromRaw > 7) {
-    return PayloadParseFailure('fromDayOfWeek 必须在 1-7 之间，当前值为 $fromRaw。');
+    return const PayloadParseFailure('训练日期必须在周一到周日之间。');
   }
 
   final toRaw = payload['toDayOfWeek'];
   if (toRaw == null) {
-    return const PayloadParseFailure('toDayOfWeek 缺失。');
+    return const PayloadParseFailure('请明确训练要移动到哪一天。');
   }
   if (toRaw is! int) {
-    return const PayloadParseFailure('toDayOfWeek 必须是整数（1-7），不接受小数或文本。');
+    return const PayloadParseFailure('训练日期格式不正确，请使用周一到周日中的一天。');
   }
   if (toRaw < 1 || toRaw > 7) {
-    return PayloadParseFailure('toDayOfWeek 必须在 1-7 之间，当前值为 $toRaw。');
+    return const PayloadParseFailure('训练日期必须在周一到周日之间。');
   }
 
   if (fromRaw == toRaw) {
-    return const PayloadParseFailure('fromDayOfWeek 与 toDayOfWeek 必须不同。');
+    return const PayloadParseFailure('移动前后的训练日期不能相同。');
   }
 
   String? reason;

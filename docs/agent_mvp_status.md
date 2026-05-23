@@ -52,6 +52,8 @@
 
 > Phase G.3 backend payload guard: backend native compress routing now clarifies instead of emitting malformed `compressWorkout` actions when `todayWorkout.dayOfWeek` is missing or target minutes fall outside 5-180. Optional LangGraph response validation now checks mutation payload schema before returning final responses. This aligns backend behavior with Flutter parser strictness without changing Flutter UI, action types, confirmation, `sourceContextHash`, native default routing, or real-LLM behavior.
 
+> Phase H.2 copy polish: user-facing parser / executor / LangGraph fallback messages are localized and less technical, so invalid suggestions explain what the user should clarify without exposing internal payload field names. Validation strictness, confirmation, `sourceContextHash` checks, action schema, routing, and graph wiring are unchanged.
+
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
 ### 历史稳定点

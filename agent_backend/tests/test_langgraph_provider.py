@@ -182,8 +182,10 @@ def test_langgraph_unavailable_returns_safe_answer_only(
     assert isinstance(response, AgentResponse)
     assert response.intent in {"answerOnly", "weeklyReview"}
     assert all(action.type not in MUTATION_ACTION_TYPES for action in response.actions)
-    assert "LangGraph" in response.message
-    assert "unavailable" in response.message
+    assert "智能编排暂时不可用" in response.message
+    assert "基础教练模式" in response.message
+    assert "LangGraph" not in response.message
+    assert "unavailable" not in response.message
 
 
 def test_langgraph_builds_named_safe_node_sequence(
@@ -536,6 +538,9 @@ def test_langgraph_graph_failure_returns_safe_fallback(
 
     assert response.intent == "answerOnly"
     assert response.actions == []
+    assert "教练编排没有成功完成" in response.message
+    assert "graph failed" not in response.message
+    assert "Graph" not in response.message
 
 
 def test_langgraph_native_node_failure_returns_safe_fallback(
@@ -553,6 +558,8 @@ def test_langgraph_native_node_failure_returns_safe_fallback(
 
     assert response.intent == "answerOnly"
     assert response.actions == []
+    assert "教练编排没有成功完成" in response.message
+    assert "native provider failed" not in response.message
 
 
 def test_langgraph_malformed_response_state_returns_safe_fallback() -> None:
@@ -562,6 +569,9 @@ def test_langgraph_malformed_response_state_returns_safe_fallback() -> None:
 
     assert result["response"].intent == "answerOnly"
     assert result["response"].actions == []
+    assert "安全校验" in result["response"].message
+    assert "payload" not in result["response"].message
+    assert "sourceContextHash" not in result["response"].message
 
 
 @pytest.mark.parametrize(
@@ -618,6 +628,9 @@ def test_langgraph_response_contract_validation_fail_closed(
 
     assert result["response"].intent == "answerOnly"
     assert result["response"].actions == []
+    assert "安全校验" in result["response"].message
+    assert "payload" not in result["response"].message
+    assert "sourceContextHash" not in result["response"].message
 
 
 def test_langgraph_response_contract_validation_rejects_hash_mismatch() -> None:
@@ -643,6 +656,9 @@ def test_langgraph_response_contract_validation_rejects_hash_mismatch() -> None:
 
     assert result["response"].intent == "answerOnly"
     assert result["response"].actions == []
+    assert "安全校验" in result["response"].message
+    assert "payload" not in result["response"].message
+    assert "sourceContextHash" not in result["response"].message
 
 
 def test_langgraph_response_contract_validation_rejects_missing_hash() -> None:
@@ -667,6 +683,9 @@ def test_langgraph_response_contract_validation_rejects_missing_hash() -> None:
 
     assert result["response"].intent == "answerOnly"
     assert result["response"].actions == []
+    assert "安全校验" in result["response"].message
+    assert "payload" not in result["response"].message
+    assert "sourceContextHash" not in result["response"].message
 
 
 @pytest.mark.parametrize(
@@ -707,6 +726,9 @@ def test_langgraph_response_contract_validation_rejects_malformed_payloads(
 
     assert result["response"].intent == "answerOnly"
     assert result["response"].actions == []
+    assert "安全校验" in result["response"].message
+    assert "payload" not in result["response"].message
+    assert "sourceContextHash" not in result["response"].message
 
 
 def test_langgraph_response_contract_validation_records_payload_fail_closed_trace(

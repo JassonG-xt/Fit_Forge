@@ -144,7 +144,8 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('dayOfWeek'), findsOneWidget);
+    expect(find.textContaining('请明确要压缩哪一天的训练'), findsOneWidget);
+    expect(find.textContaining('dayOfWeek'), findsNothing);
     expect(find.text('应用修改'), findsNothing);
     expect(find.text('无法应用'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);

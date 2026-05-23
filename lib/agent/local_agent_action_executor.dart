@@ -73,7 +73,7 @@ class LocalAgentActionExecutor {
   AgentActionResult? _validateMutationBoundary(AgentAction action) {
     if (!_isMutation(action.type)) return null;
     if (!action.requiresConfirmation) {
-      return AgentActionResult.failure('该修改建议缺少用户确认要求，已拒绝执行。');
+      return AgentActionResult.failure('请先确认该修改后再应用。');
     }
 
     final plan = appState.activePlan;
@@ -81,12 +81,12 @@ class LocalAgentActionExecutor {
 
     final expected = action.sourceContextHash;
     if (expected == null || expected.isEmpty) {
-      return AgentActionResult.failure('修改建议缺少训练计划校验信息，请重新让教练生成建议。');
+      return AgentActionResult.failure('当前训练计划已变化，请重新让教练生成建议后再应用。');
     }
 
     final current = computePlanContextHash(plan);
     if (current != expected) {
-      return AgentActionResult.failure('训练计划已经发生变化，请重新让教练生成建议。');
+      return AgentActionResult.failure('当前训练计划已变化，请重新让教练生成建议后再应用。');
     }
     return null;
   }
@@ -99,7 +99,7 @@ class LocalAgentActionExecutor {
     if (plan == null) return null; // plan 消失 → _requireActivePlan 会拦
     final current = computePlanContextHash(plan);
     if (current != expected) {
-      return AgentActionResult.failure('训练计划已经发生变化，请重新让教练生成建议。');
+      return AgentActionResult.failure('当前训练计划已变化，请重新让教练生成建议后再应用。');
     }
     return null;
   }
@@ -239,7 +239,7 @@ class LocalAgentActionExecutor {
         .where((e) => e.id == payload.toExerciseId)
         .firstOrNull;
     if (target == null) {
-      return AgentActionResult.failure('替代动作 ${payload.toExerciseId} 不在动作库中。');
+      return AgentActionResult.failure('替换后的动作不在动作库中，暂时无法应用。');
     }
 
     final newPlan = replaceExerciseInPlan(

@@ -73,7 +73,8 @@ void main() {
         }, sourceContextHash: hash),
       );
       expect(result.success, false);
-      expect(result.message, contains('1-7'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('availableWeekdays')));
     });
 
     test('rescheduleWeek empty list rejected', () async {
@@ -140,6 +141,8 @@ void main() {
       );
       expect(result.success, false);
       expect(result.message, contains('不在动作库'));
+      expect(result.message, isNot(contains('definitely_not_in_library')));
+      expect(result.message, isNot(contains('toExerciseId')));
     });
 
     test('replaceExercise rejects fromId == toId', () async {
@@ -243,6 +246,8 @@ void main() {
         }, sourceContextHash: hash),
       );
       expect(result.success, false);
+      expect(result.message, contains('大于 0 分钟'));
+      expect(result.message, isNot(contains('targetMinutes')));
     });
 
     test('read-only types return noop without modifying state', () async {
@@ -301,6 +306,8 @@ void main() {
         );
 
         expect(result.success, false);
+        expect(result.message, contains('重新让教练生成建议'));
+        expect(result.message, isNot(contains('sourceContextHash')));
         expect(state.activePlan!.toJson(), before);
       },
     );
@@ -319,6 +326,8 @@ void main() {
       );
 
       expect(result.success, false);
+      expect(result.message, contains('当前训练计划已变化'));
+      expect(result.message, isNot(contains('sourceContextHash')));
       expect(state.activePlan!.toJson(), before);
     });
 
@@ -439,7 +448,8 @@ void main() {
         }),
       );
       expect(result.success, false);
-      expect(result.message, contains('1-7'));
+      expect(result.message, contains('周一到周日'));
+      expect(result.message, isNot(contains('availableWeekdays')));
       expect(state.activePlan, isNull);
     });
 
@@ -451,7 +461,8 @@ void main() {
         makeAction(AgentActionType.generatePlan, const {'targetMinutes': 4}),
       );
       expect(result.success, false);
-      expect(result.message, contains('5-180'));
+      expect(result.message, contains('5 到 180 分钟'));
+      expect(result.message, isNot(contains('targetMinutes')));
       expect(state.activePlan, isNull);
     });
 
@@ -611,6 +622,7 @@ void main() {
         );
 
         expect(result.success, false);
+        expect(result.message, contains('请先确认该修改后再应用'));
         expect(state.activePlan, same(beforePlan));
       },
     );
@@ -631,6 +643,7 @@ void main() {
         );
 
         expect(result.success, false);
+        expect(result.message, isNot(contains('sourceContextHash')));
         expect(state.activePlan, same(beforePlan));
       },
     );
@@ -653,6 +666,7 @@ void main() {
         );
 
         expect(result.success, false);
+        expect(result.message, isNot(contains('sourceContextHash')));
         expect(state.activePlan!.toJson(), beforeJson);
       },
     );
@@ -674,7 +688,9 @@ void main() {
         );
 
         expect(result.success, false);
-        expect(result.message, contains('必须不同'));
+        expect(result.message, contains('不能相同'));
+        expect(result.message, isNot(contains('fromDayOfWeek')));
+        expect(result.message, isNot(contains('toDayOfWeek')));
         expect(state.activePlan, same(beforePlan));
       },
     );
