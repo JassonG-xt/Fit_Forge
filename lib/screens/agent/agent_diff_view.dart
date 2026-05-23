@@ -22,16 +22,19 @@ class AgentDiffView extends StatelessWidget {
     super.key,
     required this.action,
     required this.appState,
+    this.preview,
   });
 
   final AgentAction action;
   final AppState appState;
+  final ActionPreview? preview;
 
   static const _previewer = AgentActionPreviewer();
 
   @override
   Widget build(BuildContext context) {
-    final preview = _previewer.preview(action: action, appState: appState);
+    final preview =
+        this.preview ?? _previewer.preview(action: action, appState: appState);
     final inner = _buildFromPreview(preview);
     if (inner == null) return const SizedBox.shrink();
     return Padding(

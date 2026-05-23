@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../agent/action_preview.dart';
 import '../../agent/models/agent_action.dart';
 import '../../services/app_state.dart';
 import '../../theme/app_colors.dart';
@@ -47,6 +48,14 @@ class AgentActionCard extends StatelessWidget {
     final visuals = _ActionVisuals.forType(action.type);
     final willMutate = action.requiresConfirmation;
     final accent = isResolved ? AppColors.textTertiary : visuals.accent;
+    final appState = Provider.of<AppState>(context, listen: false);
+    final preview = willMutate
+        ? const AgentActionPreviewer().preview(
+            action: action,
+            appState: appState,
+          )
+        : null;
+    final canConfirm = !isResolved && preview is! PreviewFailure;
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -95,10 +104,8 @@ class AgentActionCard extends StatelessWidget {
                       if (willMutate && !isResolved)
                         AgentDiffView(
                           action: action,
-                          appState: Provider.of<AppState>(
-                            context,
-                            listen: false,
-                          ),
+                          appState: appState,
+                          preview: preview,
                         ),
                       if (action.type == AgentActionType.weeklyReview)
                         AgentWeeklyReviewPanel(action: action),
@@ -106,6 +113,7 @@ class AgentActionCard extends StatelessWidget {
                         const SizedBox(height: AppSpacing.md),
                         _ConfirmationFooter(
                           isResolved: isResolved,
+                          canConfirm: canConfirm,
                           onConfirm: onConfirm,
                           onCancel: onCancel,
                         ),
@@ -303,11 +311,13 @@ class _Badge extends StatelessWidget {
 class _ConfirmationFooter extends StatelessWidget {
   const _ConfirmationFooter({
     required this.isResolved,
+    required this.canConfirm,
     required this.onConfirm,
     required this.onCancel,
   });
 
   final bool isResolved;
+  final bool canConfirm;
   final VoidCallback? onConfirm;
   final VoidCallback? onCancel;
 
@@ -317,9 +327,17 @@ class _ConfirmationFooter extends StatelessWidget {
       children: [
         Expanded(
           child: GlowButton(
-            label: isResolved ? '已处理' : '应用修改',
-            icon: isResolved ? Icons.check_rounded : Icons.bolt_rounded,
-            onPressed: isResolved ? null : onConfirm,
+            label: isResolved
+                ? '已处理'
+                : canConfirm
+                ? '应用修改'
+                : '无法应用',
+            icon: isResolved
+                ? Icons.check_rounded
+                : canConfirm
+                ? Icons.bolt_rounded
+                : Icons.block_rounded,
+            onPressed: isResolved || !canConfirm ? null : onConfirm,
           ),
         ),
         const SizedBox(width: AppSpacing.sm),
