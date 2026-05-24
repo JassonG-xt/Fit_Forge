@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/models.dart';
 import '../engines/plan_engine.dart';
+import 'achievement_progress_service.dart';
 import 'app_clock.dart';
 import 'app_state_import_export_service.dart';
 import 'app_state_import_preview.dart';
@@ -18,8 +19,11 @@ class AppState extends ChangeNotifier {
   AppState({
     AppStateStore store = const AppStateStore(),
     AppClock clock = const SystemAppClock(),
+    AchievementProgressService achievementProgressService =
+        const AchievementProgressService(),
   }) : _store = store,
        _clock = clock,
+       _achievementProgressService = achievementProgressService,
        _importExportService = AppStateImportExportService(clock: clock);
 
   static const int currentExportVersion = AppStateSnapshot.currentVersion;
@@ -28,6 +32,7 @@ class AppState extends ChangeNotifier {
 
   final AppStateStore _store;
   final AppClock _clock;
+  final AchievementProgressService _achievementProgressService;
   final AppStateImportExportService _importExportService;
 
   // ──── 状态 ────
@@ -210,11 +215,14 @@ class AppState extends ChangeNotifier {
   void saveSession(WorkoutSession session) {
     _sessions.add(session);
     _invalidateCompletedCache();
-    // Snapshot PR cache before update to detect new PRs
-    final prSnapshot = Map<String, double>.from(_prCache);
-    _updatePrCache(session);
-    final newPRCount = _countNewPRs(session, prSnapshot);
-    _updateAchievements(newPRCount);
+    final prResult = _achievementProgressService.updatePrCacheForSession(
+      currentPrCache: _prCache,
+      session: session,
+    );
+    _prCache
+      ..clear()
+      ..addAll(prResult.prCache);
+    _updateAchievements(prResult.newPRCount);
     notifyListeners();
     _persist();
   }
@@ -247,102 +255,22 @@ class AppState extends ChangeNotifier {
 
   /// 从全量历史重建 PR cache。仅在 init 时调用一次。
   void _rebuildPrCache() {
-    _prCache.clear();
-    for (final session in _sessions) {
-      _updatePrCache(session);
-    }
-  }
-
-  /// 增量更新：扫描 session 里每组完成数据，更新各动作的最高重量。
-  void _updatePrCache(WorkoutSession session) {
-    for (final record in session.exerciseRecords) {
-      for (final s in record.sets) {
-        if (!s.isCompleted || s.weightKg <= 0) continue;
-        final current = _prCache[record.exerciseId] ?? 0;
-        if (s.weightKg > current) {
-          _prCache[record.exerciseId] = s.weightKg;
-        }
-      }
-    }
+    _prCache
+      ..clear()
+      ..addAll(_achievementProgressService.rebuildPrCache(_sessions));
   }
 
   // ──── 成就 ────
   List<Achievement> _migrateAchievements(List<Achievement> achievements) {
-    final defaults = defaultAchievements();
-    if (achievements.isEmpty) return defaults;
-
-    final existingById = {for (final a in achievements) a.id: a};
-    final defaultIds = defaults.map((a) => a.id).toSet();
-
-    return [
-      for (final fallback in defaults)
-        _mergeAchievement(existingById[fallback.id], fallback),
-      ...achievements.where((a) => !defaultIds.contains(a.id)),
-    ];
-  }
-
-  Achievement _mergeAchievement(Achievement? existing, Achievement fallback) {
-    if (existing == null) return fallback;
-    return Achievement(
-      id: fallback.id,
-      type: fallback.type,
-      title: fallback.title,
-      description: fallback.description,
-      icon: fallback.icon,
-      threshold: fallback.threshold,
-      targetBodyPart: existing.targetBodyPart ?? fallback.targetBodyPart,
-      currentProgress: existing.currentProgress,
-      isUnlocked: existing.isUnlocked,
-      unlockedAt: existing.unlockedAt,
-    );
+    return _achievementProgressService.migrateAchievements(achievements);
   }
 
   void _updateAchievements(int newPRCount) {
-    final totalCompleted = completedSessions.length;
-    final streak = streakDays;
-
-    for (final a in _achievements) {
-      if (a.isUnlocked) continue;
-      switch (a.type) {
-        case AchievementType.streak:
-          a.currentProgress = streak;
-          if (streak >= a.threshold) a.unlock();
-        case AchievementType.totalWorkouts:
-          a.currentProgress = totalCompleted;
-          if (totalCompleted >= a.threshold) a.unlock();
-        case AchievementType.personalRecord:
-          if (newPRCount > 0) {
-            a.currentProgress += newPRCount;
-            if (a.currentProgress >= a.threshold) a.unlock();
-          }
-        case AchievementType.bodyPartMastery:
-          final targetBodyPart = a.targetBodyPart;
-          if (targetBodyPart == null) break;
-          final bodyPartSessions = completedSessions
-              .where((s) => s.dayType.targetBodyParts.contains(targetBodyPart))
-              .length;
-          a.currentProgress = bodyPartSessions;
-          if (bodyPartSessions >= a.threshold) a.unlock();
-        case AchievementType.nutritionStreak:
-          // Nutrition tracking not yet implemented; skip silently.
-          break;
-      }
-    }
-  }
-
-  /// Compares each exercise's max weight in the session against the
-  /// pre-update snapshot. O(exercises * sets) — no nested session loop.
-  int _countNewPRs(WorkoutSession session, Map<String, double> prSnapshot) {
-    var count = 0;
-    for (final record in session.exerciseRecords) {
-      final sessionMax = record.sets
-          .where((s) => s.isCompleted && s.weightKg > 0)
-          .fold<double>(0, (max, s) => s.weightKg > max ? s.weightKg : max);
-      if (sessionMax <= 0) continue;
-      final oldMax = prSnapshot[record.exerciseId] ?? 0;
-      if (oldMax > 0 && sessionMax > oldMax) count++;
-    }
-    return count;
+    _achievements = _achievementProgressService.updateAchievementsAfterSession(
+      achievements: _achievements,
+      completedSessions: completedSessions,
+      newPRCount: newPRCount,
+    );
   }
 
   // ──── 持久化 ────
