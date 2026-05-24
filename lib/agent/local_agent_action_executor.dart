@@ -1,10 +1,7 @@
 import '../models/enums.dart';
 import '../models/workout_plan.dart';
 import '../services/app_state.dart';
-import 'action_helpers/exercise_replacer.dart';
-import 'action_helpers/workout_compressor.dart';
-import 'action_helpers/workout_mover.dart';
-import 'action_helpers/workout_rescheduler.dart';
+import '../services/workout_plan_mutation_service.dart';
 import 'action_payload_parser.dart';
 import 'models/agent_action.dart';
 import 'models/agent_action_result.dart';
@@ -16,9 +13,14 @@ import 'plan_context_hash.dart';
 /// 都会先做 payload 校验，校验失败时返回 [AgentActionResult.failure]
 /// 而不抛异常给 UI。
 class LocalAgentActionExecutor {
-  LocalAgentActionExecutor(this.appState);
+  LocalAgentActionExecutor(
+    this.appState, {
+    WorkoutPlanMutationService mutationService =
+        const WorkoutPlanMutationService(),
+  }) : _mutationService = mutationService;
 
   final AppState appState;
+  final WorkoutPlanMutationService _mutationService;
 
   Future<AgentActionResult> execute(AgentAction action) async {
     final mutationGuard = _validateMutationBoundary(action);
@@ -127,8 +129,11 @@ class LocalAgentActionExecutor {
         (parsed as PayloadParseSuccess<GeneratePlanPayload>).value;
 
     try {
-      var plan = appState.previewPlan();
-      plan = _applyPreferences(plan, preferences);
+      final plan = _mutationService.generatePlan(
+        profile: appState.profile!,
+        exercises: appState.exercises,
+        preferences: preferences,
+      );
       appState.adoptPlan(plan);
       return AgentActionResult.success(
         title: '已生成训练计划',
@@ -137,40 +142,6 @@ class LocalAgentActionExecutor {
     } catch (e) {
       return AgentActionResult.failure('生成计划失败：$e');
     }
-  }
-
-  // 把可选偏好作用到 PlanEngine 输出上。
-  // 仅使用现有的 reschedulePlanToWeekdays / compressDayInPlan 助手，
-  // 不引入新 helper、不修改 PlanEngine 行为。
-  WorkoutPlan _applyPreferences(
-    WorkoutPlan plan,
-    GeneratePlanPayload preferences,
-  ) {
-    var current = plan;
-    final weekdays = preferences.availableWeekdays;
-    if (weekdays != null) {
-      current = reschedulePlanToWeekdays(
-        plan: current,
-        availableWeekdays: weekdays,
-      ).plan;
-    }
-    final minutes = preferences.targetMinutes;
-    if (minutes != null) {
-      for (final day in current.days) {
-        if (day.dayType == WorkoutDayType.rest || day.exercises.isEmpty) {
-          continue;
-        }
-        final compressed = compressDayInPlan(
-          plan: current,
-          dayOfWeek: day.dayOfWeek,
-          targetMinutes: minutes,
-        );
-        if (compressed != null) {
-          current = compressed;
-        }
-      }
-    }
-    return current;
   }
 
   String _generatePlanSuccessMessage(
@@ -205,7 +176,7 @@ class LocalAgentActionExecutor {
     }
     final weekdays = (parsed as PayloadParseSuccess<List<int>>).value;
 
-    final result = reschedulePlanToWeekdays(
+    final result = _mutationService.rescheduleWeek(
       plan: plan!,
       availableWeekdays: weekdays,
     );
@@ -242,12 +213,11 @@ class LocalAgentActionExecutor {
       return AgentActionResult.failure('替换后的动作不在动作库中，暂时无法应用。');
     }
 
-    final newPlan = replaceExerciseInPlan(
+    final newPlan = _mutationService.replaceExercise(
       plan: plan!,
       dayOfWeek: payload.dayOfWeek,
       fromExerciseId: payload.fromExerciseId,
-      toExerciseId: payload.toExerciseId,
-      toExerciseName: target.name,
+      targetExercise: target,
     );
     if (newPlan == null) {
       return AgentActionResult.failure('在计划中没有找到对应的动作。');
@@ -274,7 +244,7 @@ class LocalAgentActionExecutor {
     final payload =
         (parsed as PayloadParseSuccess<CompressWorkoutPayload>).value;
 
-    final newPlan = compressDayInPlan(
+    final newPlan = _mutationService.compressWorkout(
       plan: plan!,
       dayOfWeek: payload.dayOfWeek,
       targetMinutes: payload.targetMinutes,
@@ -307,38 +277,16 @@ class LocalAgentActionExecutor {
     final payload =
         (parsed as PayloadParseSuccess<MoveWorkoutSessionPayload>).value;
 
-    final source = plan!.days
-        .where((d) => d.dayOfWeek == payload.fromDayOfWeek)
-        .firstOrNull;
-    final sourceHasWorkout =
-        source != null &&
-        source.dayType != WorkoutDayType.rest &&
-        source.exercises.isNotEmpty;
-    if (!sourceHasWorkout) {
-      return AgentActionResult.failure(
-        '${_weekdayName(payload.fromDayOfWeek)}没有训练，无法移动。',
-      );
-    }
-
-    final target = plan.days
-        .where((d) => d.dayOfWeek == payload.toDayOfWeek)
-        .firstOrNull;
-    final targetOccupied =
-        target != null &&
-        target.dayType != WorkoutDayType.rest &&
-        target.exercises.isNotEmpty;
-    if (targetOccupied) {
-      return AgentActionResult.failure(
-        '${_weekdayName(payload.toDayOfWeek)}已有训练，'
-        '请先调整目标日；不会自动合并或交换。',
-      );
-    }
-
-    final newPlan = moveWorkoutSessionInPlan(
-      plan: plan,
+    final result = _mutationService.moveWorkoutSession(
+      plan: plan!,
       fromDayOfWeek: payload.fromDayOfWeek,
       toDayOfWeek: payload.toDayOfWeek,
     );
+    if (!result.success) {
+      return AgentActionResult.failure(result.message!);
+    }
+
+    final newPlan = result.plan!;
     appState.adoptPlan(newPlan);
     return AgentActionResult.success(
       title: '已移动训练',
