@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fit_forge/services/app_state.dart';
+import 'package:fit_forge/services/app_clock.dart';
 import 'package:fit_forge/services/app_state_store.dart';
 import 'package:fit_forge/models/models.dart';
 
@@ -228,6 +229,18 @@ void main() {
         ),
         throwsUnsupportedError,
       );
+    });
+  });
+
+  group('clock', () {
+    test('exportToJson uses injected clock for exportedAt', () {
+      final fixedNow = DateTime(2026, 5, 18, 9, 30);
+      final state = AppState(clock: FixedAppClock(fixedNow));
+
+      final exported =
+          json.decode(state.exportToJson()) as Map<String, dynamic>;
+
+      expect(exported['exportedAt'], fixedNow.toIso8601String());
     });
   });
 
