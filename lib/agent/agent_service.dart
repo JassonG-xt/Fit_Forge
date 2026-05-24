@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../services/app_state.dart';
+import '../services/app_clock.dart';
 import 'agent_client.dart';
 import 'agent_context_builder.dart';
 import 'agent_event_log.dart';
@@ -27,10 +28,12 @@ class AgentService extends ChangeNotifier {
     AgentContextBuilder? contextBuilder,
     AgentEventLog? eventLog,
     Uuid? idGenerator,
+    AppClock clock = const SystemAppClock(),
   }) : _executor = executor ?? LocalAgentActionExecutor(appState),
        _contextBuilder = contextBuilder ?? const AgentContextBuilder(),
        _eventLog = eventLog,
-       _ids = idGenerator ?? const Uuid();
+       _ids = idGenerator ?? const Uuid(),
+       _clock = clock;
 
   final AppState appState;
   final AgentClient client;
@@ -38,6 +41,7 @@ class AgentService extends ChangeNotifier {
   final AgentContextBuilder _contextBuilder;
   final AgentEventLog? _eventLog;
   final Uuid _ids;
+  final AppClock _clock;
 
   final List<AgentMessage> _messages = <AgentMessage>[];
   final Set<String> _processedActionIds = <String>{};
@@ -63,7 +67,7 @@ class AgentService extends ChangeNotifier {
       id: _ids.v4(),
       role: AgentMessageRole.user,
       content: trimmed,
-      createdAt: DateTime.now(),
+      createdAt: _clock.now(),
     );
     _messages.add(userMessage);
     _isSending = true;
@@ -97,7 +101,7 @@ class AgentService extends ChangeNotifier {
           id: _ids.v4(),
           role: AgentMessageRole.assistant,
           content: '暂时无法连接 FitForge Coach，请稍后重试。',
-          createdAt: DateTime.now(),
+          createdAt: _clock.now(),
           isError: true,
         ),
       );
@@ -166,7 +170,7 @@ class AgentService extends ChangeNotifier {
   PendingClarification? _activePendingClarification() {
     final pending = _pendingClarification;
     if (pending == null) return null;
-    if (pending.isExpired(DateTime.now())) {
+    if (pending.isExpired(_clock.now())) {
       _pendingClarification = null;
       return null;
     }
@@ -187,7 +191,7 @@ class AgentService extends ChangeNotifier {
         intent: CoachIntentType.compressWorkout,
         filledSlots: const {},
         missingSlots: const ['targetDuration'],
-        createdAt: DateTime.now(),
+        createdAt: _clock.now(),
       );
     }
     if (response.message.contains('移到周几')) {
@@ -195,7 +199,7 @@ class AgentService extends ChangeNotifier {
         intent: CoachIntentType.moveWorkoutSession,
         filledSlots: const {},
         missingSlots: const ['toDayOfWeek'],
-        createdAt: DateTime.now(),
+        createdAt: _clock.now(),
       );
     }
     if (response.message.contains('保留哪几天')) {
@@ -203,7 +207,7 @@ class AgentService extends ChangeNotifier {
         intent: CoachIntentType.rescheduleWeek,
         filledSlots: const {},
         missingSlots: const ['availableWeekdays'],
-        createdAt: DateTime.now(),
+        createdAt: _clock.now(),
       );
     }
     if (response.message.contains('压缩今天训练') &&
@@ -212,7 +216,7 @@ class AgentService extends ChangeNotifier {
         intent: CoachIntentType.feedbackAdjustment,
         filledSlots: const {},
         missingSlots: const ['adjustmentChoice'],
-        createdAt: DateTime.now(),
+        createdAt: _clock.now(),
       );
     }
     if (response.message.contains('哪个动作') && response.message.contains('可用')) {
@@ -220,7 +224,7 @@ class AgentService extends ChangeNotifier {
         intent: CoachIntentType.replaceExercise,
         filledSlots: const {},
         missingSlots: const ['sourceExercise', 'availableEquipment'],
-        createdAt: DateTime.now(),
+        createdAt: _clock.now(),
       );
     }
     if (response.message.contains('整周') && response.message.contains('某一天')) {
@@ -228,7 +232,7 @@ class AgentService extends ChangeNotifier {
         intent: CoachIntentType.rescheduleWeek,
         filledSlots: const {},
         missingSlots: const ['scheduleScope'],
-        createdAt: DateTime.now(),
+        createdAt: _clock.now(),
       );
     }
     return null;
@@ -242,7 +246,7 @@ class AgentService extends ChangeNotifier {
       id: _ids.v4(),
       role: AgentMessageRole.assistant,
       content: response.message,
-      createdAt: DateTime.now(),
+      createdAt: _clock.now(),
       actions: response.actions,
     );
   }
