@@ -28,6 +28,13 @@ Phase H.3 consolidates the Coach Agent audit status after G.3/H.1/H.2,
 refreshes eval counts, and clarifies that no known P0/P1 audit findings
 remain. It is docs-only and does not change runtime behavior.
 
+Flutter Coach Agent context now includes a deterministic
+`trainingLoadSummary`. The summary gives the agent read-only context for
+planned training days, weekly set volume, daily set spikes, consecutive
+training days, and beginner high-frequency or high-volume heuristics. It does
+not mutate plans, automatically change workouts, or provide medical advice or
+a complete sport-science prescription.
+
 ## Current Architecture
 
 ```text
