@@ -28,6 +28,14 @@ Phase H.3 consolidates the Coach Agent audit status after G.3/H.1/H.2,
 refreshes eval counts, and clarifies that no known P0/P1 audit findings
 remain. It is docs-only and does not change runtime behavior.
 
+Coach Agent safety guardrails now include a first-pass deterministic
+contraindication-risk policy for common lumbar/spine risk, knee risk,
+hypertension/cardiovascular risk, and high-risk training requests. These
+checks run before LLM/provider routing and return `safetyResponse` without
+mutation actions. This is a safety tripwire, not a medical diagnosis system or
+complete rehabilitation prescription, and it does not automatically modify
+plans.
+
 ## Current Architecture
 
 ```text
@@ -148,7 +156,7 @@ mutation payloads before returning final responses.
 | `moveWorkoutSession` | Yes | Yes | Moves one planned workout session between explicit weekdays. |
 | `weeklyReview` | No | No | Read-only review panel content. |
 | `nutritionAdvice` | No | No | Nutrition-oriented advice without local mutation. |
-| `safetyResponse` | No | No | Deterministic safety short-circuit for high-risk symptoms. |
+| `safetyResponse` | No | No | Deterministic safety short-circuit for high-risk symptoms or contraindication-risk requests. |
 | `answerOnly` | No | No | Clarification or explanation-only fallback. |
 
 ## Safety Model
@@ -180,8 +188,12 @@ target. The generic fallback remains for unrelated messages.
 
 Flutter mock mode mirrors the same boundary for user-facing local demos:
 high-risk paraphrases such as `胸口有点疼` and `头很晕` route to
-`safetyResponse`; vague compress / replacement / schedule requests get
-specific clarifications; unrelated messages still use the generic fallback.
+`safetyResponse`. Common contraindication-risk prompts such as lumbar disc
+risk plus heavy deadlifts, knee effusion plus jumping / HIIT, severe
+hypertension plus 1RM / max-lift requests, or sharp knee pain plus jump squats
+also route to `safetyResponse`. Vague compress / replacement / schedule
+requests get specific clarifications; unrelated messages still use the generic
+fallback.
 
 ## Phase E Non-Goals
 

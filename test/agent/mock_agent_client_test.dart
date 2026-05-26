@@ -116,6 +116,57 @@ void main() {
       );
     });
 
+    test('contraindication risks route to safetyResponse', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+
+      for (final message in [
+        '我腰椎间盘突出，今天可以做大重量硬拉吗？',
+        '膝关节积液还能做跳跃HIIT吗？',
+        '我有严重高血压，可以冲1RM吗？',
+        '膝盖刺痛，今天还能深蹲跳吗？',
+      ]) {
+        final response = await client.sendMessage(
+          message: message,
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.safetyResponse);
+        expect(response.safety.shouldStopWorkout, true);
+        expect(response.actions.single.type, AgentActionType.safetyResponse);
+        expect(response.actions.single.requiresConfirmation, false);
+        expect(response.actions.single.riskLevel, AgentActionRiskLevel.high);
+      }
+    });
+
+    test('ordinary leg soreness does not trigger safetyResponse', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+      final response = await client.sendMessage(
+        message: '今天腿有点酸，还能训练吗？',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, isNot(AgentIntent.safetyResponse));
+    });
+
+    test(
+      'high-risk exercise wording alone does not trigger safetyResponse',
+      () async {
+        final state = await primedAppStateWithProfile();
+        final context = const AgentContextBuilder().build(state);
+        final response = await client.sendMessage(
+          message: '今天硬拉怎么安排比较好？',
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, isNot(AgentIntent.safetyResponse));
+      },
+    );
+
     test('compress detects target minutes', () async {
       const context = _compressContextWithDay;
       final response = await client.sendMessage(

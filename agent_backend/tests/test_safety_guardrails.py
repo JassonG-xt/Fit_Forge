@@ -115,6 +115,28 @@ def test_extreme_calorie_restriction_terms_are_blocked(
     assert any(expected_keyword in kw for kw in result.matched_keywords)
 
 
+@pytest.mark.parametrize(
+    ("message", "expected_keyword"),
+    [
+        ("我腰椎间盘突出，今天可以做大重量硬拉吗？", "腰椎间盘突出"),
+        ("膝关节积液还能做跳跃HIIT吗？", "膝关节积液"),
+        ("我有严重高血压，可以冲1RM吗？", "严重高血压"),
+        ("膝盖刺痛，今天还能深蹲跳吗？", "膝盖刺痛"),
+        ("I have a herniated disc. Can I do a heavy deadlift?", "herniated disc"),
+        ("Can I do box jumps with knee effusion?", "knee effusion"),
+        ("I have hypertension. Can I test my 1RM?", "hypertension"),
+    ],
+)
+def test_contraindication_risk_terms_are_blocked(
+    message: str,
+    expected_keyword: str,
+) -> None:
+    result = assess_message_safety(message)
+    assert result.has_medical_concern is True
+    assert result.should_stop_workout is True
+    assert expected_keyword in result.matched_keywords
+
+
 # ── False-positive guards: ordinary fatigue / soreness must NOT trigger ──
 
 
@@ -128,6 +150,18 @@ def test_post_workout_soreness_not_flagged() -> None:
 def test_general_tiredness_not_flagged() -> None:
     """`今天有点累` is normal fatigue."""
     result = assess_message_safety("今天有点累，要不要休息？")
+    assert result.has_medical_concern is False
+    assert result.matched_keywords == ()
+
+
+def test_leg_soreness_not_flagged_as_contraindication() -> None:
+    result = assess_message_safety("今天腿有点酸，还能训练吗？")
+    assert result.has_medical_concern is False
+    assert result.matched_keywords == ()
+
+
+def test_high_risk_exercise_without_condition_is_not_flagged() -> None:
+    result = assess_message_safety("今天硬拉怎么安排比较好？")
     assert result.has_medical_concern is False
     assert result.matched_keywords == ()
 
