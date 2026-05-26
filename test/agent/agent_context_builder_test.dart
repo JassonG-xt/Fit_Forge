@@ -14,6 +14,7 @@ void main() {
       final state = await freshAppState();
       const builder = AgentContextBuilder();
       final snapshot = builder.build(state);
+      final json = snapshot.toJson();
 
       expect(snapshot.locale, 'zh-CN');
       expect(snapshot.profile, isNull);
@@ -23,6 +24,10 @@ void main() {
       expect(snapshot.bodyMetrics, isEmpty);
       expect(snapshot.progressSummary['streakDays'], 0);
       expect(snapshot.progressSummary['totalWorkoutsThisWeek'], 0);
+      final trainingLoadSummary =
+          json['trainingLoadSummary'] as Map<String, dynamic>;
+      expect(trainingLoadSummary['loadLevel'], 'unknown');
+      expect(trainingLoadSummary['flags'], contains('no_active_plan'));
     });
 
     test('includes profile json when profile is set', () async {
@@ -90,6 +95,15 @@ void main() {
         (exercises.first as Map<String, dynamic>)['exerciseId'],
         'bench_press',
       );
+
+      final trainingLoadSummary =
+          snapshot.toJson()['trainingLoadSummary'] as Map<String, dynamic>;
+      expect(trainingLoadSummary['plannedTrainingDays'], 1);
+      expect(trainingLoadSummary['totalPlannedSets'], 4);
+      expect(trainingLoadSummary['maxDailySets'], 4);
+      expect(trainingLoadSummary['longestConsecutiveTrainingDays'], 1);
+      expect(trainingLoadSummary['flags'], isA<List<dynamic>>());
+      expect(trainingLoadSummary['loadLevel'], isA<String>());
     });
 
     test('today workout is null when today is rest day', () async {
@@ -198,6 +212,7 @@ void main() {
       expect(json, isA<Map<String, dynamic>>());
       expect(json.containsKey('locale'), true);
       expect(json.containsKey('progressSummary'), true);
+      expect(json.containsKey('trainingLoadSummary'), true);
     });
   });
 }

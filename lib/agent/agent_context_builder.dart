@@ -3,6 +3,7 @@ import '../models/workout_session.dart';
 import '../services/app_state.dart';
 import 'models/agent_context_snapshot.dart';
 import 'plan_context_hash.dart';
+import 'training_load_analyzer.dart';
 
 /// 把 AppState 压缩成发给 Coach Agent 的最小快照。
 ///
@@ -24,6 +25,20 @@ class AgentContextBuilder {
     final profile = state.profile;
     final activePlan = state.activePlan;
     final today = state.todayWorkout;
+    final todayWorkout = today != null
+        ? {
+            'dayOfWeek': today.dayOfWeek,
+            'dayType': today.dayType.name,
+            'exercises': today.exercises.map((e) => e.toJson()).toList(),
+          }
+        : null;
+    final trainingLoadSummary = const TrainingLoadAnalyzer()
+        .analyze(
+          activePlan: activePlan,
+          profile: profile,
+          todayWorkout: todayWorkout,
+        )
+        .toJson();
 
     // 上游 AppState 已经维护了排序（completedSessions 在 SessionQueries 里
     // 按 date desc，bodyMetrics 在 add 时排序），但这里仍显式 sort 一次，
@@ -37,13 +52,7 @@ class AgentContextBuilder {
       locale: locale,
       profile: profile?.toJson(),
       activePlan: activePlan?.toJson(),
-      todayWorkout: today != null
-          ? {
-              'dayOfWeek': today.dayOfWeek,
-              'dayType': today.dayType.name,
-              'exercises': today.exercises.map((e) => e.toJson()).toList(),
-            }
-          : null,
+      todayWorkout: todayWorkout,
       recentSessions: sortedSessions
           .take(recentSessionLimit)
           .map(_summarizeSession)
@@ -64,6 +73,7 @@ class AgentContextBuilder {
       availableExerciseSummary: state.exercises
           .map(_summarizeExercise)
           .toList(),
+      trainingLoadSummary: trainingLoadSummary,
       planContextHash: activePlan != null
           ? computePlanContextHash(activePlan)
           : null,

@@ -15,13 +15,29 @@ void main() {
     requiresConfirmation: true,
   );
 
+  final createdLogs = <AgentEventLog>[];
+
+  AgentEventLog makeLog({int maxEvents = 50}) {
+    final log = AgentEventLog(maxEvents: maxEvents);
+    createdLogs.add(log);
+    return log;
+  }
+
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    createdLogs.clear();
+  });
+
+  tearDown(() {
+    for (final log in createdLogs) {
+      log.dispose();
+    }
     SharedPreferences.setMockInitialValues({});
   });
 
   group('AgentEventLog', () {
     test('record appends an event with default outcome flags', () async {
-      final log = AgentEventLog();
+      final log = makeLog();
       await log.hydrate();
 
       final event = log.record(
@@ -38,7 +54,7 @@ void main() {
     });
 
     test('updateOutcome rewrites flags on the matching event', () async {
-      final log = AgentEventLog();
+      final log = makeLog();
       await log.hydrate();
       log.record(
         id: 'e-1',
@@ -57,7 +73,7 @@ void main() {
     test(
       'updateOutcome captures failure reason on execution failure',
       () async {
-        final log = AgentEventLog();
+        final log = makeLog();
         await log.hydrate();
         log.record(
           id: 'e-1',
@@ -80,7 +96,7 @@ void main() {
     );
 
     test('updateOutcome is a no-op for unknown action ids', () async {
-      final log = AgentEventLog();
+      final log = makeLog();
       await log.hydrate();
       log.record(
         id: 'e-1',
@@ -99,7 +115,7 @@ void main() {
     });
 
     test('caps the buffer at maxEvents (FIFO)', () async {
-      final log = AgentEventLog(maxEvents: 3);
+      final log = makeLog(maxEvents: 3);
       await log.hydrate();
       for (var i = 0; i < 5; i++) {
         log.record(id: 'e-$i', userMessage: 'm$i', agentMessage: 'r$i');
@@ -108,7 +124,7 @@ void main() {
     });
 
     test('event_log_caps_retained_events', () async {
-      final log = AgentEventLog(maxEvents: 3);
+      final log = makeLog(maxEvents: 3);
       await log.hydrate();
 
       for (var i = 0; i < 6; i++) {
@@ -125,7 +141,7 @@ void main() {
     });
 
     test('event_log_truncates_long_messages', () async {
-      final log = AgentEventLog();
+      final log = makeLog();
       await log.hydrate();
 
       log.record(id: 'long', userMessage: 'x' * 1000, agentMessage: 'y' * 1000);
@@ -135,7 +151,7 @@ void main() {
     });
 
     test('event_log_redacts_sensitive_health_text', () async {
-      final log = AgentEventLog();
+      final log = makeLog();
       await log.hydrate();
 
       log.record(
@@ -154,7 +170,7 @@ void main() {
     });
 
     test('persists events across instances', () async {
-      final first = AgentEventLog();
+      final first = makeLog();
       await first.hydrate();
       first.record(
         id: 'e-1',
@@ -165,7 +181,7 @@ void main() {
       first.updateOutcome(actionId: 'a-1', accepted: true, executed: true);
       await first.flushPending();
 
-      final second = AgentEventLog();
+      final second = makeLog();
       await second.hydrate();
 
       expect(second.events, hasLength(1));
@@ -176,7 +192,7 @@ void main() {
     });
 
     test('clear empties the buffer and removes the persisted blob', () async {
-      final log = AgentEventLog();
+      final log = makeLog();
       await log.hydrate();
       log.record(id: 'e-1', userMessage: 'a', agentMessage: 'b');
       await log.flushPending();
@@ -192,7 +208,7 @@ void main() {
       SharedPreferences.setMockInitialValues({
         'fitforge.agent_event_log.v1': 'not json',
       });
-      final log = AgentEventLog();
+      final log = makeLog();
 
       await log.hydrate();
 
@@ -203,7 +219,7 @@ void main() {
 
     test('hydrate is idempotent', () async {
       SharedPreferences.setMockInitialValues({});
-      final log = AgentEventLog();
+      final log = makeLog();
       await log.hydrate();
       log.record(id: 'e-1', userMessage: 'a', agentMessage: 'b');
 
