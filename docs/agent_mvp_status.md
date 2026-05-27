@@ -56,6 +56,40 @@
 
 > Phase H.3 audit/docs consolidation: docs-only. Consolidates the Coach Agent audit status after G.3/H.1/H.2, refreshes eval counts to 77 total / 73 active / 4 expectedGap, and clarifies that no known P0/P1 audit findings remain. Runtime behavior, Flutter UI behavior, parser strictness, executor checks, backend routing, action schemas, LangGraph wiring, dependencies, and real LLM policy are unchanged.
 
+## P0 Safety / Load-Aware Baseline
+
+The latest `main` now includes the P0 Coach Agent safety and load-aware
+coaching baseline:
+
+- PR #115: `test: stabilize flutter widget test baseline`
+- PR #116: `feat(agent): add contraindication risk guardrails`
+- PR #117: `feat(agent): add training load summary context`
+- PR #118: `feat(agent): use training load summary for read-only coaching`
+
+Latest verified baseline:
+
+- `flutter test`: 478 passed, 1 skipped
+- `cd agent_backend && python -m pytest`: 703 passed, 4 skipped
+- PR #118 merge-gate CI was green for Flutter, backend pytest, blocking secret
+  scan, and dependency audit.
+
+Current positioning:
+
+- Coach Agent remains a controlled structured-action system.
+- Safety priority is first: high-risk contraindication prompts short-circuit to
+  `safetyResponse`.
+- Load-aware coaching is read-only and context-grounded through
+  `trainingLoadSummary`.
+- Mutations still require explicit user intent, preview, confirmation, trusted
+  `sourceContextHash`, and `LocalAgentActionExecutor`.
+
+Recommended next-stage work, not yet implemented:
+
+- P1 `AdaptationPlanner` design before any automatic plan adjustment.
+- More granular `ContraindicationPolicy` taxonomy and false-positive review.
+- `PersonaPolicy` / `ResponseRenderer` separation for consistent coaching tone.
+- Pass^k real-provider quality evals outside per-PR CI.
+
 如果代码与本文档不一致，以 `lib/`、`test/`、`agent_backend/`、`.github/workflows/` 为准。
 
 ### 历史稳定点
