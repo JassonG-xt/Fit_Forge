@@ -64,6 +64,8 @@
 
 > Acute symptom guardrail standardization: global deterministic `fitness_guardrails.py` now owns acute stop signals for chest tightness/pain, breathing difficulty, dizziness/fainting/nausea, and sharp or severe pain. The `AdaptationPlanner` relies on that global guardrail instead of the previous local chest-tightness overlap, and the Flutter mock safety keywords are synced for demo parity. Ordinary fatigue, ordinary muscle soreness, and mild exertion are guarded against high-risk false positives. This is a conservative stop signal, not medical diagnosis or full triage; mutation actions, executor behavior, action schemas, output validation, `sourceContextHash`, eval JSON, CI, and dependencies are unchanged.
 
+> P1-D Flutter mock alignment: Flutter local `MockAgentClient` now mirrors the native provider's representative P1 routing priority for local/demo parity: safety first, explicit mutation intent before read-only adaptation, read-only fatigue/recovery/load advice, and false-positive guards for ordinary soreness, ordinary exercise programming, nutrition, and mild exertion wording. The mock still uses existing action types and existing preview/confirmation semantics; `LocalAgentActionExecutor`, backend providers, LangGraph, real LLM provider behavior, output validation, `sourceContextHash`, eval JSON, CI, and dependencies are unchanged. This is mock parity, not a second independent planner and not full P1 completion.
+
 ## P0 Safety / Load-Aware Baseline
 
 The latest `main` now includes the P0 Coach Agent safety and load-aware
@@ -93,8 +95,6 @@ Current positioning:
 
 Recommended next-stage work, not yet implemented:
 
-- P1-D Flutter mock alignment for the deterministic `AdaptationPlanner`
-  helper.
 - More granular `ContraindicationPolicy` taxonomy and false-positive review.
 - `PersonaPolicy` / `ResponseRenderer` separation for consistent coaching tone.
 - Pass^k real-provider quality evals outside per-PR CI.
