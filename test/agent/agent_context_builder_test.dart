@@ -199,5 +199,76 @@ void main() {
       expect(json.containsKey('locale'), true);
       expect(json.containsKey('progressSummary'), true);
     });
+
+    test('fresh state includes a stable unknown trainingLoadSummary', () async {
+      final state = await freshAppState();
+      final snapshot = const AgentContextBuilder().build(state);
+      final json = snapshot.toJson();
+
+      expect(json.containsKey('trainingLoadSummary'), true);
+      final summary = json['trainingLoadSummary'] as Map<String, dynamic>;
+      expect(summary['loadLevel'], 'unknown');
+      expect(summary['flags'], contains('no_active_plan'));
+    });
+
+    test('toJson includes trainingLoadSummary fields', () async {
+      final state = await primedAppStateWithProfile();
+      state.adoptPlan(
+        WorkoutPlan(
+          id: 'load_summary_plan',
+          name: 'Load summary plan',
+          goal: state.profile!.goal,
+          split: TrainingSplit.custom,
+          weeklyFrequency: 2,
+          days: [
+            WorkoutDay(
+              dayOfWeek: 1,
+              dayType: WorkoutDayType.push,
+              exercises: [
+                PlannedExercise(
+                  exerciseId: 'bench_press',
+                  exerciseName: 'Bench Press',
+                  targetSets: 4,
+                  targetReps: 8,
+                  restSeconds: 90,
+                ),
+              ],
+            ),
+            WorkoutDay(dayOfWeek: 2, dayType: WorkoutDayType.rest),
+            WorkoutDay(
+              dayOfWeek: 3,
+              dayType: WorkoutDayType.legs,
+              exercises: [
+                PlannedExercise(
+                  exerciseId: 'squat',
+                  exerciseName: 'Squat',
+                  targetSets: 5,
+                  targetReps: 8,
+                  restSeconds: 120,
+                ),
+              ],
+            ),
+            for (var day = 4; day <= 7; day++)
+              WorkoutDay(dayOfWeek: day, dayType: WorkoutDayType.rest),
+          ],
+        ),
+      );
+      await state.flushPendingPersistence();
+
+      final json = const AgentContextBuilder().build(state).toJson();
+      final summary = json['trainingLoadSummary'] as Map<String, dynamic>;
+
+      expect(summary.keys, contains('plannedTrainingDays'));
+      expect(summary.keys, contains('restDays'));
+      expect(summary.keys, contains('totalPlannedSets'));
+      expect(summary.keys, contains('maxDailySets'));
+      expect(summary.keys, contains('longestConsecutiveTrainingDays'));
+      expect(summary.keys, contains('weeklySetsByBodyPart'));
+      expect(summary.keys, contains('flags'));
+      expect(summary.keys, contains('loadLevel'));
+      expect(summary['plannedTrainingDays'], 2);
+      expect(summary['restDays'], 5);
+      expect(summary['totalPlannedSets'], 9);
+    });
   });
 }
