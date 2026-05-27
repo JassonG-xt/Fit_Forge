@@ -58,6 +58,8 @@
 
 > P1-A AdaptationPlanner contract: docs-only. Defines the future `AdaptationPlanner` responsibility boundary, inputs, outputs, priority order, allowed existing actions, non-goals, roadmap, and planned eval categories in `docs/agent_p1_adaptation_planner_contract.md`. No runtime behavior changed; next implementation step is a deterministic backend helper before any provider integration.
 
+> P1-B AdaptationPlanner helper: backend-only. Adds a deterministic pure helper that classifies user requests into safety, explicit mutation, read-only adaptation, or fallback decisions. It is not wired into the native provider, optional LangGraph provider, Flutter mock, or `LocalAgentActionExecutor`; no runtime behavior, action type, safety guardrail, eval JSON, CI, or dependency behavior changed. Next step: P1-C native provider integration.
+
 ## P0 Safety / Load-Aware Baseline
 
 The latest `main` now includes the P0 Coach Agent safety and load-aware
@@ -87,7 +89,8 @@ Current positioning:
 
 Recommended next-stage work, not yet implemented:
 
-- P1-B deterministic `AdaptationPlanner` helper based on the P1-A contract.
+- P1-C native provider integration for the deterministic `AdaptationPlanner`
+  helper.
 - More granular `ContraindicationPolicy` taxonomy and false-positive review.
 - `PersonaPolicy` / `ResponseRenderer` separation for consistent coaching tone.
 - Pass^k real-provider quality evals outside per-PR CI.
