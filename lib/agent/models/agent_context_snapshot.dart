@@ -12,6 +12,16 @@ class AgentContextSnapshot {
     required this.bodyMetrics,
     required this.progressSummary,
     required this.availableExerciseSummary,
+    this.trainingLoadSummary = const {
+      'plannedTrainingDays': 0,
+      'restDays': 0,
+      'totalPlannedSets': 0,
+      'maxDailySets': 0,
+      'longestConsecutiveTrainingDays': 0,
+      'weeklySetsByBodyPart': <String, int>{},
+      'flags': ['no_active_plan'],
+      'loadLevel': 'unknown',
+    },
     this.planContextHash,
   });
 
@@ -23,6 +33,7 @@ class AgentContextSnapshot {
   final List<Map<String, dynamic>> bodyMetrics;
   final Map<String, dynamic> progressSummary;
   final List<Map<String, dynamic>> availableExerciseSummary;
+  final Map<String, dynamic> trainingLoadSummary;
 
   /// activePlan 的 contextHash，供 agent 生成 action 时写入 sourceContextHash。
   final String? planContextHash;
@@ -36,6 +47,7 @@ class AgentContextSnapshot {
     'bodyMetrics': bodyMetrics,
     'progressSummary': progressSummary,
     'availableExerciseSummary': availableExerciseSummary,
+    'trainingLoadSummary': trainingLoadSummary,
     if (planContextHash != null) 'planContextHash': planContextHash,
   };
 }

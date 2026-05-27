@@ -36,6 +36,14 @@ mutation actions. This is a safety tripwire, not a medical diagnosis system or
 complete rehabilitation prescription, and it does not automatically modify
 plans.
 
+Coach Agent context now includes a deterministic `trainingLoadSummary` built
+from the active plan. It summarizes planned training days, rest days, weekly
+and daily set volume, in-week consecutive training streaks, coarse body-part
+set estimates, heuristic flags, and a simple `loadLevel`. This is read-only
+context for reasoning about frequency, volume, and beginner high-load signals;
+it does not mutate plans, diagnose medical risk, or provide a complete
+exercise-science prescription.
+
 ## Current Architecture
 
 ```text
