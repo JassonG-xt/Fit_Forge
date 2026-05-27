@@ -15,6 +15,7 @@ import re
 import uuid
 from typing import Iterable
 
+from agents.adaptation_planner import AdaptationDecision, plan_adaptation
 from agents.action_safety import inject_action_safety
 from agents.generate_plan_policy import (
     has_sufficient_generate_plan_context as _has_sufficient_generate_plan_context,
@@ -983,6 +984,53 @@ def _has_all(text: str, keys: Iterable[str]) -> bool:
     return all(k in text for k in keys)
 
 
+def _plan_adaptation(request: AgentRequest) -> AdaptationDecision:
+    return plan_adaptation(request.message, request.context.model_dump())
+
+
+def _planner_explicit_mutation_response(
+    request: AgentRequest,
+    decision: AdaptationDecision,
+) -> AgentResponse | None:
+    message = request.message
+    action_type = decision.recommended_action_type
+
+    if action_type == "compressWorkout":
+        return _compress_response(message, request)
+    if action_type == "replaceExercise":
+        return _replace_response(message, request)
+    if action_type == "rescheduleWeek":
+        rescheduled = _reschedule_response(message)
+        if rescheduled is not None:
+            return rescheduled
+        return _schedule_clarification_response()
+    if action_type == "moveWorkoutSession":
+        if _is_move_session(message):
+            return _move_session_response(message)
+        target_weekdays = _extract_weekdays(message)
+        if len(target_weekdays) == 1:
+            return _move_today_workout_response(request, target_weekdays[0])
+        return _feedback_move_clarification_response(request)
+    if action_type == "generatePlan":
+        return _generate_plan_response(message)
+    return None
+
+
+def _planner_read_only_response(
+    request: AgentRequest,
+    decision: AdaptationDecision,
+) -> AgentResponse | None:
+    load_advice = build_training_load_advice(
+        context=request.context,
+        user_message=request.message,
+    )
+    if load_advice is not None:
+        return load_advice
+    if decision.recommended_action_type == "weeklyReview":
+        return _weekly_review_response(request)
+    return None
+
+
 _GENERATE_PLAN_CLARIFICATION_MESSAGE = (
     "可以帮你生成训练计划。为了安排得更合适，我需要先确认你的目标、"
     "每周能练几次、以及你的训练经验水平。"
@@ -1020,6 +1068,10 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
     if assess_message_safety(message).has_medical_concern:
         return _safety_response(message)
 
+    planner_decision = _plan_adaptation(request)
+    if planner_decision.decision_type == "safety":
+        return _safety_response(message)
+
     pending_response = _resolve_pending_clarification(request)
     if pending_response is not None:
         return pending_response
@@ -1045,6 +1097,16 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
         rescheduled = _reschedule_response(message)
         if rescheduled is not None:
             return rescheduled
+
+    if planner_decision.decision_type == "explicitMutation":
+        planner_response = _planner_explicit_mutation_response(request, planner_decision)
+        if planner_response is not None:
+            return planner_response
+
+    if planner_decision.decision_type == "readOnlyAdaptation":
+        planner_response = _planner_read_only_response(request, planner_decision)
+        if planner_response is not None:
+            return planner_response
 
     load_advice = build_training_load_advice(
         context=request.context,

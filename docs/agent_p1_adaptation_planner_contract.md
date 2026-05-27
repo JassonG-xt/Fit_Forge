@@ -334,14 +334,26 @@ behavior changed in P1-B.
 
 ### P1-C: Native provider integration
 
-Next step. Integrate the helper into the native provider while preserving
-safety priority, explicit mutation routing, output validation, trusted
-context-hash injection, and provider fallback behavior.
+Implemented as native-provider-only routing. The deterministic helper now
+participates in the native backend provider path after the existing safety
+guardrail and before read-only load fallback. It may:
+
+- add a planner-local safety short-circuit for safety-overlap prompts such as
+  chest tightness without changing the global `fitness_guardrails.py` rule set
+- preserve explicit mutation intent by routing helper-classified mutation
+  requests to the existing native provider payload builders
+- enable read-only adaptation responses by reusing existing read-only response
+  builders, especially `training_load_advice.py`
+
+P1-C does not integrate the optional LangGraph provider, real LLM provider, or
+Flutter mock. It does not add action types, bypass output validation, change
+`sourceContextHash` trust boundaries, modify `LocalAgentActionExecutor`, or
+allow automatic plan mutation.
 
 ### P1-D: Flutter mock alignment
 
-Sync representative mock behavior after backend behavior is pinned. No UI
-rewrite and no executor expansion.
+Next step. Sync representative Flutter mock behavior after backend behavior is
+pinned. No UI rewrite and no executor expansion.
 
 ### P1-E: Eval expansion
 

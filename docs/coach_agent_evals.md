@@ -332,9 +332,10 @@ The full Phase F contract lives in
 
 ## P1 AdaptationPlanner Eval Requirements
 
-P1-A defines planned eval categories for future runtime work. It does not add
-active eval JSON cases and does not change the current mock/native behavior.
-The contract lives in
+P1-A defined planned eval categories for future runtime work. P1-C adds native
+provider pytest coverage for the deterministic helper integration, but it still
+does not add active eval JSON cases and does not integrate LangGraph or the
+real LLM provider. The contract lives in
 [`docs/agent_p1_adaptation_planner_contract.md`](agent_p1_adaptation_planner_contract.md).
 
 Future implementation PRs must add coverage for:
@@ -349,8 +350,12 @@ Future implementation PRs must add coverage for:
   programming, and ordinary weekly review prompts do not trigger safety or
   mutation false positives.
 
-These categories are planned requirements, not current active eval categories.
-Any future mutation-intent case must continue to assert
+These categories remain planned eval JSON requirements, not current active eval
+JSON categories. P1-C coverage lives in
+`agent_backend/tests/test_native_provider_adaptation_planner.py` and checks the
+native-provider-only runtime boundary: safety priority, mutation-not-stolen,
+read-only adaptation, and false positives. Any future mutation-intent case must
+continue to assert
 `requiresConfirmation=true`, trusted `sourceContextHash`, output validation,
 no direct execution, and no new action type.
 
