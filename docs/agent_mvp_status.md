@@ -60,6 +60,8 @@
 
 > P1-B AdaptationPlanner helper: backend-only. Adds a deterministic pure helper that classifies user requests into safety, explicit mutation, read-only adaptation, or fallback decisions. It is not wired into the native provider, optional LangGraph provider, Flutter mock, or `LocalAgentActionExecutor`; no runtime behavior, action type, safety guardrail, eval JSON, CI, or dependency behavior changed. Next step: P1-C native provider integration.
 
+> P1-C AdaptationPlanner native-provider integration: backend-only and native-provider-only. The deterministic helper now participates in native routing so safety-overlap prompts can short-circuit locally, explicit mutation requests can still flow to the existing confirmed mutation builders, and read-only adaptation can reuse the existing read-only response path. LangGraph, the real LLM provider, Flutter mock routing, `LocalAgentActionExecutor`, action schemas, output validation boundaries, and the global safety guardrail remain unchanged. Runtime behavior changed only in the native provider path; next step: P1-D Flutter mock alignment.
+
 ## P0 Safety / Load-Aware Baseline
 
 The latest `main` now includes the P0 Coach Agent safety and load-aware
@@ -89,7 +91,7 @@ Current positioning:
 
 Recommended next-stage work, not yet implemented:
 
-- P1-C native provider integration for the deterministic `AdaptationPlanner`
+- P1-D Flutter mock alignment for the deterministic `AdaptationPlanner`
   helper.
 - More granular `ContraindicationPolicy` taxonomy and false-positive review.
 - `PersonaPolicy` / `ResponseRenderer` separation for consistent coaching tone.
