@@ -167,6 +167,56 @@ void main() {
       },
     );
 
+    test(
+      'load-aware high load prompt returns read-only weeklyReview',
+      () async {
+        final response = await client.sendMessage(
+          message: '我是不是练太多了？',
+          context: _highLoadContextWithDay,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.weeklyReview);
+        expect(response.actions.single.type, AgentActionType.weeklyReview);
+        expect(response.actions.single.requiresConfirmation, false);
+        expect(
+          response.actions.single.payload['riskNotes'],
+          contains(contains('负荷偏高')),
+        );
+      },
+    );
+
+    test(
+      'load-aware prompt does not steal explicit compress request',
+      () async {
+        final response = await client.sendMessage(
+          message: '我想把今天训练压缩到20分钟',
+          context: _highLoadContextWithDay,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.compressWorkout);
+        expect(response.actions.single.type, AgentActionType.compressWorkout);
+        expect(response.actions.single.requiresConfirmation, true);
+        expect(response.actions.single.payload['targetMinutes'], 20);
+      },
+    );
+
+    test('safety request still wins over load-aware advice', () async {
+      final response = await client.sendMessage(
+        message: '我膝关节积液还能做跳跃HIIT吗？',
+        context: _moderateLoadContextWithDay,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.safetyResponse);
+      expect(response.safety.shouldStopWorkout, true);
+      expect(
+        response.actions.map((a) => a.type),
+        isNot(contains(AgentActionType.weeklyReview)),
+      );
+    });
+
     test('compress detects target minutes', () async {
       const context = _compressContextWithDay;
       final response = await client.sendMessage(
@@ -1260,6 +1310,74 @@ WorkoutPlan _seedMovePlan() => WorkoutPlan(
     for (var d = 2; d <= 7; d++)
       WorkoutDay(dayOfWeek: d, dayType: WorkoutDayType.rest),
   ],
+);
+
+const _highLoadContextWithDay = AgentContextSnapshot(
+  locale: 'zh-CN',
+  profile: {'weeklyFrequency': 4, 'experienceLevel': 'beginner'},
+  activePlan: {'id': 'load_plan'},
+  todayWorkout: {
+    'dayOfWeek': 1,
+    'dayType': 'push',
+    'exercises': [
+      {
+        'exerciseId': 'bench',
+        'exerciseName': 'Bench',
+        'targetSets': 3,
+        'targetReps': 8,
+        'restSeconds': 90,
+      },
+    ],
+  },
+  recentSessions: [],
+  bodyMetrics: [],
+  progressSummary: {},
+  availableExerciseSummary: [],
+  trainingLoadSummary: {
+    'plannedTrainingDays': 6,
+    'restDays': 1,
+    'totalPlannedSets': 72,
+    'maxDailySets': 18,
+    'longestConsecutiveTrainingDays': 4,
+    'weeklySetsByBodyPart': {'chest': 24, 'legs': 24},
+    'flags': ['high_training_frequency', 'long_consecutive_training_streak'],
+    'loadLevel': 'high',
+  },
+  planContextHash: 'trusted_load_hash',
+);
+
+const _moderateLoadContextWithDay = AgentContextSnapshot(
+  locale: 'zh-CN',
+  profile: {'weeklyFrequency': 3, 'experienceLevel': 'intermediate'},
+  activePlan: {'id': 'moderate_load_plan'},
+  todayWorkout: {
+    'dayOfWeek': 1,
+    'dayType': 'push',
+    'exercises': [
+      {
+        'exerciseId': 'bench',
+        'exerciseName': 'Bench',
+        'targetSets': 3,
+        'targetReps': 8,
+        'restSeconds': 90,
+      },
+    ],
+  },
+  recentSessions: [],
+  bodyMetrics: [],
+  progressSummary: {},
+  availableExerciseSummary: [],
+  trainingLoadSummary: {
+    'plannedTrainingDays': 3,
+    'restDays': 4,
+    'totalPlannedSets': 30,
+    'maxDailySets': 12,
+    'longestConsecutiveTrainingDays': 2,
+    'weeklySetsByBodyPart': {'chest': 10, 'back': 10, 'legs': 10},
+    'flags': <String>[],
+    'loadLevel': 'moderate',
+  },
+  planContextHash: 'trusted_load_hash',
 );
 
 const _compressContextWithDay = AgentContextSnapshot(

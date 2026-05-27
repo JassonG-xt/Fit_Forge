@@ -44,6 +44,13 @@ context for reasoning about frequency, volume, and beginner high-load signals;
 it does not mutate plans, diagnose medical risk, or provide a complete
 exercise-science prescription.
 
+Read-only coaching now consumes `trainingLoadSummary` for training-load
+reviews, recovery questions, and "is this week reasonable?" prompts. High
+load, beginner-high-volume/frequency, long-streak, low-load, moderate-load, and
+unknown/no-plan summaries produce `weeklyReview` guidance only. Safety
+guardrails still run first, explicit mutation intents still route to existing
+confirmed actions, and load advice never edits a plan automatically.
+
 ## Current Architecture
 
 ```text

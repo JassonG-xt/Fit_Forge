@@ -83,13 +83,19 @@ class MockAgentClient implements AgentClient {
     if (clarification != null && _shouldClarifyBeforeLegacyRouting(candidate)) {
       return _clarificationResponse(clarification, confidence: candidate.score);
     }
-    if (candidate.type == CoachIntentType.trainingFeedback ||
-        candidate.type == CoachIntentType.recoveryAdvice) {
-      return _weeklyReviewResponse(context, userMessage: message);
-    }
     if (candidate.type == CoachIntentType.rescheduleWeek &&
         candidate.slots.containsKey('availableWeekdays')) {
       return _rescheduleResponse(message, context);
+    }
+
+    final loadAdvice = _trainingLoadAdviceResponse(context, message);
+    if (loadAdvice != null) {
+      return loadAdvice;
+    }
+
+    if (candidate.type == CoachIntentType.trainingFeedback ||
+        candidate.type == CoachIntentType.recoveryAdvice) {
+      return _weeklyReviewResponse(context, userMessage: message);
     }
 
     // generatePlan 优先于 compress：当用户在「生成计划」请求里同时给出
@@ -1173,6 +1179,198 @@ class MockAgentClient implements AgentClient {
     }
     if (message.contains('半小时')) return 30;
     return null;
+  }
+
+  AgentResponse? _trainingLoadAdviceResponse(
+    AgentContextSnapshot context,
+    String message,
+  ) {
+    if (_hasExplicitLoadMutationIntent(message) ||
+        !_hasTrainingLoadReadonlyIntent(message)) {
+      return null;
+    }
+
+    final summary = context.trainingLoadSummary;
+    final loadLevel = (summary['loadLevel'] as String?)?.toLowerCase();
+    if (loadLevel == null ||
+        !{'high', 'moderate', 'low', 'unknown'}.contains(loadLevel)) {
+      return null;
+    }
+
+    final flags = (summary['flags'] as List? ?? const [])
+        .whereType<String>()
+        .toList();
+    final plannedDays = summary['plannedTrainingDays'] as int? ?? 0;
+    final totalSets = summary['totalPlannedSets'] as int? ?? 0;
+    final maxDailySets = summary['maxDailySets'] as int? ?? 0;
+    final longestStreak =
+        summary['longestConsecutiveTrainingDays'] as int? ?? 0;
+
+    final observations = <String>[
+      '计划训练 $plannedDays 天，总计划组数 $totalSets 组。',
+      '单日最高 $maxDailySets 组，最长连续训练 $longestStreak 天。',
+    ];
+    final riskNotes = <String>[];
+    final suggestions = <String>[];
+    int? completedSessions;
+    late String summaryText;
+
+    if ((loadLevel == 'unknown' || flags.contains('no_active_plan')) &&
+        context.recentSessions.isNotEmpty) {
+      return null;
+    }
+
+    if (loadLevel == 'unknown' || flags.contains('no_active_plan')) {
+      completedSessions = 0;
+      observations
+        ..clear()
+        ..add('当前没有可分析的有效训练计划，所以我不会伪造训练数据。');
+      suggestions
+        ..add('可以先建立稳定训练计划，或补充近期训练记录后再复盘负荷。')
+        ..add('数据不足时先保守训练，不要为了补量强行加练。')
+        ..add('我不会直接修改训练计划；需要调整时仍需要你明确提出并确认。');
+      summaryText = '当前训练负荷未知：没有可分析的有效训练计划。';
+    } else if (loadLevel == 'high' || _hasHighLoadFlag(flags)) {
+      observations.insert(0, '当前训练负荷偏高，建议优先保守处理。');
+      riskNotes.addAll(
+        _highLoadRiskNotes(
+          flags: flags,
+          plannedDays: plannedDays,
+          totalSets: totalSets,
+          maxDailySets: maxDailySets,
+          longestStreak: longestStreak,
+        ),
+      );
+      suggestions
+        ..add('建议降低强度、减少组数，或把今天改成恢复训练/休息。')
+        ..add('如果疲劳明显，优先睡眠、补水、热身和低强度活动。')
+        ..add('我不会直接修改训练计划；需要压缩或调整时仍需要你明确提出并确认。');
+      summaryText = '本周训练负荷偏高，建议先降强度或安排恢复。';
+    } else if (loadLevel == 'low') {
+      observations.insert(0, '当前训练负荷偏低或训练频率较少。');
+      suggestions
+        ..add('如果状态正常，可以逐步增加训练频率或先提高执行一致性。')
+        ..add('不要为了追进度突然大幅加量，先观察睡眠、疲劳和动作质量。')
+        ..add('我不会自动修改训练计划；需要调整时仍需要你明确提出并确认。');
+      summaryText = '当前训练负荷偏低，可以稳步提高一致性。';
+    } else {
+      observations.insert(0, '当前训练负荷大致可接受。');
+      suggestions
+        ..add('可以维持当前计划，继续关注睡眠、疲劳和关节不适。')
+        ..add('如果今天状态一般，优先保证动作质量，必要时降低强度。')
+        ..add('调整训练量应逐步进行；我不会自动修改训练计划。');
+      summaryText = '当前训练负荷大致可接受，建议稳步执行并关注恢复。';
+    }
+
+    final payload = <String, dynamic>{
+      'summary': summaryText,
+      'observations': observations,
+      'nextWeekSuggestions': suggestions,
+    };
+    if (completedSessions != null) {
+      payload['completedSessions'] = completedSessions;
+    }
+    if (riskNotes.isNotEmpty) {
+      payload['riskNotes'] = riskNotes;
+    }
+
+    return AgentResponse(
+      message: '$summaryText${suggestions.first}',
+      intent: AgentIntent.weeklyReview,
+      confidence: 0.86,
+      actions: [
+        AgentAction(
+          id: _newId('load_advice'),
+          type: AgentActionType.weeklyReview,
+          title: '训练负荷建议',
+          summary: summaryText,
+          requiresConfirmation: false,
+          payload: payload,
+        ),
+      ],
+    );
+  }
+
+  bool _hasTrainingLoadReadonlyIntent(String message) {
+    final lower = message.toLowerCase();
+    return [
+      '练太多',
+      '练得太多',
+      '训练太多',
+      '训练安排合理',
+      '安排合理',
+      '最近有点累',
+      '有点累',
+      '继续按计划',
+      '复盘',
+      '训练强度',
+      '状态一般',
+      '适合练',
+      '还要继续',
+      '还能训练',
+      '要不要休息',
+    ].any(lower.contains);
+  }
+
+  bool _hasExplicitLoadMutationIntent(String message) {
+    final lower = message.toLowerCase();
+    if (['生成计划', '制定计划', '新计划'].any(lower.contains)) return true;
+    if (['替换', '换成', '换掉', '换一个动作'].any(lower.contains)) return true;
+    if (['压缩', '压到', '缩短'].any(lower.contains)) return true;
+    if (RegExp(r'\d+\s*分钟').hasMatch(lower) &&
+        ['今天', '训练', '压', '缩短'].any(lower.contains)) {
+      return true;
+    }
+    if (['挪到', '移到', '改到', '调到', '只保留'].any(lower.contains)) {
+      return true;
+    }
+    if (['调整训练日', '改训练日', '重新安排到'].any(lower.contains)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _hasHighLoadFlag(List<String> flags) => flags.any(
+    {
+      'high_training_frequency',
+      'high_weekly_set_volume',
+      'high_daily_set_volume',
+      'long_consecutive_training_streak',
+      'beginner_high_frequency',
+      'beginner_high_volume',
+    }.contains,
+  );
+
+  List<String> _highLoadRiskNotes({
+    required List<String> flags,
+    required int plannedDays,
+    required int totalSets,
+    required int maxDailySets,
+    required int longestStreak,
+  }) {
+    final notes = <String>[];
+    if (flags.contains('high_training_frequency')) {
+      notes.add('训练天数较高（计划 $plannedDays 天），本周训练负荷偏高。');
+    }
+    if (flags.contains('high_weekly_set_volume')) {
+      notes.add('总计划组数较高（$totalSets 组），本周训练负荷偏高。');
+    }
+    if (flags.contains('high_daily_set_volume')) {
+      notes.add('单日组数偏高（最高 $maxDailySets 组），建议保守调整。');
+    }
+    if (flags.contains('long_consecutive_training_streak')) {
+      notes.add('连续训练天数较长（$longestStreak 天），恢复窗口偏少。');
+    }
+    if (flags.contains('beginner_high_frequency')) {
+      notes.add('初学者训练频率偏高（计划 $plannedDays 天），建议先保守执行。');
+    }
+    if (flags.contains('beginner_high_volume')) {
+      notes.add('初学者训练量偏高（计划 $totalSets 组），建议减少组数或强度。');
+    }
+    if (notes.isEmpty) {
+      notes.add('本周训练负荷偏高，建议优先安排恢复。');
+    }
+    return notes;
   }
 
   AgentResponse _weeklyReviewResponse(

@@ -109,6 +109,9 @@ def _build_context(case: Dict[str, Any]) -> Dict[str, Any]:
             **override["progressSummary"],
         }
 
+    if "trainingLoadSummary" in override:
+        ctx["trainingLoadSummary"] = override["trainingLoadSummary"]
+
     return ctx
 
 
