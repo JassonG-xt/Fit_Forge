@@ -6,18 +6,26 @@ from dataclasses import dataclass
 
 
 CARDIAC_RESPIRATORY_KEYWORDS = (
+    "胸闷",
+    "胸口闷",
     "胸口疼",
     "胸口有点疼",
     "胸痛",
     "心绞",
+    "心悸",
     "呼吸困难",
     "喘不上气",
+    "chest tightness",
+    "tight chest",
     "chest pain",
     "shortness of breath",
+    "difficulty breathing",
 )
 
 DIZZINESS_FAINTING_KEYWORDS = (
+    "快晕倒",
     "晕倒",
+    "晕厥",
     "昏厥",
     "严重头晕",
     "头晕",
@@ -26,7 +34,15 @@ DIZZINESS_FAINTING_KEYWORDS = (
     "dizzy",
     "dizziness",
     "faint",
+    "fainting",
     "fainted",
+)
+
+NAUSEA_KEYWORDS = (
+    "恶心",
+    "想吐",
+    "nausea",
+    "nauseous",
 )
 
 ACUTE_INJURY_KEYWORDS = (
@@ -44,9 +60,12 @@ ACUTE_INJURY_KEYWORDS = (
 )
 
 SEVERE_PAIN_KEYWORDS = (
+    "关节刺痛",
     "剧痛",
+    "剧烈疼痛",
     "严重疼",
     "疼得厉害",
+    "sharp joint pain",
     "severe pain",
 )
 
@@ -154,6 +173,7 @@ CONTRAINDICATED_TRAINING_KEYWORDS = (
 HIGH_RISK_KEYWORDS = (
     *CARDIAC_RESPIRATORY_KEYWORDS,
     *DIZZINESS_FAINTING_KEYWORDS,
+    *NAUSEA_KEYWORDS,
     *ACUTE_INJURY_KEYWORDS,
     *SEVERE_PAIN_KEYWORDS,
     *HIGH_RISK_POPULATION_KEYWORDS,

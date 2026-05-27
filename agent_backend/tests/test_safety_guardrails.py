@@ -20,6 +20,32 @@ def test_chest_pain_flagged() -> None:
     assert "胸口疼" in result.matched_keywords
 
 
+@pytest.mark.parametrize(
+    ("message", "expected_keyword"),
+    [
+        ("胸闷但想继续练", "胸闷"),
+        ("跑步时胸痛还能继续吗？", "胸痛"),
+        ("训练中头晕恶心", "头晕"),
+        ("我有点喘不上气还想冲一组", "喘不上气"),
+        ("膝盖关节刺痛还能深蹲吗？", "关节刺痛"),
+        ("I have chest tightness during training", "chest tightness"),
+        ("I feel chest pain when running", "chest pain"),
+        ("Shortness of breath but I want one more set", "shortness of breath"),
+        ("Difficulty breathing during HIIT", "difficulty breathing"),
+        ("I feel nausea and dizziness mid-workout", "nausea"),
+        ("Sharp joint pain during squats", "sharp joint pain"),
+    ],
+)
+def test_acute_symptom_terms_are_blocked(
+    message: str,
+    expected_keyword: str,
+) -> None:
+    result = assess_message_safety(message)
+    assert result.has_medical_concern is True
+    assert result.should_stop_workout is True
+    assert expected_keyword in result.matched_keywords
+
+
 def test_each_keyword_triggers() -> None:
     for kw in HIGH_RISK_KEYWORDS:
         sentence = f"我现在 {kw} 还可以训练吗"
@@ -156,6 +182,18 @@ def test_general_tiredness_not_flagged() -> None:
 
 def test_leg_soreness_not_flagged_as_contraindication() -> None:
     result = assess_message_safety("今天腿有点酸，还能训练吗？")
+    assert result.has_medical_concern is False
+    assert result.matched_keywords == ()
+
+
+def test_muscle_soreness_not_flagged_as_acute_joint_pain() -> None:
+    result = assess_message_safety("训练后肌肉酸痛，明天怎么安排？")
+    assert result.has_medical_concern is False
+    assert result.matched_keywords == ()
+
+
+def test_mild_breathlessness_not_flagged_as_breathing_difficulty() -> None:
+    result = assess_message_safety("有点喘，休息一下再练可以吗")
     assert result.has_medical_concern is False
     assert result.matched_keywords == ()
 

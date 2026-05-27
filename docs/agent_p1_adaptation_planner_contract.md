@@ -338,8 +338,9 @@ Implemented as native-provider-only routing. The deterministic helper now
 participates in the native backend provider path after the existing safety
 guardrail and before read-only load fallback. It may:
 
-- add a planner-local safety short-circuit for safety-overlap prompts such as
-  chest tightness without changing the global `fitness_guardrails.py` rule set
+- rely on the global deterministic safety guardrail for safety-overlap prompts,
+  including acute symptoms such as chest tightness/pain, breathing difficulty,
+  dizziness/fainting/nausea, and sharp or severe pain
 - preserve explicit mutation intent by routing helper-classified mutation
   requests to the existing native provider payload builders
 - enable read-only adaptation responses by reusing existing read-only response
@@ -349,6 +350,16 @@ P1-C does not integrate the optional LangGraph provider, real LLM provider, or
 Flutter mock. It does not add action types, bypass output validation, change
 `sourceContextHash` trust boundaries, modify `LocalAgentActionExecutor`, or
 allow automatic plan mutation.
+
+Follow-up acute symptom standardization moved chest tightness and related acute
+symptom handling into `fitness_guardrails.py` instead of keeping it as
+local planner behavior. The `AdaptationPlanner` should depend on
+`assess_message_safety` for these stop signals rather than maintaining a
+duplicate keyword list. Ordinary fatigue, "state is average" wording, ordinary
+muscle soreness, and mild exertion such as "a bit out of breath" should not be
+treated as high-risk safety. This remains a conservative safety stop signal,
+not a diagnosis, medical triage system, rehabilitation prescription, or claim
+that training is safe.
 
 ### P1-D: Flutter mock alignment
 

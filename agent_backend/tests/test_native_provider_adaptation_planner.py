@@ -4,6 +4,8 @@ import os
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 from agents.coach_agent import run_coach_agent
 from schemas.agent_request import AgentRequest
 
@@ -126,8 +128,18 @@ def _assert_no_mutation(response) -> None:
     assert all(action.requiresConfirmation is False for action in response.actions)
 
 
-def test_planner_safety_overlap_routes_chest_tightness_to_safety_response() -> None:
-    response = _run("胸闷但想继续练", _high_load_summary())
+@pytest.mark.parametrize(
+    "message",
+    [
+        "胸闷但想继续练",
+        "训练中头晕恶心",
+        "膝盖关节刺痛还能深蹲吗？",
+    ],
+)
+def test_global_acute_symptom_guardrail_routes_to_safety_response(
+    message: str,
+) -> None:
+    response = _run(message, _high_load_summary())
 
     assert response.intent == "safetyResponse"
     assert response.safety.shouldStopWorkout is True

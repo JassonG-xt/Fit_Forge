@@ -90,6 +90,25 @@ void main() {
       );
     });
 
+    test('acute symptom paraphrases route to safetyResponse', () async {
+      final state = await primedAppStateWithProfile();
+      final context = const AgentContextBuilder().build(state);
+
+      for (final message in ['胸闷但想继续练', '训练中头晕恶心', '膝盖关节刺痛还能深蹲吗']) {
+        final response = await client.sendMessage(
+          message: message,
+          context: context,
+          history: const [],
+        );
+
+        expect(response.intent, AgentIntent.safetyResponse, reason: message);
+        expect(response.safety.shouldStopWorkout, true, reason: message);
+        expect(response.actions.single.type, AgentActionType.safetyResponse);
+        expect(response.actions.single.requiresConfirmation, false);
+        expect(response.actions.single.riskLevel, AgentActionRiskLevel.high);
+      }
+    });
+
     test('safety risk in English does not generate mutation action', () async {
       final state = await primedAppStateWithProfile();
       final context = const AgentContextBuilder().build(state);

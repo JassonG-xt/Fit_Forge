@@ -33,10 +33,7 @@ def plan_adaptation(
     message = (user_message or "").strip()
     normalized = message.lower()
 
-    if (
-        assess_message_safety(message).has_medical_concern
-        or _has_planner_safety_overlap(normalized)
-    ):
+    if assess_message_safety(message).has_medical_concern:
         return AdaptationDecision(
             decision_type="safety",
             recommended_action_type="safetyResponse",
@@ -319,19 +316,6 @@ def _has_fatigue_signal(message: str) -> bool:
             "fatigued",
             "sore",
             "recovery",
-        ),
-    )
-
-
-def _has_planner_safety_overlap(message: str) -> bool:
-    # Planner-only P1 contract overlap; this does not change runtime guardrails.
-    return _has_any(
-        message,
-        (
-            "胸闷",
-            "胸口闷",
-            "chest tightness",
-            "tight chest",
         ),
     )
 

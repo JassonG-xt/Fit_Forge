@@ -29,16 +29,21 @@ refreshes eval counts, and clarifies that no known P0/P1 audit findings
 remain. It is docs-only and does not change runtime behavior.
 P1-A defines the future `AdaptationPlanner` contract and eval requirements in
 [`docs/agent_p1_adaptation_planner_contract.md`](agent_p1_adaptation_planner_contract.md).
-This is design-only until a later implementation PR lands; current runtime
-behavior remains the P0 safety/load-aware read-only coaching baseline.
+P1-B adds the deterministic backend helper, and P1-C integrates it into the
+native provider only. LangGraph / real LLM planner integration is still not
+included, Flutter executor boundaries are unchanged, and mutation still requires
+the existing preview and confirmation path.
 
 Coach Agent safety guardrails now include a first-pass deterministic
 contraindication-risk policy for common lumbar/spine risk, knee risk,
-hypertension/cardiovascular risk, and high-risk training requests. These
-checks run before LLM/provider routing and return `safetyResponse` without
-mutation actions. This is a safety tripwire, not a medical diagnosis system or
-complete rehabilitation prescription, and it does not automatically modify
-plans.
+hypertension/cardiovascular risk, acute symptoms, and high-risk training
+requests. Acute symptoms include chest tightness/pain, breathing difficulty,
+dizziness/fainting/nausea, and sharp or severe pain. Ordinary fatigue, ordinary
+muscle soreness, and mild exertion such as "a bit out of breath" are not
+high-risk safety signals by themselves. These checks run before LLM/provider
+routing and return `safetyResponse` without mutation actions. This is a safety
+tripwire, not a medical diagnosis system or complete rehabilitation
+prescription, and it does not automatically modify plans.
 
 Coach Agent context now includes a deterministic `trainingLoadSummary` built
 from the active plan. It summarizes planned training days, rest days, weekly
@@ -61,8 +66,9 @@ The current P0 baseline combines deterministic safety tripwires with read-only
 training-load reasoning:
 
 - Deterministic contraindication-risk guardrails cover lumbar / spine risk,
-  knee risk, hypertension / cardiovascular risk, and high-risk training
-  requests such as heavy deadlifts, jump HIIT, 1RM attempts, and jump squats.
+  knee risk, hypertension / cardiovascular risk, acute symptom stop signals,
+  and high-risk training requests such as heavy deadlifts, jump HIIT, 1RM
+  attempts, and jump squats.
 - `trainingLoadSummary` is available in Coach Agent context with
   `plannedTrainingDays`, `restDays`, `totalPlannedSets`, `maxDailySets`,
   `longestConsecutiveTrainingDays`, `weeklySetsByBodyPart`, `flags`, and
