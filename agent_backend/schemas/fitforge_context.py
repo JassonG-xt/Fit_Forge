@@ -19,4 +19,5 @@ class FitForgeContext(BaseModel):
     bodyMetrics: List[Dict[str, Any]] = Field(default_factory=list)
     progressSummary: Dict[str, Any] = Field(default_factory=dict)
     availableExerciseSummary: List[Dict[str, Any]] = Field(default_factory=list)
+    trainingLoadSummary: Optional[Dict[str, Any]] = None
     planContextHash: Optional[str] = None

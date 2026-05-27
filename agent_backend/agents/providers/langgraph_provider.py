@@ -25,6 +25,7 @@ from agents.orchestration_trace import (
     record_trace_provider,
     record_trace_response,
 )
+from agents.training_load_advice import build_training_load_advice
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -135,6 +136,12 @@ def recovery_policy_node(state: LangGraphCoachState) -> LangGraphCoachState:
             record_trace_decision("recovery_policy_node", "delegate_non_recovery")
         return {}
     record_trace_decision("recovery_policy_node", "policy_answer_only", signal)
+    load_advice = build_training_load_advice(
+        context=request.context,
+        user_message=request.message,
+    )
+    if load_advice is not None:
+        return {"response": load_advice}
     return {"response": _recovery_policy_response()}
 
 

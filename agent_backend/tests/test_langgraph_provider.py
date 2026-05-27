@@ -419,6 +419,39 @@ def test_recovery_policy_node_answers_only_for_overtraining() -> None:
     assert result["response"].actions == []
 
 
+def test_recovery_policy_node_uses_training_load_summary_when_available() -> None:
+    request = AgentRequest(
+        message="我是不是练太多了？",
+        context={
+            "trainingLoadSummary": {
+                "plannedTrainingDays": 6,
+                "restDays": 1,
+                "totalPlannedSets": 72,
+                "maxDailySets": 18,
+                "longestConsecutiveTrainingDays": 4,
+                "weeklySetsByBodyPart": {"chest": 24},
+                "flags": ["high_training_frequency"],
+                "loadLevel": "high",
+            }
+        },
+    )
+    result = recovery_policy_node(
+        {
+            "request": request,
+            "recovery": {
+                "signal": "overtraining",
+                "reason": "load_or_overtraining_keywords",
+            },
+        }
+    )
+
+    response = result["response"]
+    assert response.intent == "weeklyReview"
+    assert response.actions[0].type == "weeklyReview"
+    assert response.actions[0].requiresConfirmation is False
+    assert any("负荷偏高" in note for note in response.actions[0].payload["riskNotes"])
+
+
 def test_recovery_policy_node_does_not_intercept_explicit_compress_requests() -> None:
     assert recovery_policy_node(
         {

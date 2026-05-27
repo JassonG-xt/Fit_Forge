@@ -37,6 +37,9 @@ which provider is wired up:
 - Phase H.2 copy coverage: user-facing parser, executor, and LangGraph
   fallback failures stay actionable and do not expose internal payload field
   names
+- Load-aware read-only coaching coverage: `trainingLoadSummary` can inform
+  `weeklyReview` advice for high, unknown, and normal training-load review
+  prompts without stealing explicit mutation intents or bypassing safety
 - The agent never auto-executes; mutations always go through
   `AgentAction → preview → user confirmation → LocalAgentActionExecutor → AppState`
 
@@ -90,6 +93,7 @@ real-provider eval mocks the LLM transport.
 | `orchestrationBoundary` | 4 | Native default remains authoritative, LangGraph remains optional / experimental, and provider output still cannot bypass the structured-action boundary |
 | `pendingClarification` | 4 | Single-turn clarification completion from recent history; completed mutations still require confirmation and trusted `sourceContextHash` |
 | `feedbackFollowUp` | 4 | Feedback-to-adjustment follow-up after `weeklyReview`; concrete adjustments reuse existing mutation actions and still require confirmation |
+| `loadAwareReadOnly` | 4 | `trainingLoadSummary` drives read-only `weeklyReview` advice; explicit mutations and safety still win |
 
 ## Case status meanings
 
@@ -118,11 +122,12 @@ moveWorkoutSession: 3 active / 0 expectedGap
 nonMutatingCoaching: 26 active / 0
 pendingClarification: 4 active / 0
 feedbackFollowUp  : 4 active / 0
+loadAwareReadOnly : 4 active / 0
 safety            : 12 active / 0
 promptInjection   : 6 active / 0
 orchestrationBoundary: 4 active / 0
                   ────────────────────────
-total             : 88 active / 4 expectedGap (92 cases)
+total             : 92 active / 4 expectedGap (96 cases)
 ```
 
 The remaining 4 `expectedGap` cases are kept as regression signals and are not
@@ -515,6 +520,23 @@ Training feedback remains read-only. It does not create or apply
 `compressWorkout`, `replaceExercise`, `rescheduleWeek`, `moveWorkoutSession`, or
 `generatePlan`; high-risk health wording still short-circuits to
 `safetyResponse`.
+
+### LoadAwareReadOnly v1
+
+After `trainingLoadSummary` entered the Agent context, the native/mock and real
+provider boundary can use it for deterministic read-only coaching before
+falling back to generic weekly-review copy. Four active cases pin the boundary:
+
+| caseId | category | what it pins |
+|--------|----------|--------------|
+| `load_aware_high_load_advice_zh` | `loadAwareReadOnly` | high `loadLevel` / high-frequency flags return read-only `weeklyReview` guidance with recovery suggestions |
+| `load_aware_unknown_no_active_plan_zh` | `loadAwareReadOnly` | unknown/no active plan explains limited data instead of fabricating training details |
+| `load_aware_explicit_compress_not_stolen_zh` | `loadAwareReadOnly` | explicit compression still routes to confirmed `compressWorkout` |
+| `load_aware_safety_priority_zh` | `loadAwareReadOnly` | safety guardrails still beat load-aware read-only advice |
+
+This is not a medical diagnosis, full exercise prescription, automatic deload,
+or autonomous plan rewrite. It only adds context-grounded read-only reasoning;
+mutations still require explicit user intent, preview, and confirmation.
 
 ### PendingClarification v1
 

@@ -29,6 +29,7 @@ from agents.generate_plan_policy import (
     has_sufficient_generate_plan_context as _has_sufficient_generate_plan_context,
 )
 from agents.output_validation import normalize_agent_response
+from agents.training_load_advice import build_training_load_advice
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -326,6 +327,13 @@ def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
     # Safety pre-check: short-circuit before LLM call
     if assess_message_safety(request.message).has_medical_concern:
         return _safety_fallback_response(request.message)
+
+    load_advice = build_training_load_advice(
+        context=request.context,
+        user_message=request.message,
+    )
+    if load_advice is not None:
+        return load_advice
 
     base_url = os.environ.get("LLM_BASE_URL", "")
     api_key = os.environ.get("LLM_API_KEY", "")

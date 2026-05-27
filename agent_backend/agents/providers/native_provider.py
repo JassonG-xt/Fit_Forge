@@ -27,6 +27,7 @@ from agents.feedback.training_feedback_analyzer import analyze_training_feedback
 from agents.intent.clarification_policy import message_for as _clarification_for
 from agents.intent.coach_intent import CoachIntentType, IntentCandidate
 from agents.intent.intent_router import route as _route_intent
+from agents.training_load_advice import build_training_load_advice
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -1040,12 +1041,20 @@ def _route_mock_message(request: AgentRequest) -> AgentResponse:
     clarification = _clarification_for(candidate)
     if clarification and _should_clarify_before_legacy_routing(candidate):
         return _clarification_response(clarification, candidate.score)
-    if candidate.type in {CoachIntentType.trainingFeedback, CoachIntentType.recoveryAdvice}:
-        return _weekly_review_response(request)
     if candidate.type == CoachIntentType.rescheduleWeek and "availableWeekdays" in candidate.slots:
         rescheduled = _reschedule_response(message)
         if rescheduled is not None:
             return rescheduled
+
+    load_advice = build_training_load_advice(
+        context=request.context,
+        user_message=message,
+    )
+    if load_advice is not None:
+        return load_advice
+
+    if candidate.type in {CoachIntentType.trainingFeedback, CoachIntentType.recoveryAdvice}:
+        return _weekly_review_response(request)
 
     # generatePlan must win over compress when the user asks to generate a plan
     # AND happens to mention preferences like `每次 45 分钟` — the minutes are
