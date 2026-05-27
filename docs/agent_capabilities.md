@@ -27,6 +27,10 @@ without exposing internal payload field names.
 Phase H.3 consolidates the Coach Agent audit status after G.3/H.1/H.2,
 refreshes eval counts, and clarifies that no known P0/P1 audit findings
 remain. It is docs-only and does not change runtime behavior.
+P1-A defines the future `AdaptationPlanner` contract and eval requirements in
+[`docs/agent_p1_adaptation_planner_contract.md`](agent_p1_adaptation_planner_contract.md).
+This is design-only until a later implementation PR lands; current runtime
+behavior remains the P0 safety/load-aware read-only coaching baseline.
 
 Coach Agent safety guardrails now include a first-pass deterministic
 contraindication-risk policy for common lumbar/spine risk, knee risk,
@@ -269,6 +273,7 @@ validation evidence, limitations, and interview framing, see
 
 - `docs/agent_orchestration_adapter.md`
 - `docs/agent_phase_f_planner_nutrition_contract.md`
+- `docs/agent_p1_adaptation_planner_contract.md`
 - `docs/coach_agent_audit_summary.md`
 - `docs/coach_agent_evals.md`
 - `docs/coach_agent_demo_script.md`

@@ -330,6 +330,30 @@ nutrition requests.
 The full Phase F contract lives in
 [`docs/agent_phase_f_planner_nutrition_contract.md`](agent_phase_f_planner_nutrition_contract.md).
 
+## P1 AdaptationPlanner Eval Requirements
+
+P1-A defines planned eval categories for future runtime work. It does not add
+active eval JSON cases and does not change the current mock/native behavior.
+The contract lives in
+[`docs/agent_p1_adaptation_planner_contract.md`](agent_p1_adaptation_planner_contract.md).
+
+Future implementation PRs must add coverage for:
+
+- `adaptationPlannerReadOnly`: fatigue, recovery, and load-review prompts
+  produce recommendation-only responses and do not mutate plans.
+- `adaptationPlannerMutationIntent`: explicit compress, replace, reschedule,
+  move, or regenerate requests keep routing to existing confirmed actions.
+- `adaptationPlannerSafetyPriority`: high-risk symptoms or
+  contraindication-risk requests still short-circuit to `safetyResponse`.
+- `adaptationPlannerFalsePositive`: ordinary soreness, ordinary exercise
+  programming, and ordinary weekly review prompts do not trigger safety or
+  mutation false positives.
+
+These categories are planned requirements, not current active eval categories.
+Any future mutation-intent case must continue to assert
+`requiresConfirmation=true`, trusted `sourceContextHash`, output validation,
+no direct execution, and no new action type.
+
 ### Cross-run promotion of three paraphrases (history)
 
 Three Chinese paraphrases were promoted from `expectedGap` to `active` after

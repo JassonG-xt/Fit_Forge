@@ -56,6 +56,8 @@
 
 > Phase H.3 audit/docs consolidation: docs-only. Consolidates the Coach Agent audit status after G.3/H.1/H.2, refreshes eval counts to 77 total / 73 active / 4 expectedGap, and clarifies that no known P0/P1 audit findings remain. Runtime behavior, Flutter UI behavior, parser strictness, executor checks, backend routing, action schemas, LangGraph wiring, dependencies, and real LLM policy are unchanged.
 
+> P1-A AdaptationPlanner contract: docs-only. Defines the future `AdaptationPlanner` responsibility boundary, inputs, outputs, priority order, allowed existing actions, non-goals, roadmap, and planned eval categories in `docs/agent_p1_adaptation_planner_contract.md`. No runtime behavior changed; next implementation step is a deterministic backend helper before any provider integration.
+
 ## P0 Safety / Load-Aware Baseline
 
 The latest `main` now includes the P0 Coach Agent safety and load-aware
@@ -85,7 +87,7 @@ Current positioning:
 
 Recommended next-stage work, not yet implemented:
 
-- P1 `AdaptationPlanner` design before any automatic plan adjustment.
+- P1-B deterministic `AdaptationPlanner` helper based on the P1-A contract.
 - More granular `ContraindicationPolicy` taxonomy and false-positive review.
 - `PersonaPolicy` / `ResponseRenderer` separation for consistent coaching tone.
 - Pass^k real-provider quality evals outside per-PR CI.
