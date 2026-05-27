@@ -538,6 +538,42 @@ This is not a medical diagnosis, full exercise prescription, automatic deload,
 or autonomous plan rewrite. It only adds context-grounded read-only reasoning;
 mutations still require explicit user intent, preview, and confirmation.
 
+## P0 Safety and Load-Aware Eval Coverage
+
+The P0 safety / load-aware baseline is covered as deterministic contract and
+routing behavior, not as a full training-science quality score.
+
+Covered safety priority cases include:
+
+- Knee effusion plus jump HIIT routes to `safetyResponse`.
+- Severe hypertension plus a 1RM / max-effort request routes to
+  `safetyResponse`.
+- Ordinary leg soreness does not directly become a high-risk medical
+  `safetyResponse`.
+- Generic deadlift programming questions do not directly become
+  contraindication safety short-circuits.
+
+Covered load-aware read-only cases include:
+
+- High `trainingLoadSummary.loadLevel` / high-frequency flags route to
+  read-only `weeklyReview` advice.
+- Moderate load routes to read-only review rather than `safetyResponse`.
+- Unknown / no-active-plan summaries explain limited data instead of
+  fabricating training details.
+- Explicit mutation requests are not stolen by load-aware advice:
+  compression still routes to `compressWorkout`, replacement to
+  `replaceExercise`, weekly rescheduling to `rescheduleWeek`, and plan
+  regeneration to `generatePlan` when the corresponding user intent is explicit.
+
+Latest verified baseline after PR #118:
+
+- `flutter test`: 478 passed, 1 skipped
+- `cd agent_backend && python -m pytest`: 703 passed, 4 skipped
+
+This coverage is still primarily deterministic routing / contract coverage. It
+does not claim complete exercise-science quality scoring, provider promotion,
+or real-provider Pass^k stability. Those remain separate future eval tracks.
+
 ### PendingClarification v1
 
 After `pending-clarification-v1`, the mock/native path supports one-turn

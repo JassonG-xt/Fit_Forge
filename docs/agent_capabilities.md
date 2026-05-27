@@ -51,6 +51,38 @@ unknown/no-plan summaries produce `weeklyReview` guidance only. Safety
 guardrails still run first, explicit mutation intents still route to existing
 confirmed actions, and load advice never edits a plan automatically.
 
+## P0 Safety and Load-Aware Coaching Baseline
+
+The current P0 baseline combines deterministic safety tripwires with read-only
+training-load reasoning:
+
+- Deterministic contraindication-risk guardrails cover lumbar / spine risk,
+  knee risk, hypertension / cardiovascular risk, and high-risk training
+  requests such as heavy deadlifts, jump HIIT, 1RM attempts, and jump squats.
+- `trainingLoadSummary` is available in Coach Agent context with
+  `plannedTrainingDays`, `restDays`, `totalPlannedSets`, `maxDailySets`,
+  `longestConsecutiveTrainingDays`, `weeklySetsByBodyPart`, `flags`, and
+  `loadLevel`.
+- Load-aware read-only coaching consumes that summary for weekly review,
+  "am I training too much?", recovery, and schedule-reasonableness prompts.
+  It handles high, moderate, low, and unknown / no-active-plan summaries.
+- The routing priority is:
+  `safetyResponse > explicit mutation intent > load-aware read-only advice > fallback`.
+- Explicit mutation requests still use the existing confirmation flow:
+  `compressWorkout`, `replaceExercise`, `rescheduleWeek`, and `generatePlan`
+  remain mutation suggestions that require preview, user confirmation, and the
+  trusted `sourceContextHash` boundary.
+
+This baseline is intentionally conservative. It is not a medical diagnosis,
+rehabilitation prescription, complete exercise-science prescription, or
+replacement for a physician, physical therapist, or coach. It does not
+automatically modify plans, add mutation authority, compress workouts,
+reschedule training, replace exercises, or generate plans without explicit user
+intent and confirmation. `trainingLoadSummary` is a conservative heuristic
+summary, not a precise sports-science model. `weeklySetsByBodyPart` is a
+coarse estimate based on `WorkoutDayType.targetBodyParts`, not an exercise-level
+muscle accounting system.
+
 ## Current Architecture
 
 ```text
