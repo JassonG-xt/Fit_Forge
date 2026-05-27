@@ -77,13 +77,19 @@ void main() {
   testWidgets('calendar screen opens a completed workout day summary', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1000));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+    });
+
     final appState = await primedAppStateWithProfile();
     final now = DateTime.now();
+    final workoutDate = DateTime(now.year, now.month, 15, 12);
     appState.saveSession(
       WorkoutSession(
         id: 'calendar-session',
         dayType: WorkoutDayType.push,
-        date: now,
+        date: workoutDate,
         durationMinutes: 42,
         isCompleted: true,
         exerciseRecords: [
@@ -105,10 +111,16 @@ void main() {
       child: const CalendarScreen(),
     );
 
-    await tester.tap(find.text('${now.day}').first);
+    final targetDay = find.text('${workoutDate.day}').first;
+    await tester.ensureVisible(targetDay);
+    await tester.pumpAndSettle();
+    await tester.tap(targetDay);
     await tester.pumpAndSettle();
 
-    expect(find.text('${now.month}/${now.day} 训练记录'), findsOneWidget);
+    expect(
+      find.text('${workoutDate.month}/${workoutDate.day} 训练记录'),
+      findsOneWidget,
+    );
     expect(find.text('Bench Press'), findsOneWidget);
     expect(find.text('42 分钟'), findsOneWidget);
   });
