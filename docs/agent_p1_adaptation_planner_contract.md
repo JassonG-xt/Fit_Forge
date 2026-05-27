@@ -324,14 +324,19 @@ requirements without changing runtime behavior.
 
 ### P1-B: Deterministic AdaptationPlanner helper
 
-Backend-only pure helper that classifies safety, explicit mutation, read-only
-adaptation, and fallback. No new action types. No executor changes.
+Implemented as a backend-only pure helper in
+`agent_backend/agents/adaptation_planner.py`. It classifies safety, explicit
+mutation, read-only adaptation, and fallback decisions, and is covered by
+focused unit tests. It is not wired into the native provider, optional
+LangGraph provider, Flutter mock, or executor yet. No runtime behavior, action
+types, safety guardrails, eval JSON, CI, or `LocalAgentActionExecutor`
+behavior changed in P1-B.
 
 ### P1-C: Native provider integration
 
-Integrate the helper into the native provider while preserving safety priority,
-explicit mutation routing, output validation, trusted context-hash injection,
-and provider fallback behavior.
+Next step. Integrate the helper into the native provider while preserving
+safety priority, explicit mutation routing, output validation, trusted
+context-hash injection, and provider fallback behavior.
 
 ### P1-D: Flutter mock alignment
 
