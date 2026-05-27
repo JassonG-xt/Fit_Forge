@@ -277,7 +277,7 @@ class MockAgentClient implements AgentClient {
 
   // ──── intent matchers ────
 
-  static const _safetyKeywords = [
+  static const _coreSafetyKeywords = [
     '胸口有点疼',
     '胸口疼',
     '胸痛',
@@ -341,8 +341,72 @@ class MockAgentClient implements AgentClient {
     'underage',
   ];
 
-  bool _isSafetyRisk(String text) =>
-      _safetyKeywords.any(text.toLowerCase().contains);
+  static const _medicalConditionKeywords = [
+    '腰椎间盘突出',
+    '腰突',
+    '椎间盘突出',
+    '腰椎滑脱',
+    '腰伤',
+    '下背痛',
+    '膝关节积液',
+    '膝盖积液',
+    '半月板损伤',
+    '膝盖刺痛',
+    '膝盖剧痛',
+    '膝伤',
+    '严重高血压',
+    '高血压',
+    '血压很高',
+    '心脏病',
+    '心律不齐',
+    'herniated disc',
+    'disc herniation',
+    'knee effusion',
+    'meniscus injury',
+    'hypertension',
+    'high blood pressure',
+  ];
+
+  static const _contraindicatedTrainingKeywords = [
+    '大重量硬拉',
+    '硬拉',
+    '深蹲跳',
+    '跳跃',
+    '跳箱',
+    'HIIT',
+    'hiit',
+    '高强度间歇',
+    '冲极限',
+    '极限重量',
+    '1RM',
+    '1rm',
+    '憋气',
+    '力竭',
+    'deadlift',
+    'heavy deadlift',
+    'jump squat',
+    'box jump',
+    'box jumps',
+    'HIIT',
+    '1RM',
+    'max lift',
+  ];
+
+  static const _safetyKeywords = [
+    ..._coreSafetyKeywords,
+    ..._medicalConditionKeywords,
+    ..._contraindicatedTrainingKeywords,
+  ];
+
+  bool _isSafetyRisk(String text) {
+    final lower = text.toLowerCase();
+    final hasCoreRisk = _coreSafetyKeywords.any(lower.contains);
+    final hasMedicalCondition = _medicalConditionKeywords.any(lower.contains);
+    if (hasCoreRisk || hasMedicalCondition) {
+      return true;
+    }
+    return false;
+  }
 
   bool _isCompressIntent(String text) {
     final compressKeywords = [
@@ -662,8 +726,9 @@ class MockAgentClient implements AgentClient {
     return AgentResponse(
       message:
           '我不建议你在这种情况下继续训练。'
-          '胸痛、明显头晕、呼吸困难或急性损伤都可能意味着潜在风险。'
-          '请先停止训练，并尽快咨询医生或专业医疗人员。',
+          '胸痛、明显头晕、呼吸困难、急性损伤、明确伤病史或高风险动作请求都可能意味着潜在风险。'
+          '请先停止或避免当前训练请求，并咨询医生、康复师或专业教练评估。'
+          '在获得专业评估前，可以考虑低强度恢复性活动，但 FitForge 不提供医疗诊断或处方。',
       intent: AgentIntent.safetyResponse,
       confidence: 0.95,
       actions: [
@@ -671,7 +736,7 @@ class MockAgentClient implements AgentClient {
           id: _newId('safety'),
           type: AgentActionType.safetyResponse,
           title: '检测到潜在健康风险',
-          summary: '请暂停训练，并尽快寻求专业医疗帮助。FitForge 不提供医疗诊断或治疗建议。',
+          summary: '请暂停或避免当前高风险训练请求，并寻求医生、康复师或专业教练评估。FitForge 不提供医疗诊断或治疗建议。',
           requiresConfirmation: false,
           riskLevel: AgentActionRiskLevel.high,
           payload: {

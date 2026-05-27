@@ -69,8 +69,9 @@ def _safety_response(message: str) -> AgentResponse:
     return AgentResponse(
         message=(
             "我不建议你在这种情况下继续训练。"
-            "胸痛、明显头晕、呼吸困难或急性损伤都可能意味着潜在风险。"
-            "请先停止训练，并尽快咨询医生或专业医疗人员。"
+            "胸痛、明显头晕、呼吸困难、急性损伤、明确伤病史或高风险动作请求都可能意味着潜在风险。"
+            "请先停止或避免当前训练请求，并咨询医生、康复师或专业教练评估。"
+            "在获得专业评估前，可以考虑低强度恢复性活动，但 FitForge 不提供医疗诊断或处方。"
         ),
         intent="safetyResponse",
         confidence=0.95,
@@ -79,7 +80,7 @@ def _safety_response(message: str) -> AgentResponse:
                 id=_action_id("safety"),
                 type="safetyResponse",
                 title="检测到潜在健康风险",
-                summary="请暂停训练，并尽快寻求专业医疗帮助。FitForge 不提供医疗诊断或治疗建议。",
+                summary="请暂停或避免当前高风险训练请求，并寻求医生、康复师或专业教练评估。FitForge 不提供医疗诊断或治疗建议。",
                 requiresConfirmation=False,
                 riskLevel="high",
                 payload={

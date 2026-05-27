@@ -454,7 +454,9 @@ def _safety_response(message: str) -> AgentResponse:
     assessment = assess_message_safety(message)
     return AgentResponse(
         message=(
-            "不建议在这些症状下继续训练。请先停止训练，并尽快寻求专业医疗帮助。"
+            "不建议在这些症状、伤病史或高风险动作请求下继续训练。"
+            "请先停止或避免当前训练请求，并咨询医生、康复师或专业教练评估。"
+            "FitForge 不提供医疗诊断或处方。"
         ),
         intent="safetyResponse",
         confidence=0.95,
@@ -463,7 +465,7 @@ def _safety_response(message: str) -> AgentResponse:
                 id="safety_langgraph",
                 type="safetyResponse",
                 title="检测到潜在健康风险",
-                summary="请停止训练并寻求专业帮助。FitForge 不提供医疗诊断。",
+                summary="请暂停或避免当前高风险训练请求，并寻求医生、康复师或专业教练评估。FitForge 不提供医疗诊断。",
                 requiresConfirmation=False,
                 riskLevel="high",
                 payload={

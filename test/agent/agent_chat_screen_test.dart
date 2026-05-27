@@ -191,7 +191,7 @@ void main() {
 
     expect(find.textContaining('我可以帮你生成训练计划'), findsNothing);
     expect(find.text('检测到潜在健康风险'), findsOneWidget);
-    expect(find.textContaining('请暂停训练'), findsWidgets);
+    expect(find.textContaining('请先停止或避免当前训练请求'), findsWidgets);
     expect(find.text('应用修改'), findsNothing);
   });
 
