@@ -338,6 +338,14 @@ does not add active eval JSON cases and does not integrate LangGraph or the
 real LLM provider. The contract lives in
 [`docs/agent_p1_adaptation_planner_contract.md`](agent_p1_adaptation_planner_contract.md).
 
+Acute symptom safety coverage is now standardized in the global deterministic
+guardrail rather than living only in the native planner path. Backend safety,
+planner, native provider, and Flutter mock tests cover chest tightness/pain,
+breathing difficulty, dizziness/fainting/nausea, and sharp or severe pain while
+guarding ordinary fatigue, ordinary muscle soreness, and mild exertion against
+high-risk false positives. This does not add eval JSON cases, action types,
+mutation behavior, or medical diagnosis/triage claims.
+
 Future implementation PRs must add coverage for:
 
 - `adaptationPlannerReadOnly`: fatigue, recovery, and load-review prompts
