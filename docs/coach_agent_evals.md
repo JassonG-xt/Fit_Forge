@@ -400,14 +400,29 @@ P1-F smoke support adds:
 - flaky case reporting
 - safety failure reporting
 - mutation-routing failure reporting
+- sanitized failure diagnostics via `attemptDiagnostics` and
+  `failureClassBreakdown`
 
 Latest dry-run/fake-transport check:
 
 - dry-run P1 smoke: 13 cases / 39 attempts / 39 passed
 
 That dry-run validates report plumbing only. It is not evidence of live
-real-provider stability, and no live real-provider P1 Pass^k result is recorded
-in this docs update.
+real-provider stability.
+
+A later manual live P1 smoke was **not** a clean pass:
+
+- repeat 3 / 13 cases / 39 attempts
+- 32 passed / 7 failed / 82.05% pass rate
+- safety failures: none
+- mutation-routing failures: `adaptation_mutation_replace_equipment_zh`
+- false-positive category: 6/9 failed
+
+That run remains a failed smoke result and is not provider promotion. The
+diagnostics added after the run are intended to separate provider empty /
+non-JSON output, parser/schema issues, safety over-trigger, mutation routing,
+no-action fallback, and potential eval-expectation mismatches without storing
+raw LLM output or credentials.
 
 ### Cross-run promotion of three paraphrases (history)
 

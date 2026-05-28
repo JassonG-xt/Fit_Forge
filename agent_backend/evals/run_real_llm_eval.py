@@ -46,6 +46,8 @@ import time
 import traceback
 import unicodedata
 import uuid
+from collections import Counter
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -124,6 +126,20 @@ _PROVIDER_ERROR_KINDS = (
 )
 
 
+_FAILURE_CLASSES = (
+    "provider_empty_content",
+    "provider_non_json",
+    "parser_failure",
+    "schema_validation",
+    "unknown_action",
+    "safety_over_trigger",
+    "mutation_routing",
+    "no_action_fallback",
+    "eval_expectation",
+    "other",
+)
+
+
 @dataclass
 class TransientSignals:
     requestError: bool = False
@@ -160,9 +176,10 @@ class CaseResult:
     promptInjectionOk: Optional[bool] = None
     failureReason: Optional[str] = None
     transientSignals: TransientSignals = field(default_factory=TransientSignals)
+    diagnostics: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        data = {
             "caseId": self.caseId,
             "category": self.category,
             "status": self.status,
@@ -178,6 +195,338 @@ class CaseResult:
             "failureReason": self.failureReason,
             "transientSignals": self.transientSignals.to_dict(),
         }
+        if self.diagnostics is not None:
+            data["diagnostics"] = dict(self.diagnostics)
+        return data
+
+
+@dataclass
+class AttemptDiagnosticsCapture:
+    """Sanitized per-attempt observations gathered inside the eval harness.
+
+    This stores shapes, counts, action types, and closed-set reason codes only.
+    It never stores raw provider output, prompts, context JSON, URLs, or keys.
+    """
+
+    rawTextLength: int = 0
+    hasRawText: bool = False
+    rawTextLooksJsonish: bool = False
+    preNormalizationActionTypes: List[str] = field(default_factory=list)
+    preNormalizationRequiresConfirmationValues: List[bool] = field(
+        default_factory=list
+    )
+    postNormalizationActionTypes: List[str] = field(default_factory=list)
+    postNormalizationRequiresConfirmationValues: List[bool] = field(
+        default_factory=list
+    )
+    normalizedIntent: Optional[str] = None
+    outputValidationWarnings: List[str] = field(default_factory=list)
+    safeAnswerFallbackCalled: bool = False
+    generatePlanClarificationCalled: bool = False
+    safetyResponseFromTextCalled: bool = False
+
+    def record_raw_text(self, raw: str) -> None:
+        self.rawTextLength = len(raw)
+        self.hasRawText = bool(raw)
+        self.rawTextLooksJsonish = _looks_jsonish(raw)
+
+    def record_raw_response(self, raw: Any) -> None:
+        if not isinstance(raw, dict):
+            return
+        actions = raw.get("actions")
+        if not isinstance(actions, list):
+            return
+        self.preNormalizationActionTypes = [
+            _action_type_label(action.get("type"))
+            for action in actions
+            if isinstance(action, dict)
+        ]
+        self.preNormalizationRequiresConfirmationValues = [
+            action["requiresConfirmation"]
+            for action in actions
+            if isinstance(action, dict)
+            and isinstance(action.get("requiresConfirmation"), bool)
+        ]
+
+    def record_normalized_response(self, response: Any) -> None:
+        actions = getattr(response, "actions", []) or []
+        self.postNormalizationActionTypes = [
+            getattr(action, "type", "")
+            for action in actions
+            if getattr(action, "type", None)
+        ]
+        self.postNormalizationRequiresConfirmationValues = [
+            action.requiresConfirmation
+            for action in actions
+            if hasattr(action, "requiresConfirmation")
+        ]
+        self.normalizedIntent = getattr(response, "intent", None)
+
+
+class _OutputValidationSignalCapture(logging.Handler):
+    """Capture sanitized output-validation warnings for diagnostics."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+        self.messages: List[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - defensive diagnostics only
+            return
+        if message.startswith("Dropped "):
+            self.messages.append(message)
+
+
+def _looks_jsonish(raw: str) -> bool:
+    text = raw.strip()
+    if not text:
+        return False
+    if text.startswith("```"):
+        lines = text.split("\n", 1)
+        text = lines[1].strip() if len(lines) > 1 else ""
+        if text.endswith("```"):
+            text = text[:-3].rstrip()
+    return text.startswith("{") or text.startswith("[")
+
+
+def _action_type_label(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return f"<bool:{str(value).lower()}>"
+    if isinstance(value, (int, float)):
+        return f"<number:{value}>"
+    if value is None:
+        return "<missing>"
+    return f"<{type(value).__name__}>"
+
+
+def _dedupe(items: List[str]) -> List[str]:
+    out: List[str] = []
+    seen = set()
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
+def _action_type_difference(
+    pre_types: List[str],
+    post_types: List[str],
+) -> List[str]:
+    remaining = list(post_types)
+    dropped: List[str] = []
+    for action_type in pre_types:
+        if action_type in remaining:
+            remaining.remove(action_type)
+        else:
+            dropped.append(action_type)
+    return dropped
+
+
+def _drop_reasons_from_warnings(warnings: List[str]) -> List[str]:
+    reasons: List[str] = []
+    for message in warnings:
+        if "unsupported LLM action type" in message:
+            reasons.append("unsupported_action_type")
+        elif "without trusted context hash" in message:
+            reasons.append("missing_trusted_context_hash")
+        elif "invalid payload" in message:
+            reasons.append("invalid_payload")
+    return _dedupe(reasons)
+
+
+def _failure_reason_codes(reason: Optional[str]) -> List[str]:
+    if not reason:
+        return []
+    codes: List[str] = []
+    if "payload missing fields" in reason:
+        codes.append("missing_payload_fields")
+    if "no actions" in reason:
+        codes.append("no_actions")
+    if "requiresConfirmation false" in reason:
+        codes.append("requires_confirmation_false")
+    if "sourceContextHash mismatch" in reason:
+        codes.append("source_context_hash_mismatch")
+    if "actionType:" in reason:
+        codes.append("action_type_mismatch")
+    return codes
+
+
+def _boundary_impacts(
+    case: Dict[str, Any],
+    result: CaseResult,
+    capture: AttemptDiagnosticsCapture,
+) -> List[str]:
+    impacts: List[str] = []
+    category = case.get("category", result.category)
+    expected = result.expectedActionType
+    actual = result.actualActionTypes
+
+    if (
+        category == "adaptationPlannerMutationIntent"
+        and expected in _MUTATION_ACTION_TYPES
+        and expected not in actual
+    ):
+        impacts.append("mutation_routing")
+    if category == "adaptationPlannerSafetyPriority" and expected == "safetyResponse":
+        if "safetyResponse" not in actual:
+            impacts.append("safety_priority")
+    if category == "adaptationPlannerFalsePositive":
+        if "safetyResponse" in actual or capture.normalizedIntent == "safetyResponse":
+            impacts.append("safety_over_trigger")
+        if any(action_type in _MUTATION_ACTION_TYPES for action_type in actual):
+            impacts.append("false_positive_mutation")
+        if not impacts:
+            impacts.append("false_positive")
+    return _dedupe(impacts)
+
+
+def _classify_attempt_failure(
+    case: Dict[str, Any],
+    result: CaseResult,
+    capture: AttemptDiagnosticsCapture,
+    drop_reasons: List[str],
+) -> str:
+    signals = result.transientSignals
+    category = case.get("category", result.category)
+    expected = result.expectedActionType
+    actual = result.actualActionTypes
+
+    if signals.emptyContent:
+        return "provider_empty_content"
+    if signals.nonJson:
+        return "parser_failure" if capture.rawTextLooksJsonish else "provider_non_json"
+    if "unsupported_action_type" in drop_reasons:
+        return "unknown_action"
+    if (
+        "invalid_payload" in drop_reasons
+        or "missing_trusted_context_hash" in drop_reasons
+    ):
+        return "schema_validation"
+    if (
+        category == "adaptationPlannerFalsePositive"
+        and ("safetyResponse" in actual or capture.normalizedIntent == "safetyResponse")
+    ):
+        return "safety_over_trigger"
+    if (
+        category == "adaptationPlannerMutationIntent"
+        and expected in _MUTATION_ACTION_TYPES
+        and expected not in actual
+    ):
+        return "mutation_routing"
+    if not actual and (
+        capture.safeAnswerFallbackCalled
+        or "no actions" in (result.failureReason or "")
+    ):
+        return "no_action_fallback"
+    if (
+        expected in {"weeklyReview", "nutritionAdvice"}
+        and actual
+        and not any(t in _MUTATION_ACTION_TYPES or t == "safetyResponse" for t in actual)
+    ):
+        return "eval_expectation"
+    return "other"
+
+
+def _build_attempt_diagnostic(
+    *,
+    case: Dict[str, Any],
+    result: CaseResult,
+    capture: AttemptDiagnosticsCapture,
+    attempt_index: int = 0,
+) -> Dict[str, Any]:
+    expected_types = [result.expectedActionType] if result.expectedActionType else []
+    post_types = capture.postNormalizationActionTypes or list(result.actualActionTypes)
+    dropped = _action_type_difference(
+        capture.preNormalizationActionTypes,
+        post_types,
+    )
+    drop_reasons = _drop_reasons_from_warnings(capture.outputValidationWarnings)
+    if dropped and not drop_reasons:
+        drop_reasons.append("dropped_during_normalization")
+
+    validation_codes = _dedupe(
+        drop_reasons
+        + _failure_reason_codes(result.failureReason)
+        + (["empty_content"] if result.transientSignals.emptyContent else [])
+        + (["non_json"] if result.transientSignals.nonJson else [])
+        + (["safe_answer_fallback"] if capture.safeAnswerFallbackCalled else [])
+        + (
+            ["generate_plan_clarification"]
+            if capture.generatePlanClarificationCalled else []
+        )
+        + (
+            ["post_safety_conversion"]
+            if capture.safetyResponseFromTextCalled else []
+        )
+    )
+    failure_class = _classify_attempt_failure(
+        case,
+        result,
+        capture,
+        drop_reasons,
+    )
+    impacts = _boundary_impacts(case, result, capture)
+    secondary = [
+        impact
+        for impact in impacts
+        if impact != failure_class
+    ]
+
+    summary_parts = [failure_class]
+    if expected_types:
+        summary_parts.append(f"expected={','.join(expected_types)}")
+    summary_parts.append(
+        "actual=" + (
+            ",".join(result.actualActionTypes)
+            if result.actualActionTypes else "none"
+        )
+    )
+    if result.transientSignals.providerErrorKind:
+        summary_parts.append(f"provider={result.transientSignals.providerErrorKind}")
+    if result.transientSignals.nonJson:
+        summary_parts.append(f"rawTextLength={capture.rawTextLength}")
+
+    return {
+        "caseId": result.caseId,
+        "category": result.category,
+        "attemptIndex": attempt_index,
+        "passed": result.outcome in {"pass", "expectedGapConverted"},
+        "failureClass": failure_class,
+        "secondaryFailureClasses": secondary,
+        "boundaryImpact": impacts,
+        "expectedActionTypes": expected_types,
+        "actualActionTypes": list(result.actualActionTypes),
+        "preNormalizationActionTypes": list(capture.preNormalizationActionTypes),
+        "postNormalizationActionTypes": post_types,
+        "droppedActionTypes": dropped,
+        "dropReasons": drop_reasons,
+        "requiresConfirmationValues": (
+            list(capture.postNormalizationRequiresConfirmationValues)
+            or list(capture.preNormalizationRequiresConfirmationValues)
+        ),
+        "hasRawText": capture.hasRawText,
+        "rawTextLength": capture.rawTextLength,
+        "nonJson": result.transientSignals.nonJson,
+        "emptyContent": result.transientSignals.emptyContent,
+        "validationErrorCodes": validation_codes,
+        "sanitizedSummary": "; ".join(summary_parts),
+    }
+
+
+def _failure_class_breakdown(
+    diagnostics: List[Dict[str, Any]],
+) -> Dict[str, int]:
+    counts = Counter(d.get("failureClass", "other") for d in diagnostics)
+    return {
+        failure_class: counts.get(failure_class, 0)
+        for failure_class in _FAILURE_CLASSES
+    }
 
 
 # ── Loading and filtering ───────────────────────────────────────────
@@ -828,6 +1177,7 @@ def _run_one_case(
     case: Dict[str, Any],
     *,
     dry_run: bool,
+    include_diagnostics: bool = False,
 ) -> CaseResult:
     """Execute a single case through the real provider (or fake transport)."""
     # Import lazily so test code can monkeypatch and so importing this module
@@ -851,27 +1201,139 @@ def _run_one_case(
         env_overlay.setdefault("LLM_MODEL", "dry-run-fake-model")
 
     capture = _TransientSignalCapture()
+    diagnostics_capture = (
+        AttemptDiagnosticsCapture() if include_diagnostics else None
+    )
+    output_validation_capture = (
+        _OutputValidationSignalCapture() if include_diagnostics else None
+    )
     provider_logger = logging.getLogger(_PROVIDER_LOGGER_NAME)
     saved_level = provider_logger.level
     provider_logger.addHandler(capture)
+    output_validation_logger = logging.getLogger("agents.output_validation")
+    saved_output_validation_level = output_validation_logger.level
+    if output_validation_capture is not None:
+        output_validation_logger.addHandler(output_validation_capture)
     # Ensure WARNING-level records (non-JSON, request failed) reach the handler
     # even if some outer configuration raised the logger's level above WARNING.
     if saved_level == logging.NOTSET or saved_level > logging.WARNING:
         provider_logger.setLevel(logging.WARNING)
+    if (
+        output_validation_capture is not None
+        and (
+            saved_output_validation_level == logging.NOTSET
+            or saved_output_validation_level > logging.WARNING
+        )
+    ):
+        output_validation_logger.setLevel(logging.WARNING)
+
+    def _finalize(result: CaseResult) -> CaseResult:
+        result.transientSignals = capture.signals
+        if diagnostics_capture is not None and result.outcome not in {
+            "pass",
+            "expectedGapConverted",
+        }:
+            if output_validation_capture is not None:
+                diagnostics_capture.outputValidationWarnings = list(
+                    output_validation_capture.messages
+                )
+            result.diagnostics = _build_attempt_diagnostic(
+                case=case,
+                result=result,
+                capture=diagnostics_capture,
+            )
+        return result
+
     try:
-        with patch.dict(os.environ, env_overlay):
+        with ExitStack() as stack:
+            stack.enter_context(patch.dict(os.environ, env_overlay))
+            if diagnostics_capture is not None:
+                import agents.llm_provider as llm_provider
+                import agents.output_validation as output_validation
+
+                original_normalize = llm_provider.normalize_agent_response
+
+                def _normalize_wrapper(raw: Any, *args: Any, **kwargs: Any) -> Any:
+                    diagnostics_capture.record_raw_response(raw)
+                    response = original_normalize(raw, *args, **kwargs)
+                    diagnostics_capture.record_normalized_response(response)
+                    return response
+
+                stack.enter_context(
+                    patch(
+                        "agents.llm_provider.normalize_agent_response",
+                        _normalize_wrapper,
+                    )
+                )
+
+                original_safe_answer = output_validation._safe_answer_fallback
+
+                def _safe_answer_wrapper() -> Any:
+                    diagnostics_capture.safeAnswerFallbackCalled = True
+                    return original_safe_answer()
+
+                stack.enter_context(
+                    patch(
+                        "agents.output_validation._safe_answer_fallback",
+                        _safe_answer_wrapper,
+                    )
+                )
+
+                original_generate_clarification = (
+                    output_validation._generate_plan_clarification
+                )
+
+                def _generate_clarification_wrapper() -> Any:
+                    diagnostics_capture.generatePlanClarificationCalled = True
+                    return original_generate_clarification()
+
+                stack.enter_context(
+                    patch(
+                        "agents.output_validation._generate_plan_clarification",
+                        _generate_clarification_wrapper,
+                    )
+                )
+
+                original_safety_response = output_validation._safety_response_from_text
+
+                def _safety_response_wrapper(text: str) -> Any:
+                    diagnostics_capture.safetyResponseFromTextCalled = True
+                    return original_safety_response(text)
+
+                stack.enter_context(
+                    patch(
+                        "agents.output_validation._safety_response_from_text",
+                        _safety_response_wrapper,
+                    )
+                )
+
+                if not dry_run:
+                    original_call_llm = llm_provider._call_llm
+
+                    def _call_llm_wrapper(*args: Any, **kwargs: Any) -> str:
+                        raw = original_call_llm(*args, **kwargs)
+                        diagnostics_capture.record_raw_text(raw)
+                        return raw
+
+                    stack.enter_context(
+                        patch("agents.llm_provider._call_llm", _call_llm_wrapper)
+                    )
+
             if dry_run:
                 fake_payload = _dry_run_response_for_case(case)
-                with patch(
+                if diagnostics_capture is not None:
+                    diagnostics_capture.record_raw_text(fake_payload)
+                stack.enter_context(patch(
                     "agents.llm_provider._call_llm",
                     return_value=fake_payload,
-                ):
-                    response = run_coach_agent(request)
-            else:
-                response = run_coach_agent(request)
+                ))
+            response = run_coach_agent(request)
     except Exception as exc:  # noqa: BLE001 — eval must not crash on bad output
         provider_logger.removeHandler(capture)
         provider_logger.setLevel(saved_level)
+        if output_validation_capture is not None:
+            output_validation_logger.removeHandler(output_validation_capture)
+            output_validation_logger.setLevel(saved_output_validation_level)
         result = CaseResult(
             caseId=case["id"],
             category=case.get("category", "unknown"),
@@ -881,15 +1343,16 @@ def _run_one_case(
             expectedActionType=case.get("expected", {}).get("actionType"),
             failureReason=f"{type(exc).__name__}: {exc}"[:500],
         )
-        result.transientSignals = capture.signals
-        return result
+        return _finalize(result)
     else:
         provider_logger.removeHandler(capture)
         provider_logger.setLevel(saved_level)
+        if output_validation_capture is not None:
+            output_validation_logger.removeHandler(output_validation_capture)
+            output_validation_logger.setLevel(saved_output_validation_level)
 
     result = _evaluate_response(case, response)
-    result.transientSignals = capture.signals
-    return result
+    return _finalize(result)
 
 
 def run_eval(
@@ -1294,6 +1757,12 @@ def _normalize_passk_attempts(attempts: List[Any]) -> List[Dict[str, Any]]:
         counts_by_case[case_id] = counts_by_case.get(case_id, 0) + 1
         record.setdefault("attempt", counts_by_case[case_id])
         record["passed"] = _attempt_passed(record.get("outcome", ""))
+        diagnostics = record.get("diagnostics")
+        if isinstance(diagnostics, dict):
+            diagnostics = dict(diagnostics)
+            diagnostics["attemptIndex"] = record["attempt"]
+            diagnostics["passed"] = record["passed"]
+            record["diagnostics"] = diagnostics
         normalized.append(record)
     return normalized
 
@@ -1391,6 +1860,47 @@ def _build_passk_report(
         case["id"]: case.get("category", "unknown")
         for case in cases
     }
+    case_by_id = {case["id"]: case for case in cases}
+    attempt_diagnostics: List[Dict[str, Any]] = []
+    for record in records:
+        if record.get("passed"):
+            continue
+        diagnostics = record.get("diagnostics")
+        if isinstance(diagnostics, dict):
+            attempt_diagnostics.append(dict(diagnostics))
+            continue
+        fallback_result = CaseResult(
+            caseId=record["caseId"],
+            category=record.get("category", "unknown"),
+            status=record.get("status", "unknown"),
+            userMessage=record.get("userMessage", ""),
+            outcome=record.get("outcome", "fail"),
+            expectedActionType=record.get("expectedActionType"),
+            actualActionTypes=list(record.get("actualActionTypes") or []),
+            failureReason=record.get("failureReason"),
+        )
+        signals = record.get("transientSignals") or {}
+        fallback_result.transientSignals = TransientSignals(
+            requestError=bool(signals.get("requestError", False)),
+            timeout=bool(signals.get("timeout", False)),
+            nonJson=bool(signals.get("nonJson", False)),
+            emptyContent=bool(signals.get("emptyContent", False)),
+            otherProviderError=bool(signals.get("otherProviderError", False)),
+            providerErrorKind=signals.get("providerErrorKind"),
+        )
+        attempt_diagnostics.append(
+            _build_attempt_diagnostic(
+                case=case_by_id.get(record["caseId"], {}),
+                result=fallback_result,
+                capture=AttemptDiagnosticsCapture(),
+                attempt_index=record.get("attempt", 0),
+            )
+        )
+    records_for_report = []
+    for record in records:
+        clean = dict(record)
+        clean.pop("diagnostics", None)
+        records_for_report.append(clean)
 
     return {
         "runId": (
@@ -1415,9 +1925,11 @@ def _build_passk_report(
             else 0.0
         ),
         "caseResults": case_results,
-        "attemptResults": records,
-        "results": records,
+        "attemptResults": records_for_report,
+        "results": records_for_report,
         "categoryBreakdown": category_breakdown,
+        "attemptDiagnostics": attempt_diagnostics,
+        "failureClassBreakdown": _failure_class_breakdown(attempt_diagnostics),
         "flakyCases": [c["caseId"] for c in case_results if c["flaky"]],
         "safetyFailures": sorted(
             case_id
@@ -1429,7 +1941,7 @@ def _build_passk_report(
             for case_id in failed_case_ids
             if category_by_case_id.get(case_id) == "adaptationPlannerMutationIntent"
         ),
-        "transientSignals": _passk_transient_summary(records),
+        "transientSignals": _passk_transient_summary(records_for_report),
     }
 
 
@@ -1458,7 +1970,11 @@ def run_passk_eval(
                     failureReason=f"status={case.get('status')}",
                 )
             else:
-                result = _run_one_case(case, dry_run=dry_run)
+                result = _run_one_case(
+                    case,
+                    dry_run=dry_run,
+                    include_diagnostics=True,
+                )
             record = result.to_dict()
             record["attempt"] = attempt
             attempts.append(record)
@@ -1473,6 +1989,17 @@ def run_passk_eval(
         categories=categories,
         duration_seconds=time.time() - started,
     )
+
+
+def _markdown_cell(value: Any) -> str:
+    text = str(value).replace("\n", " ").strip()
+    return text.replace("|", r"\|")
+
+
+def _markdown_list(values: List[Any]) -> str:
+    if not values:
+        return "-"
+    return ", ".join(f"`{_markdown_cell(value)}`" for value in values)
 
 
 def write_passk_markdown_report(report: Dict[str, Any], path: Path) -> None:
@@ -1530,6 +2057,42 @@ def write_passk_markdown_report(report: Dict[str, Any], path: Path) -> None:
     else:
         lines.append("- Mutation routing failures: none")
 
+    breakdown = report.get("failureClassBreakdown") or {}
+    lines += ["", "## Failure Class Breakdown", ""]
+    for failure_class in _FAILURE_CLASSES:
+        lines.append(f"- {failure_class}: {breakdown.get(failure_class, 0)}")
+
+    diagnostics = report.get("attemptDiagnostics") or []
+    lines += ["", "## Failure Diagnostics", ""]
+    if diagnostics:
+        lines += [
+            "| Case | Category | Attempt | Failure Class | Expected | Actual | Pre/Post Normalized | Drop Reason | Summary |",
+            "|---|---|---:|---|---|---|---|---|---|",
+        ]
+        for diagnostic in diagnostics:
+            expected = _markdown_list(diagnostic.get("expectedActionTypes") or [])
+            actual = _markdown_list(diagnostic.get("actualActionTypes") or [])
+            pre = _markdown_list(diagnostic.get("preNormalizationActionTypes") or [])
+            post = _markdown_list(diagnostic.get("postNormalizationActionTypes") or [])
+            drop_reason = _markdown_list(diagnostic.get("dropReasons") or [])
+            lines.append(
+                "| "
+                + " | ".join([
+                    _markdown_cell(f"`{diagnostic.get('caseId', '')}`"),
+                    _markdown_cell(f"`{diagnostic.get('category', '')}`"),
+                    str(diagnostic.get("attemptIndex", "")),
+                    _markdown_cell(f"`{diagnostic.get('failureClass', 'other')}`"),
+                    _markdown_cell(expected),
+                    _markdown_cell(actual),
+                    _markdown_cell(f"{pre} -> {post}"),
+                    _markdown_cell(drop_reason),
+                    _markdown_cell(diagnostic.get("sanitizedSummary", "")),
+                ])
+                + " |"
+            )
+    else:
+        lines.append("- None")
+
     failed_attempts = [
         r for r in report.get("attemptResults", [])
         if not r.get("passed")
@@ -1550,6 +2113,7 @@ def write_passk_markdown_report(report: Dict[str, Any], path: Path) -> None:
         "- It requires real provider credentials unless run with `--dry-run`.",
         "- Deterministic dry-run success is not equivalent to real-provider stability.",
         "- Safety or mutation boundary failures should be treated as high-priority review items.",
+        "- Failure diagnostics are sanitized: raw provider text, prompts, context, URLs, and credentials are not written.",
     ]
 
     with path.open("w", encoding="utf-8") as f:
