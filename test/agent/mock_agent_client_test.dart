@@ -221,6 +221,165 @@ void main() {
       },
     );
 
+    test('P1-D high load does not steal explicit mutation requests', () async {
+      final cases = [
+        (
+          message: '今天加班只能练15分钟',
+          context: _highLoadContextWithDay,
+          type: AgentActionType.compressWorkout,
+        ),
+        (
+          message: '今天没有哑铃了，帮我替换动作',
+          context: _highLoadReplaceContext,
+          type: AgentActionType.replaceExercise,
+        ),
+        (
+          message: '这周只能周一周三练，帮我重排',
+          context: _highLoadContextWithDay,
+          type: AgentActionType.rescheduleWeek,
+        ),
+        (
+          message: '帮我把周一训练挪到周五',
+          context: _highLoadContextWithDay,
+          type: AgentActionType.moveWorkoutSession,
+        ),
+        (
+          message: '重新生成一个每周3练计划',
+          context: _highLoadContextWithDay,
+          type: AgentActionType.generatePlan,
+        ),
+      ];
+
+      for (final item in cases) {
+        final response = await client.sendMessage(
+          message: item.message,
+          context: item.context,
+          history: const [],
+        );
+
+        expect(response.intent, isNot(AgentIntent.weeklyReview));
+        expect(response.actions, hasLength(1), reason: item.message);
+        final action = response.actions.single;
+        expect(action.type, item.type, reason: item.message);
+        expect(action.requiresConfirmation, true, reason: item.message);
+        expect(action.sourceContextHash, item.context.planContextHash);
+      }
+    });
+
+    test(
+      'P1-D read-only adaptation reflects load rationale without mutation',
+      () async {
+        final cases = [
+          (
+            message: '我是不是练太多了？',
+            context: _highLoadContextWithDay,
+            expectedText: '负荷偏高',
+          ),
+          (
+            message: '这周训练安排合理吗？',
+            context: _beginnerHighVolumeContextWithDay,
+            expectedText: '初学者训练量偏高',
+          ),
+          (
+            message: '我是不是练太多了？',
+            context: _unknownLoadNoPlanContext,
+            expectedText: '没有可分析的有效训练计划',
+          ),
+          (
+            message: '帮我复盘一下这周训练强度',
+            context: _highLoadContextWithDay,
+            expectedText: '负荷偏高',
+          ),
+        ];
+
+        for (final item in cases) {
+          final response = await client.sendMessage(
+            message: item.message,
+            context: item.context,
+            history: const [],
+          );
+
+          expect(
+            response.intent,
+            anyOf(AgentIntent.weeklyReview, AgentIntent.answerOnly),
+            reason: item.message,
+          );
+          expect(
+            response.actions.map((a) => a.type),
+            isNot(
+              contains(
+                isIn({
+                  AgentActionType.compressWorkout,
+                  AgentActionType.replaceExercise,
+                  AgentActionType.rescheduleWeek,
+                  AgentActionType.moveWorkoutSession,
+                  AgentActionType.generatePlan,
+                }),
+              ),
+            ),
+            reason: item.message,
+          );
+          for (final action in response.actions) {
+            expect(action.requiresConfirmation, false, reason: item.message);
+          }
+          final text = [
+            response.message,
+            for (final action in response.actions) action.summary,
+            for (final action in response.actions)
+              ...action.payload.values.map((value) => '$value'),
+          ].join('\n');
+          expect(text, contains(item.expectedText), reason: item.message);
+        }
+      },
+    );
+
+    test('P1-D false positives do not become safety or mutation', () async {
+      final cases = [
+        (message: '今天硬拉怎么安排比较好？', disallowedIntent: AgentIntent.safetyResponse),
+        (message: '训练后肌肉酸痛', disallowedIntent: AgentIntent.safetyResponse),
+        (
+          message: '有点喘，休息一下再练可以吗',
+          disallowedIntent: AgentIntent.safetyResponse,
+        ),
+      ];
+
+      for (final item in cases) {
+        final response = await client.sendMessage(
+          message: item.message,
+          context: _highLoadContextWithDay,
+          history: const [],
+        );
+
+        expect(response.intent, isNot(item.disallowedIntent));
+        expect(
+          response.actions.map((a) => a.type),
+          isNot(
+            contains(
+              isIn({
+                AgentActionType.compressWorkout,
+                AgentActionType.replaceExercise,
+                AgentActionType.rescheduleWeek,
+                AgentActionType.moveWorkoutSession,
+                AgentActionType.generatePlan,
+              }),
+            ),
+          ),
+          reason: item.message,
+        );
+      }
+
+      final nutrition = await client.sendMessage(
+        message: '帮我看看饮食怎么吃',
+        context: _highLoadContextWithDay,
+        history: const [],
+      );
+      expect(nutrition.intent, AgentIntent.nutritionAdvice);
+      expect(
+        nutrition.actions.map((a) => a.type),
+        isNot(contains(AgentActionType.weeklyReview)),
+      );
+    });
+
     test('safety request still wins over load-aware advice', () async {
       final response = await client.sendMessage(
         message: '我膝关节积液还能做跳跃HIIT吗？',
@@ -1363,6 +1522,109 @@ const _highLoadContextWithDay = AgentContextSnapshot(
     'loadLevel': 'high',
   },
   planContextHash: 'trusted_load_hash',
+);
+
+const _highLoadReplaceContext = AgentContextSnapshot(
+  locale: 'zh-CN',
+  profile: {'weeklyFrequency': 4, 'experienceLevel': 'beginner'},
+  activePlan: {'id': 'load_replace_plan'},
+  todayWorkout: {
+    'dayOfWeek': 1,
+    'dayType': 'legs',
+    'exercises': [
+      {
+        'exerciseId': 'squat',
+        'exerciseName': 'Squat',
+        'targetSets': 4,
+        'targetReps': 8,
+        'restSeconds': 120,
+      },
+    ],
+  },
+  recentSessions: [],
+  bodyMetrics: [],
+  progressSummary: {},
+  availableExerciseSummary: [
+    {
+      'id': 'squat',
+      'name': 'Squat',
+      'bodyPart': 'legs',
+      'equipment': 'barbell',
+    },
+    {
+      'id': 'bodyweight_lunge',
+      'name': 'Bodyweight Lunge',
+      'bodyPart': 'legs',
+      'equipment': 'bodyweight',
+    },
+  ],
+  trainingLoadSummary: {
+    'plannedTrainingDays': 6,
+    'restDays': 1,
+    'totalPlannedSets': 72,
+    'maxDailySets': 18,
+    'longestConsecutiveTrainingDays': 4,
+    'weeklySetsByBodyPart': {'legs': 24},
+    'flags': ['high_training_frequency'],
+    'loadLevel': 'high',
+  },
+  planContextHash: 'trusted_load_replace_hash',
+);
+
+const _beginnerHighVolumeContextWithDay = AgentContextSnapshot(
+  locale: 'zh-CN',
+  profile: {'weeklyFrequency': 4, 'experienceLevel': 'beginner'},
+  activePlan: {'id': 'beginner_high_volume_plan'},
+  todayWorkout: {
+    'dayOfWeek': 1,
+    'dayType': 'push',
+    'exercises': [
+      {
+        'exerciseId': 'bench',
+        'exerciseName': 'Bench',
+        'targetSets': 3,
+        'targetReps': 8,
+        'restSeconds': 90,
+      },
+    ],
+  },
+  recentSessions: [],
+  bodyMetrics: [],
+  progressSummary: {},
+  availableExerciseSummary: [],
+  trainingLoadSummary: {
+    'plannedTrainingDays': 4,
+    'restDays': 3,
+    'totalPlannedSets': 64,
+    'maxDailySets': 16,
+    'longestConsecutiveTrainingDays': 2,
+    'weeklySetsByBodyPart': {'chest': 24, 'legs': 24},
+    'flags': ['beginner_high_volume'],
+    'loadLevel': 'high',
+  },
+  planContextHash: 'trusted_beginner_high_volume_hash',
+);
+
+const _unknownLoadNoPlanContext = AgentContextSnapshot(
+  locale: 'zh-CN',
+  profile: {'weeklyFrequency': 3, 'experienceLevel': 'beginner'},
+  activePlan: null,
+  todayWorkout: null,
+  recentSessions: [],
+  bodyMetrics: [],
+  progressSummary: {},
+  availableExerciseSummary: [],
+  trainingLoadSummary: {
+    'plannedTrainingDays': 0,
+    'restDays': 0,
+    'totalPlannedSets': 0,
+    'maxDailySets': 0,
+    'longestConsecutiveTrainingDays': 0,
+    'weeklySetsByBodyPart': <String, int>{},
+    'flags': ['no_active_plan'],
+    'loadLevel': 'unknown',
+  },
+  planContextHash: null,
 );
 
 const _moderateLoadContextWithDay = AgentContextSnapshot(

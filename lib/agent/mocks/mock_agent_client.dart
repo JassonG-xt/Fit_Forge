@@ -79,6 +79,11 @@ class MockAgentClient implements AgentClient {
     }
 
     final candidate = _intentRouter.route(message);
+    if (candidate.type == CoachIntentType.replaceExercise &&
+        _isReplaceIntent(message) &&
+        _hasDeterministicReplaceContext(context)) {
+      return _replaceResponse(message, context);
+    }
     final clarification = _clarificationPolicy.messageFor(candidate);
     if (clarification != null && _shouldClarifyBeforeLegacyRouting(candidate)) {
       return _clarificationResponse(clarification, confidence: candidate.score);
@@ -496,6 +501,13 @@ class MockAgentClient implements AgentClient {
       '器械不方便',
     ];
     return keywords.any(text.contains);
+  }
+
+  bool _hasDeterministicReplaceContext(AgentContextSnapshot context) {
+    final todayExercises = context.todayWorkout?['exercises'];
+    return todayExercises is List &&
+        todayExercises.isNotEmpty &&
+        context.availableExerciseSummary.isNotEmpty;
   }
 
   bool _isRescheduleIntent(String text) {

@@ -363,8 +363,24 @@ that training is safe.
 
 ### P1-D: Flutter mock alignment
 
-Next step. Sync representative Flutter mock behavior after backend behavior is
-pinned. No UI rewrite and no executor expansion.
+Implemented as Flutter-mock-only representative routing alignment. The local
+`MockAgentClient` now mirrors the native provider's P1 priority shape for demo
+and offline development:
+
+- safety still wins before any adaptation or mutation routing
+- explicit compress, replace, reschedule, move, and regenerate requests keep
+  routing to existing confirmed mutation actions when the mock has enough
+  deterministic context
+- fatigue, recovery, and load-review prompts stay read-only and may use
+  `trainingLoadSummary`
+- ordinary soreness, ordinary hardlift programming questions, nutrition
+  questions, and mild exertion wording are guarded against safety or mutation
+  false positives
+
+This is not a second independent planner and it does not change
+`LocalAgentActionExecutor`, action types, action schemas, backend providers,
+LangGraph, the real LLM provider, output validation, or `sourceContextHash`
+trust boundaries. Mock alignment is only for local/demo consistency.
 
 ### P1-E: Eval expansion
 

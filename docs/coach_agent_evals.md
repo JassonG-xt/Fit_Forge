@@ -362,8 +362,13 @@ These categories remain planned eval JSON requirements, not current active eval
 JSON categories. P1-C coverage lives in
 `agent_backend/tests/test_native_provider_adaptation_planner.py` and checks the
 native-provider-only runtime boundary: safety priority, mutation-not-stolen,
-read-only adaptation, and false positives. Any future mutation-intent case must
-continue to assert
+read-only adaptation, and false positives. P1-D adds Flutter mock parity
+coverage in `test/agent/mock_agent_client_test.dart` for the same representative
+priority shape, including safety priority, explicit mutation not stolen,
+read-only adaptation with `trainingLoadSummary`, and false positives. This is
+local/demo mock alignment only; it does not add eval JSON cases, action types,
+executor behavior, backend provider integration, LangGraph integration, or real
+LLM provider integration. Any future mutation-intent case must continue to assert
 `requiresConfirmation=true`, trusted `sourceContextHash`, output validation,
 no direct execution, and no new action type.
 
