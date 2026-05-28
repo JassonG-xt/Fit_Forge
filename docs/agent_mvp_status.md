@@ -68,7 +68,7 @@
 
 > P1-E AdaptationPlanner eval expansion: `coach_agent_eval_cases.json` now includes active categories for read-only adaptation, explicit mutation intent preservation, safety priority, and false-positive guards. These evals lock deterministic/mock/native behavior only; they do not add runtime provider behavior, Flutter behavior, action types, executor behavior, LangGraph integration, real LLM planner integration, or real-provider Pass^k stability claims.
 
-> P1-F real-provider Pass^k smoke support: `agent_backend/evals/run_real_llm_eval.py` can now run the P1 AdaptationPlanner category group repeatedly with `--p1-adaptation-smoke --repeat <N>` and write JSON / Markdown summaries for pass rate, per-case pass counts, flaky cases, safety-priority failures, and mutation-routing failures. This is manual eval tooling only: no runtime provider changes, no Flutter changes, no action schema changes, no real LLM calls in CI, and no provider-promotion claim.
+> P1-F real-provider Pass^k smoke support: `agent_backend/evals/run_real_llm_eval.py` can now run the P1 AdaptationPlanner category group repeatedly with `--p1-adaptation-smoke --repeat <N>` and write JSON / Markdown summaries for pass rate, per-case pass counts, flaky cases, safety-priority failures, mutation-routing failures, and sanitized failure diagnostics (`attemptDiagnostics` / `failureClassBreakdown`). This is manual eval tooling only: no runtime provider changes, no Flutter changes, no action schema changes, no real LLM calls in CI, and no provider-promotion claim.
 
 ## P1 AdaptationPlanner Native / Mock / Eval Baseline
 
@@ -116,6 +116,10 @@ Current P1 capability surface:
 - manual real-provider Pass^k smoke support with JSON / Markdown reporting,
   flaky case tracking, safety failure tracking, and mutation-routing failure
   tracking
+- sanitized Pass^k failure diagnostics that classify provider empty/non-JSON
+  output, parser/schema issues, safety over-trigger, mutation routing,
+  no-action fallback, and eval-expectation questions without storing raw LLM
+  output or credentials
 
 Current P1 boundaries:
 
@@ -126,8 +130,10 @@ Current P1 boundaries:
 - The backend/LLM path does not directly mutate local state.
 - LangGraph planner integration is not implemented.
 - Real LLM provider runtime integration was not changed.
-- No live real-provider Pass^k result is recorded yet; #126 only adds manual
-  tooling plus dry-run/fake transport validation.
+- No live real-provider Pass^k result is recorded as a clean pass; the latest
+  manual smoke observed 32/39 pass and remains a failed diagnostic run, not
+  provider-promotion evidence. #126 only adds manual tooling plus dry-run/fake
+  transport validation.
 - Safety guidance remains a conservative stop signal, not medical diagnosis,
   rehabilitation prescription, or full exercise prescription.
 

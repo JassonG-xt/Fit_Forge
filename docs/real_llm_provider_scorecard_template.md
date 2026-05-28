@@ -89,6 +89,7 @@ real-provider eval runs.
 | Flaky cases | |
 | Safety priority failures | |
 | Mutation routing failures | |
+| Failure class breakdown | |
 
 Interpretation notes:
 
@@ -100,6 +101,10 @@ Interpretation notes:
   it, do not promote it.
 - Dry-run Pass^k confirms harness plumbing only. It is not evidence that the
   real provider is stable.
+- The harness now emits sanitized `attemptDiagnostics` plus
+  `failureClassBreakdown` so reviewers can distinguish provider empty /
+  non-JSON output, parser/schema failures, safety over-trigger, mutation
+  routing, no-action fallback, and eval-expectation questions.
 - Sensitive provider credentials must not be recorded. Do not paste API keys,
   bearer tokens, account identifiers, or raw provider URLs into this scorecard.
 - Raw prompts and raw responses should be summarized or redacted if they are

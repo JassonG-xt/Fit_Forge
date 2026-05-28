@@ -177,6 +177,17 @@ per-case pass/fail counts, an overall pass rate, `flakyCases`,
 `safetyFailures`, and `mutationRoutingFailures`. Any safety or mutation
 boundary failure should be treated as a high-priority review item.
 
+Pass^k reports also include sanitized failure diagnostics for failed attempts:
+`attemptDiagnostics` plus `failureClassBreakdown`. The stable failure classes
+are `provider_empty_content`, `provider_non_json`, `parser_failure`,
+`schema_validation`, `unknown_action`, `safety_over_trigger`,
+`mutation_routing`, `no_action_fallback`, `eval_expectation`, and `other`.
+Diagnostics record only structural facts such as action types before/after
+normalization, dropped action type labels, closed-set drop reasons,
+`requiresConfirmation` booleans, raw text length, and transient provider
+flags. They do **not** store raw LLM output, raw prompts, request context,
+provider URLs, API keys, or bearer tokens.
+
 This command is intended for manual smoke testing, not CI, and it is not a
 provider-promotion or production-readiness signal by itself. Prefer `--repeat 3`
 for a quick smoke and `--repeat 5` when investigating suspected flakiness.
