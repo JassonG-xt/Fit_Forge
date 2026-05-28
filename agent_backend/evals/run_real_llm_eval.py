@@ -61,6 +61,13 @@ _BACKEND_DIR = _THIS_DIR.parent
 _DEFAULT_CASES = _THIS_DIR / "coach_agent_eval_cases.json"
 _DEFAULT_RESULTS_DIR = _THIS_DIR / "results"
 
+P1_ADAPTATION_CATEGORIES = (
+    "adaptationPlannerReadOnly",
+    "adaptationPlannerMutationIntent",
+    "adaptationPlannerSafetyPriority",
+    "adaptationPlannerFalsePositive",
+)
+
 
 # Action types that mutate AppState. Mirrors `agents.action_safety`.
 _MUTATION_ACTION_TYPES = frozenset({
@@ -188,14 +195,18 @@ def load_cases(path: Path) -> List[Dict[str, Any]]:
 def filter_cases(
     cases: List[Dict[str, Any]],
     *,
-    category: Optional[str] = None,
+    category: Optional[Any] = None,
     only_status: str = "all",
     limit: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Filter cases by category, status, and limit (in that order)."""
     out = list(cases)
     if category:
-        out = [c for c in out if c.get("category") == category]
+        if isinstance(category, str):
+            categories = {category}
+        else:
+            categories = {c for c in category}
+        out = [c for c in out if c.get("category") in categories]
     if only_status and only_status != "all":
         out = [c for c in out if c.get("status") == only_status]
     if limit is not None and limit >= 0:
@@ -295,6 +306,10 @@ def _build_request_context(case: Dict[str, Any], plan_hash: str) -> Dict[str, An
     profile_override = override.get("profile")
     if isinstance(profile_override, dict):
         ctx["profile"] = {**ctx["profile"], **profile_override}
+    if "activePlan" in override:
+        ctx["activePlan"] = override["activePlan"]
+    if "trainingLoadSummary" in override:
+        ctx["trainingLoadSummary"] = override["trainingLoadSummary"]
     return ctx
 
 
@@ -308,6 +323,10 @@ _DRY_RUN_PAYLOADS: Dict[str, Dict[str, Any]] = {
                         "toExerciseId": "leg_press", "reason": "dry-run fake"},
     "rescheduleWeek": {"availableWeekdays": [2, 5], "preserveWorkoutOrder": True},
     "generatePlan": {"usePreviewPlan": True},
+    "nutritionAdvice": {
+        "adviceType": "calorie_balance",
+        "suggestedMealPattern": "high_protein_light_dinner",
+    },
 }
 
 
@@ -340,6 +359,24 @@ def _dry_run_response_for_case(case: Dict[str, Any]) -> str:
         return json.dumps({
             "message": "dry-run weekly review",
             "intent": "weeklyReview",
+            "confidence": 0.9,
+            "actions": [action],
+            "safety": {"hasMedicalConcern": False, "shouldStopWorkout": False},
+        }, ensure_ascii=False)
+
+    if action_type == "nutritionAdvice":
+        action = {
+            "id": "dry_nutrition_advice",
+            "type": "nutritionAdvice",
+            "title": "dry-run nutrition advice",
+            "summary": "dry-run canonical nutrition advice",
+            "requiresConfirmation": False,
+            "riskLevel": "low",
+            "payload": _DRY_RUN_PAYLOADS["nutritionAdvice"],
+        }
+        return json.dumps({
+            "message": "dry-run nutrition advice",
+            "intent": "nutritionAdvice",
             "confidence": 0.9,
             "actions": [action],
             "safety": {"hasMedicalConcern": False, "shouldStopWorkout": False},
@@ -949,6 +986,10 @@ def write_json_report(report: Dict[str, Any], path: Path) -> None:
 
 def write_markdown_report(report: Dict[str, Any], path: Path) -> None:
     """Compact human summary. Includes per-category breakdown."""
+    if report.get("runType") in {"p1_real_provider_passk", "real_provider_passk"}:
+        write_passk_markdown_report(report, path)
+        return
+
     path.parent.mkdir(parents=True, exist_ok=True)
     summary = report["summary"]
 
@@ -1065,6 +1106,20 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--category", default=None,
                    help="Only run cases with this category.")
     p.add_argument(
+        "--p1-adaptation-smoke",
+        action="store_true",
+        help=(
+            "Run the P1 AdaptationPlanner category group: read-only, "
+            "mutation-intent, safety-priority, and false-positive eval cases."
+        ),
+    )
+    p.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Run each selected case N times and emit a Pass^k report when N > 1.",
+    )
+    p.add_argument(
         "--only-status",
         choices=("active", "expectedGap", "all"),
         default="all",
@@ -1100,6 +1155,16 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     args = _build_arg_parser().parse_args(argv)
 
+    if args.repeat < 1:
+        print("error: --repeat must be >= 1", file=sys.stderr)
+        return 2
+    if args.p1_adaptation_smoke and args.category:
+        print(
+            "error: --p1-adaptation-smoke cannot be combined with --category",
+            file=sys.stderr,
+        )
+        return 2
+
     cases_path = Path(args.cases)
     if not cases_path.is_absolute():
         cases_path = (_BACKEND_DIR / cases_path).resolve()
@@ -1127,9 +1192,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    category_filter = (
+        P1_ADAPTATION_CATEGORIES if args.p1_adaptation_smoke else args.category
+    )
+
     cases = filter_cases(
         selected_cases,
-        category=args.category,
+        category=category_filter,
         only_status=args.only_status,
         limit=args.limit,
     )
@@ -1138,7 +1207,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(
                 f"error: {len(selected_cases)} case(s) selected by --case-id/--case-list "
                 f"but none survived filters "
-                f"(--only-status={args.only_status!r}, --category={args.category!r}).",
+                f"(--only-status={args.only_status!r}, --category={category_filter!r}).",
                 file=sys.stderr,
             )
             return 2
@@ -1147,20 +1216,35 @@ def main(argv: Optional[List[str]] = None) -> int:
         dropped = [c["id"] for c in selected_cases if c not in cases]
         print(
             "warning: some selected case(s) filtered out by "
-            f"--only-status={args.only_status!r} / --category={args.category!r}: "
+            f"--only-status={args.only_status!r} / --category={category_filter!r}: "
             f"{', '.join(dropped)}",
             file=sys.stderr,
         )
 
-    report = run_eval(
-        cases=cases,
-        dry_run=args.dry_run,
-        model=args.model,
-        provider=args.provider,
-    )
+    if args.p1_adaptation_smoke or args.repeat > 1:
+        categories = category_filter or sorted({c.get("category", "unknown") for c in cases})
+        report = run_passk_eval(
+            cases=cases,
+            dry_run=args.dry_run,
+            model=args.model,
+            provider=args.provider,
+            repeat=args.repeat,
+            categories=categories,
+        )
+    else:
+        report = run_eval(
+            cases=cases,
+            dry_run=args.dry_run,
+            model=args.model,
+            provider=args.provider,
+        )
 
     out_path = Path(args.out) if args.out else (
-        _DEFAULT_RESULTS_DIR / f"real_llm_eval_{report['runId']}.json"
+        _DEFAULT_RESULTS_DIR / (
+            f"p1_real_provider_passk_{report['runId']}.json"
+            if report.get("runType") == "p1_real_provider_passk"
+            else f"real_llm_eval_{report['runId']}.json"
+        )
     )
     if not out_path.is_absolute():
         out_path = (_BACKEND_DIR / out_path).resolve()
@@ -1174,15 +1258,302 @@ def main(argv: Optional[List[str]] = None) -> int:
         write_markdown_report(report, md_path)
         print(f"wrote Markdown report: {md_path}")
 
-    s = report["summary"]
-    print(
-        f"summary: total={s['total']} pass={s['passed']} fail={s['failed']} "
-        f"gap={s['gap']} converted={s['expectedGapConverted']} "
-        f"errors={s['errors']} skipped={s['skipped']}"
-    )
+    if report.get("runType"):
+        print(
+            f"passk summary: cases={report['totalCases']} "
+            f"attempts={report['totalAttempts']} "
+            f"pass={report['passedAttempts']} fail={report['failedAttempts']} "
+            f"passRate={report['passRate']}%"
+        )
+    else:
+        s = report["summary"]
+        print(
+            f"summary: total={s['total']} pass={s['passed']} fail={s['failed']} "
+            f"gap={s['gap']} converted={s['expectedGapConverted']} "
+            f"errors={s['errors']} skipped={s['skipped']}"
+        )
     # Exit 0 even when cases fail. This harness is observational — failures
     # are the report's job, not the shell's.
     return 0
+
+
+def _attempt_passed(outcome: str) -> bool:
+    return outcome in {"pass", "expectedGapConverted"}
+
+
+def _normalize_passk_attempts(attempts: List[Any]) -> List[Dict[str, Any]]:
+    """Return attempt records with stable attempt numbers and pass booleans."""
+    normalized: List[Dict[str, Any]] = []
+    counts_by_case: Dict[str, int] = {}
+    for attempt in attempts:
+        if isinstance(attempt, CaseResult):
+            record = attempt.to_dict()
+        else:
+            record = dict(attempt)
+        case_id = record["caseId"]
+        counts_by_case[case_id] = counts_by_case.get(case_id, 0) + 1
+        record.setdefault("attempt", counts_by_case[case_id])
+        record["passed"] = _attempt_passed(record.get("outcome", ""))
+        normalized.append(record)
+    return normalized
+
+
+def _passk_transient_summary(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    signals = [r.get("transientSignals") or {} for r in records]
+    return {
+        "requestErrorCount": sum(1 for s in signals if s.get("requestError")),
+        "timeoutCount": sum(1 for s in signals if s.get("timeout")),
+        "nonJsonCount": sum(1 for s in signals if s.get("nonJson")),
+        "emptyContentCount": sum(1 for s in signals if s.get("emptyContent")),
+        "otherProviderErrorCount": sum(
+            1 for s in signals if s.get("otherProviderError")
+        ),
+        "providerErrorKinds": {
+            kind: sum(1 for s in signals if s.get("providerErrorKind") == kind)
+            for kind in _PROVIDER_ERROR_KINDS
+        },
+    }
+
+
+def _build_passk_report(
+    *,
+    cases: List[Dict[str, Any]],
+    attempts: List[Any],
+    repeat: int,
+    dry_run: bool,
+    model: Optional[str],
+    provider: str,
+    categories: Any,
+    duration_seconds: float,
+) -> Dict[str, Any]:
+    """Aggregate repeated real-provider attempts into a Pass^k smoke report."""
+    records = _normalize_passk_attempts(attempts)
+    category_list = (
+        [categories]
+        if isinstance(categories, str)
+        else [str(category) for category in categories]
+    )
+    p1_group = set(category_list) == set(P1_ADAPTATION_CATEGORIES)
+
+    attempts_by_case: Dict[str, List[Dict[str, Any]]] = {}
+    for record in records:
+        attempts_by_case.setdefault(record["caseId"], []).append(record)
+
+    case_results: List[Dict[str, Any]] = []
+    for case in cases:
+        case_records = attempts_by_case.get(case["id"], [])
+        passed = sum(1 for r in case_records if r.get("passed"))
+        failed = len(case_records) - passed
+        case_results.append({
+            "caseId": case["id"],
+            "category": case.get("category", "unknown"),
+            "attempts": len(case_records),
+            "passed": passed,
+            "failed": failed,
+            "flaky": passed > 0 and failed > 0,
+        })
+
+    total_attempts = len(records)
+    passed_attempts = sum(1 for r in records if r.get("passed"))
+    failed_attempts = total_attempts - passed_attempts
+
+    by_category: Dict[str, Dict[str, int]] = {}
+    for case_result in case_results:
+        bucket = by_category.setdefault(
+            case_result["category"],
+            {"cases": 0, "attempts": 0, "passedAttempts": 0, "failedAttempts": 0},
+        )
+        bucket["cases"] += 1
+        bucket["attempts"] += case_result["attempts"]
+        bucket["passedAttempts"] += case_result["passed"]
+        bucket["failedAttempts"] += case_result["failed"]
+
+    category_breakdown = []
+    for category in sorted(by_category):
+        bucket = by_category[category]
+        attempts_count = bucket["attempts"]
+        category_breakdown.append({
+            **bucket,
+            "category": category,
+            "passRate": (
+                round(bucket["passedAttempts"] / attempts_count * 100, 2)
+                if attempts_count
+                else 0.0
+            ),
+        })
+
+    failed_case_ids = {
+        case_result["caseId"]
+        for case_result in case_results
+        if case_result["failed"] > 0
+    }
+    category_by_case_id = {
+        case["id"]: case.get("category", "unknown")
+        for case in cases
+    }
+
+    return {
+        "runId": (
+            f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-"
+            f"{uuid.uuid4().hex[:6]}"
+        ),
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "runType": "p1_real_provider_passk" if p1_group else "real_provider_passk",
+        "model": model or os.environ.get("LLM_MODEL") or "unknown",
+        "provider": provider,
+        "mode": "dry-run" if dry_run else "real",
+        "durationSeconds": round(duration_seconds, 3),
+        "repeat": repeat,
+        "categories": category_list,
+        "totalCases": len(cases),
+        "totalAttempts": total_attempts,
+        "passedAttempts": passed_attempts,
+        "failedAttempts": failed_attempts,
+        "passRate": (
+            round(passed_attempts / total_attempts * 100, 2)
+            if total_attempts
+            else 0.0
+        ),
+        "caseResults": case_results,
+        "attemptResults": records,
+        "results": records,
+        "categoryBreakdown": category_breakdown,
+        "flakyCases": [c["caseId"] for c in case_results if c["flaky"]],
+        "safetyFailures": sorted(
+            case_id
+            for case_id in failed_case_ids
+            if category_by_case_id.get(case_id) == "adaptationPlannerSafetyPriority"
+        ),
+        "mutationRoutingFailures": sorted(
+            case_id
+            for case_id in failed_case_ids
+            if category_by_case_id.get(case_id) == "adaptationPlannerMutationIntent"
+        ),
+        "transientSignals": _passk_transient_summary(records),
+    }
+
+
+def run_passk_eval(
+    *,
+    cases: List[Dict[str, Any]],
+    dry_run: bool,
+    model: Optional[str],
+    provider: str,
+    repeat: int,
+    categories: Any,
+) -> Dict[str, Any]:
+    """Run cases repeatedly and return a Pass^k smoke report."""
+    started = time.time()
+    attempts: List[Dict[str, Any]] = []
+    for attempt in range(1, repeat + 1):
+        for case in cases:
+            if case.get("status") in ("expectedFailure", "todo"):
+                result = CaseResult(
+                    caseId=case["id"],
+                    category=case.get("category", "unknown"),
+                    status=case.get("status", "unknown"),
+                    userMessage=case.get("userMessage", ""),
+                    outcome="skipped",
+                    expectedActionType=case.get("expected", {}).get("actionType"),
+                    failureReason=f"status={case.get('status')}",
+                )
+            else:
+                result = _run_one_case(case, dry_run=dry_run)
+            record = result.to_dict()
+            record["attempt"] = attempt
+            attempts.append(record)
+
+    return _build_passk_report(
+        cases=cases,
+        attempts=attempts,
+        repeat=repeat,
+        dry_run=dry_run,
+        model=model,
+        provider=provider,
+        categories=categories,
+        duration_seconds=time.time() - started,
+    )
+
+
+def write_passk_markdown_report(report: Dict[str, Any], path: Path) -> None:
+    """Human summary for repeated P1 real-provider smoke runs."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    categories = ", ".join(f"`{c}`" for c in report.get("categories", []))
+    flaky = report.get("flakyCases") or []
+    safety_failures = report.get("safetyFailures") or []
+    mutation_failures = report.get("mutationRoutingFailures") or []
+
+    lines = [
+        "# P1 AdaptationPlanner Real Provider Pass^k Smoke",
+        "",
+        "## Summary",
+        "",
+        f"- Repeat: {report.get('repeat', 0)}",
+        f"- Categories: {categories}",
+        f"- Cases: {report.get('totalCases', 0)}",
+        f"- Attempts: {report.get('totalAttempts', 0)}",
+        f"- Passed: {report.get('passedAttempts', 0)}",
+        f"- Failed: {report.get('failedAttempts', 0)}",
+        f"- Pass rate: {report.get('passRate', 0.0)}%",
+        f"- Mode: `{report.get('mode', 'unknown')}`",
+        f"- Model: `{report.get('model', 'unknown')}`",
+        f"- Provider: `{report.get('provider', 'unknown')}`",
+        "",
+        "## Category Breakdown",
+        "",
+        "| category | cases | attempts | passed | failed | pass rate |",
+        "|----------|------:|---------:|-------:|-------:|----------:|",
+    ]
+
+    for bucket in report.get("categoryBreakdown", []):
+        lines.append(
+            f"| `{bucket['category']}` | {bucket['cases']} | "
+            f"{bucket['attempts']} | {bucket['passedAttempts']} | "
+            f"{bucket['failedAttempts']} | {bucket['passRate']}% |"
+        )
+
+    lines += ["", "## Flaky Cases", ""]
+    if flaky:
+        lines.extend(f"- `{case_id}`" for case_id in flaky)
+    else:
+        lines.append("- None")
+
+    lines += ["", "## Safety / Mutation Boundary Failures", ""]
+    if safety_failures:
+        lines.append("Safety priority failures:")
+        lines.extend(f"- `{case_id}`" for case_id in safety_failures)
+    else:
+        lines.append("- Safety priority failures: none")
+    if mutation_failures:
+        lines.append("Mutation routing failures:")
+        lines.extend(f"- `{case_id}`" for case_id in mutation_failures)
+    else:
+        lines.append("- Mutation routing failures: none")
+
+    failed_attempts = [
+        r for r in report.get("attemptResults", [])
+        if not r.get("passed")
+    ]
+    if failed_attempts:
+        lines += ["", "## Failed Attempts", ""]
+        for attempt in failed_attempts:
+            lines.append(
+                f"- `{attempt['caseId']}` attempt {attempt.get('attempt')}: "
+                f"{attempt.get('outcome')} - {attempt.get('failureReason') or ''}"
+            )
+
+    lines += [
+        "",
+        "## Notes",
+        "",
+        "- This report is intended for manual smoke testing, not CI.",
+        "- It requires real provider credentials unless run with `--dry-run`.",
+        "- Deterministic dry-run success is not equivalent to real-provider stability.",
+        "- Safety or mutation boundary failures should be treated as high-priority review items.",
+    ]
+
+    with path.open("w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":
