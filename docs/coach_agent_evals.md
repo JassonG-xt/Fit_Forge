@@ -341,7 +341,7 @@ nutrition requests.
 The full Phase F contract lives in
 [`docs/agent_phase_f_planner_nutrition_contract.md`](agent_phase_f_planner_nutrition_contract.md).
 
-## P1 AdaptationPlanner Eval Requirements
+## P1 AdaptationPlanner Eval Coverage
 
 P1-A defined the planned eval categories, P1-C wired the deterministic helper
 into the native provider, and P1-D aligned the Flutter mock's representative
@@ -357,6 +357,10 @@ guarding ordinary fatigue, ordinary muscle soreness, and mild exertion against
 high-risk false positives. P1-E does not add action types, mutation behavior, or
 medical diagnosis/triage claims.
 
+Current eval count remains:
+
+- 105 active / 4 expectedGap / 109 total
+
 P1-E active eval categories:
 
 | category | active cases | what it pins |
@@ -365,6 +369,18 @@ P1-E active eval categories:
 | `adaptationPlannerMutationIntent` | 4 | high-load compression, named exercise replacement, weekly reschedule, and plan regeneration keep routing to existing confirmed mutation actions |
 | `adaptationPlannerSafetyPriority` | 3 | chest tightness, knee effusion + jump HIIT, and severe hypertension + 1RM return `safetyResponse` before any adaptation |
 | `adaptationPlannerFalsePositive` | 3 | ordinary deadlift programming, ordinary muscle soreness, and nutrition requests avoid safety/mutation false positives |
+
+Coverage by behavior:
+
+- Read-only adaptation: high load + fatigue / "training too much", beginner
+  high volume, and unknown / no active plan.
+- Mutation intent not stolen: `compressWorkout`, `replaceExercise`,
+  `rescheduleWeek`, and `generatePlan` still route to existing confirmed
+  mutation actions.
+- Safety priority: acute symptom, knee condition + jump HIIT, and severe
+  hypertension + 1RM still short-circuit to `safetyResponse`.
+- False positives: ordinary deadlift planning, ordinary muscle soreness, and
+  nutrition requests do not become high-risk safety or unintended mutation.
 
 The eval JSON locks deterministic/mock/native behavior only. P1-F adds a
 manual real-provider Pass^k smoke entry in
@@ -375,6 +391,23 @@ LLM planner integration, automatic plan mutation, or a new action schema.
 Any future mutation-intent case must continue to assert
 `requiresConfirmation=true`, trusted `sourceContextHash`, output validation,
 no direct execution, and no new action type.
+
+P1-F smoke support adds:
+
+- `--p1-adaptation-smoke`
+- `--repeat N`
+- JSON / Markdown Pass^k reports
+- flaky case reporting
+- safety failure reporting
+- mutation-routing failure reporting
+
+Latest dry-run/fake-transport check:
+
+- dry-run P1 smoke: 13 cases / 39 attempts / 39 passed
+
+That dry-run validates report plumbing only. It is not evidence of live
+real-provider stability, and no live real-provider P1 Pass^k result is recorded
+in this docs update.
 
 ### Cross-run promotion of three paraphrases (history)
 

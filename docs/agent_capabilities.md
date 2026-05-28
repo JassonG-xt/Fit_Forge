@@ -33,6 +33,28 @@ P1-B adds the deterministic backend helper, and P1-C integrates it into the
 native provider only. LangGraph / real LLM planner integration is still not
 included, Flutter executor boundaries are unchanged, and mutation still requires
 the existing preview and confirmation path.
+P1-D through P1-F align the Flutter mock's representative behavior, add P1 eval
+coverage, and add manual Pass^k smoke reporting for real-provider checks.
+
+## P1 AdaptationPlanner Capability Summary
+
+The P1 AdaptationPlanner baseline now supports deterministic routing in the
+native provider for safety, explicit mutation intent, read-only adaptation, and
+fallback decisions. Flutter mock mode has representative parity for local/demo
+workflows, so common P1 safety, mutation-not-stolen, read-only adaptation, and
+false-positive cases behave like the native path without changing the executor.
+
+The eval suite covers the P1 behavior with active categories for read-only
+adaptation, mutation intent preservation, safety priority, and false positives.
+The real-provider eval harness can run those categories manually with
+`--p1-adaptation-smoke --repeat <N>` and produce Pass^k JSON / Markdown reports
+for pass rate, flaky cases, safety failures, and mutation-routing failures.
+
+The safety and mutation boundaries remain unchanged: no automatic mutation
+without explicit user confirmation, no new action type, no direct backend or
+LLM state mutation, and no expansion of `LocalAgentActionExecutor` authority.
+P1 is not a medical diagnosis system, rehabilitation prescription, or complete
+exercise prescription.
 
 Coach Agent safety guardrails now include a first-pass deterministic
 contraindication-risk policy for common lumbar/spine risk, knee risk,

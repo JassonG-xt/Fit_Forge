@@ -70,6 +70,76 @@
 
 > P1-F real-provider Pass^k smoke support: `agent_backend/evals/run_real_llm_eval.py` can now run the P1 AdaptationPlanner category group repeatedly with `--p1-adaptation-smoke --repeat <N>` and write JSON / Markdown summaries for pass rate, per-case pass counts, flaky cases, safety-priority failures, and mutation-routing failures. This is manual eval tooling only: no runtime provider changes, no Flutter changes, no action schema changes, no real LLM calls in CI, and no provider-promotion claim.
 
+## P1 AdaptationPlanner Native / Mock / Eval Baseline
+
+P1 is now archived as a deterministic native/mock/eval baseline plus manual
+real-provider smoke tooling:
+
+- #120 `docs(agent): define p1 adaptation planner contract`
+- #121 `feat(agent): add deterministic adaptation planner helper`
+- #122 `feat(agent): integrate adaptation planner into native provider`
+- #123 `feat(agent): standardize acute symptom safety guardrails`
+- #124 `feat(agent): align flutter mock adaptation routing`
+- #125 `test(agent): add p1 adaptation planner eval coverage`
+- #126 `test(agent): add p1 real-provider passk smoke support`
+
+Current main:
+
+- `04a36b8 test(agent): add p1 real-provider passk smoke support (#126)`
+
+Current tag:
+
+- `agent-p1-adaptation-planner-v1`
+- The tag marks the P1 native/mock/eval baseline at #125
+  (`59ca338 test(agent): add p1 adaptation planner eval coverage (#125)`).
+- #126 adds manual real-provider Pass^k smoke support after the tag.
+- No GitHub release was created for this tag.
+
+Latest recorded validation:
+
+- backend full pytest: 784 passed, 4 skipped
+- `flutter analyze`: no issues found
+- `flutter test`: 482 passed, 1 skipped
+- dry-run P1 smoke: 13 cases / 39 attempts / 39 passed
+
+Current P1 capability surface:
+
+- deterministic `AdaptationPlanner` helper
+- native provider integration
+- safety priority preserved
+- explicit mutation intent not stolen by read-only adaptation
+- read-only adaptation for fatigue, recovery, and load-review prompts
+- acute symptom coverage moved into the global deterministic safety guardrail
+- Flutter mock representative parity for local/demo mode
+- P1 eval coverage across read-only, mutation-intent, safety-priority, and
+  false-positive categories
+- manual real-provider Pass^k smoke support with JSON / Markdown reporting,
+  flaky case tracking, safety failure tracking, and mutation-routing failure
+  tracking
+
+Current P1 boundaries:
+
+- Runtime mutation still requires preview, user confirmation, trusted
+  `sourceContextHash`, and `LocalAgentActionExecutor`.
+- No new action type was added.
+- `LocalAgentActionExecutor` was not changed by P1.
+- The backend/LLM path does not directly mutate local state.
+- LangGraph planner integration is not implemented.
+- Real LLM provider runtime integration was not changed.
+- No live real-provider Pass^k result is recorded yet; #126 only adds manual
+  tooling plus dry-run/fake transport validation.
+- Safety guidance remains a conservative stop signal, not medical diagnosis,
+  rehabilitation prescription, or full exercise prescription.
+
+Recommended next-stage route:
+
+- Run and review a live real-provider P1 Pass^k smoke manually before making
+  any provider-quality claim.
+- Keep LangGraph / real LLM planner integration as a separate design and
+  implementation track.
+- Treat any future safety-priority or mutation-routing failure as a blocking
+  architecture review item before provider promotion.
+
 ## P0 Safety / Load-Aware Baseline
 
 The latest `main` now includes the P0 Coach Agent safety and load-aware
