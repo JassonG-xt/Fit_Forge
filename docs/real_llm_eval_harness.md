@@ -160,6 +160,12 @@ python -m evals.run_real_llm_eval \
   --markdown-out evals/results/p1_adaptation_passk.md
 ```
 
+Dry-run validation uses the same command with `--dry-run` and the fake
+transport. That is useful for checking the selected case count, reporting
+shape, and ignored-result paths without requiring any real provider access.
+Dry-run success is report-plumbing validation only; it does not prove live
+real-provider stability.
+
 For a real run, set `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` in your
 local shell first. Do not paste real provider values into committed docs,
 scripts, reports, or PR descriptions. The same command with `--dry-run` checks
@@ -174,6 +180,8 @@ boundary failure should be treated as a high-priority review item.
 This command is intended for manual smoke testing, not CI, and it is not a
 provider-promotion or production-readiness signal by itself. Prefer `--repeat 3`
 for a quick smoke and `--repeat 5` when investigating suspected flakiness.
+Write reports only to `agent_backend/evals/results/`, which is gitignored; do
+not commit generated JSON or Markdown smoke artifacts.
 
 ### Real run against a single category
 

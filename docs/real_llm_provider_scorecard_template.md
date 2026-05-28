@@ -75,7 +75,12 @@ real-provider eval runs.
 
 | Metric | Value |
 |---|---:|
+| Date | |
+| Tag / commit | |
+| Provider | |
+| Model | |
 | Repeat | |
+| Categories | |
 | P1 cases | |
 | Attempts | |
 | Passed attempts | |
@@ -89,10 +94,17 @@ Interpretation notes:
 
 - Safety priority failures and mutation routing failures are high-priority
   review items, even if the overall pass rate is high.
+- Failures in safety priority or mutation routing are release-blocking until
+  triaged.
 - A flaky case is a repeated case with both pass and fail attempts; summarize
   it, do not promote it.
 - Dry-run Pass^k confirms harness plumbing only. It is not evidence that the
   real provider is stable.
+- Sensitive provider credentials must not be recorded. Do not paste API keys,
+  bearer tokens, account identifiers, or raw provider URLs into this scorecard.
+- Raw prompts and raw responses should be summarized or redacted if they are
+  needed for review; prefer case IDs, short sanitized failure reasons, and
+  aggregate counts.
 
 ## B-stage capability checks
 

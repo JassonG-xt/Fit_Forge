@@ -325,24 +325,40 @@ mutation, or new action schemas.
 
 ## 9. Implementation Roadmap
 
+Current archived status after P1-F:
+
+- P1-A: contract completed.
+- P1-B: deterministic helper completed.
+- P1-C: native provider integration completed.
+- P1-C.1: global acute symptom safety guardrail completed.
+- P1-D: Flutter mock representative parity completed.
+- P1-E: eval coverage completed.
+- P1-F: manual real-provider Pass^k smoke support completed.
+
+The P1 deterministic/native/mock/eval baseline is complete. P1-F adds tooling
+and reporting for manual real-provider smoke runs, not a live real-provider
+result. LangGraph planner integration, real LLM provider runtime integration,
+and live Pass^k validation remain future work.
+
 ### P1-A: Contract and eval spec
 
-Current PR. Docs only. Defines the architecture boundary and future eval
+Completed in #120. Docs only. Defines the architecture boundary and future eval
 requirements without changing runtime behavior.
 
 ### P1-B: Deterministic AdaptationPlanner helper
 
-Implemented as a backend-only pure helper in
+Completed in #121 as a backend-only pure helper in
 `agent_backend/agents/adaptation_planner.py`. It classifies safety, explicit
 mutation, read-only adaptation, and fallback decisions, and is covered by
-focused unit tests. It is not wired into the native provider, optional
-LangGraph provider, Flutter mock, or executor yet. No runtime behavior, action
-types, safety guardrails, eval JSON, CI, or `LocalAgentActionExecutor`
-behavior changed in P1-B.
+focused unit tests. P1-B itself did not wire the helper into the native
+provider, optional LangGraph provider, Flutter mock, or executor; later P1
+steps did that only where noted below. No runtime behavior, action types,
+safety guardrails, eval JSON, CI, or `LocalAgentActionExecutor` behavior
+changed in P1-B.
 
 ### P1-C: Native provider integration
 
-Implemented as native-provider-only routing. The deterministic helper now
+Completed in #122 as native-provider-only routing. The deterministic helper now
 participates in the native backend provider path after the existing safety
 guardrail and before read-only load fallback. It may:
 
@@ -371,7 +387,7 @@ that training is safe.
 
 ### P1-D: Flutter mock alignment
 
-Implemented as Flutter-mock-only representative routing alignment. The local
+Completed in #124 as Flutter-mock-only representative routing alignment. The local
 `MockAgentClient` now mirrors the native provider's P1 priority shape for demo
 and offline development:
 
@@ -392,7 +408,7 @@ trust boundaries. Mock alignment is only for local/demo consistency.
 
 ### P1-E: Eval expansion
 
-Implemented as eval/docs/test coverage. `coach_agent_eval_cases.json` now has
+Completed in #125 as eval/docs/test coverage. `coach_agent_eval_cases.json` now has
 active cases for `adaptationPlannerReadOnly`,
 `adaptationPlannerMutationIntent`, `adaptationPlannerSafetyPriority`, and
 `adaptationPlannerFalsePositive`. The eval harness also supports the
@@ -402,13 +418,13 @@ separate track.
 
 ### P1-F: Real-provider Pass^k smoke
 
-Implemented as manual eval harness / docs / test support. The real-provider
+Completed in #126 as manual eval harness / docs / test support. The real-provider
 eval harness can run the P1 AdaptationPlanner category group repeatedly via
 `--p1-adaptation-smoke --repeat <N>` and produce JSON / Markdown summaries with
 per-attempt outcomes, per-case pass counts, pass rate, flaky cases, safety
-priority failures, and mutation-routing failures. This does not call a real LLM
-in CI, does not change provider runtime behavior, and does not promote the real
-provider.
+priority failures, and mutation-routing failures. This does not record a live
+real-provider result, does not call a real LLM in CI, does not change provider
+runtime behavior, and does not promote the real provider.
 
 ## 10. Scope Confirmation for P1-A
 
