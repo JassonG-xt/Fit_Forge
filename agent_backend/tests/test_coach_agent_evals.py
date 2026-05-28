@@ -109,6 +109,15 @@ def _build_context(case: Dict[str, Any]) -> Dict[str, Any]:
             **override["progressSummary"],
         }
 
+    if "profile" in override:
+        ctx["profile"] = {
+            **ctx.get("profile", {}),
+            **override["profile"],
+        }
+
+    if "activePlan" in override:
+        ctx["activePlan"] = override["activePlan"]
+
     if "trainingLoadSummary" in override:
         ctx["trainingLoadSummary"] = override["trainingLoadSummary"]
 
@@ -205,6 +214,26 @@ def test_active_case_against_mock_provider(case: Dict[str, Any]) -> None:
             f"got {first.payload.get('targetMinutes')}"
         )
 
+    must_contain_text = expected.get("mustContainText") or []
+    if isinstance(must_contain_text, str):
+        must_contain_text = [must_contain_text]
+    if must_contain_text:
+        text = "\n".join(
+            [
+                response.message or "",
+                *[action.summary for action in response.actions],
+                *[
+                    str(value)
+                    for action in response.actions
+                    for value in action.payload.values()
+                ],
+            ]
+        )
+        for fragment in must_contain_text:
+            assert fragment in text, (
+                f"[{case['id']}] expected text fragment {fragment!r}"
+            )
+
     # ── expected weekdays (rescheduleWeek) ──
     expected_weekdays = expected.get("expectedWeekdays")
     if expected_weekdays is not None and response.actions:
@@ -289,12 +318,74 @@ def test_eval_suite_covers_required_categories() -> None:
         "promptInjection": 6,
         "orchestrationBoundary": 4,
         "feedbackFollowUp": 4,
+        "adaptationPlannerReadOnly": 3,
+        "adaptationPlannerMutationIntent": 4,
+        "adaptationPlannerSafetyPriority": 3,
+        "adaptationPlannerFalsePositive": 3,
     }
     for category, minimum in required.items():
         assert counts.get(category, 0) >= minimum, (
             f"Category '{category}' has {counts.get(category, 0)} cases; "
             f"minimum is {minimum}"
         )
+
+
+def test_p1_adaptation_planner_categories_keep_boundary_contracts() -> None:
+    """P1 eval categories must encode the routing boundary, not only labels."""
+    required = {
+        "adaptationPlannerReadOnly",
+        "adaptationPlannerMutationIntent",
+        "adaptationPlannerSafetyPriority",
+        "adaptationPlannerFalsePositive",
+    }
+    cases_by_category: Dict[str, List[Dict[str, Any]]] = {
+        category: [c for c in _ACTIVE_CASES if c["category"] == category]
+        for category in required
+    }
+
+    for case in cases_by_category["adaptationPlannerReadOnly"]:
+        expected = case["expected"]
+        assert expected.get("noMutationAction") is True, case["id"]
+        assert expected.get("requiresConfirmation") is False, case["id"]
+        assert expected.get("safety", "none") == "none", case["id"]
+
+    for case in cases_by_category["adaptationPlannerMutationIntent"]:
+        expected = case["expected"]
+        assert expected.get("actionType") in _MUTATION_ACTION_TYPES, case["id"]
+        assert expected.get("requiresConfirmation") is True, case["id"]
+        assert expected.get("mustHaveSourceContextHash") is True, case["id"]
+        assert expected.get("mustNotExecuteDirectly") is True, case["id"]
+        assert expected.get("safety", "none") == "none", case["id"]
+
+    for case in cases_by_category["adaptationPlannerSafetyPriority"]:
+        expected = case["expected"]
+        assert expected.get("actionType") == "safetyResponse", case["id"]
+        assert expected.get("requiresConfirmation") is False, case["id"]
+        assert expected.get("noMutationAction") is True, case["id"]
+        assert expected.get("safety") == "stopWorkout", case["id"]
+
+    for case in cases_by_category["adaptationPlannerFalsePositive"]:
+        expected = case["expected"]
+        assert expected.get("noMutationAction") is True, case["id"]
+        assert expected.get("safety", "none") == "none", case["id"]
+        assert expected.get("actionType") not in {"safetyResponse", *_MUTATION_ACTION_TYPES}, (
+            case["id"]
+        )
+
+
+def test_context_override_supports_profile_and_active_plan() -> None:
+    case = {
+        "contextOverride": {
+            "profile": {"experienceLevel": "beginner"},
+            "activePlan": None,
+        }
+    }
+
+    ctx = _build_context(case)
+
+    assert ctx["profile"]["goal"] == _DEFAULT_CONTEXT["profile"]["goal"]
+    assert ctx["profile"]["experienceLevel"] == "beginner"
+    assert ctx["activePlan"] is None
 
 
 def test_eval_suite_has_unique_ids() -> None:

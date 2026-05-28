@@ -279,8 +279,8 @@ secrets, API keys, or full `sourceContextHash` values.
 
 ## 8. Eval Requirements
 
-Future P1 runtime implementation must add deterministic eval coverage before
-being considered complete. Planned categories:
+P1-E adds deterministic eval coverage before treating the native/mock P1
+baseline as covered by the Coach Agent eval suite. Active categories:
 
 - `adaptationPlannerReadOnly`
 - `adaptationPlannerMutationIntent`
@@ -298,6 +298,7 @@ Required mutation-intent cases:
 - High load + "压缩到20分钟" -> `compressWorkout`.
 - Equipment missing + "帮我替换卧推" -> `replaceExercise`.
 - Schedule disruption + "这周只能周一周三练" -> `rescheduleWeek`.
+- Plan regeneration + "重新生成一个每周3练计划" -> `generatePlan`.
 
 Required safety-priority cases:
 
@@ -309,11 +310,17 @@ Required false-positive cases:
 
 - Ordinary muscle soreness -> no high-risk `safetyResponse`.
 - Ordinary deadlift programming -> no contraindication guardrail.
-- Ordinary weekly review -> no mutation action.
+- Ordinary nutrition request -> existing non-mutating nutrition/fallback path,
+  not adaptation `weeklyReview`.
 
 Each mutation-intent eval must still assert `requiresConfirmation=true`,
 trusted `sourceContextHash`, output validation, no direct execution, and no new
 action type.
+
+P1-E evals lock deterministic/mock/native behavior only. They do not claim
+real-provider Pass^k stability, provider promotion, LangGraph planner
+integration, real LLM planner integration, automatic plan mutation, or new
+action schemas.
 
 ## 9. Implementation Roadmap
 
@@ -384,8 +391,13 @@ trust boundaries. Mock alignment is only for local/demo consistency.
 
 ### P1-E: Eval expansion
 
-Add active eval cases for the planned adaptation planner categories. Plan a
-future Pass^k provider-quality track separately; do not add it in P1-A.
+Implemented as eval/docs/test coverage. `coach_agent_eval_cases.json` now has
+active cases for `adaptationPlannerReadOnly`,
+`adaptationPlannerMutationIntent`, `adaptationPlannerSafetyPriority`, and
+`adaptationPlannerFalsePositive`. The eval harness also supports the
+`profile`, `activePlan`, `trainingLoadSummary`, and `mustContainText` checks
+needed by these cases. Future real-provider Pass^k quality work remains a
+separate track.
 
 ## 10. Scope Confirmation for P1-A
 
