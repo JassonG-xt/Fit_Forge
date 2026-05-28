@@ -4,7 +4,7 @@
 
 - Tag: `agent-coach-portfolio-readiness-v1`
 - Latest tagged commit: `470855f65d81d1a8855f436d6063cfbee23ce5c2`
-- 状态：Coach Agent MVP + eval suite (88 active / 4 expectedGap, 92 total) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ recovery-routing phase summary（详见 `docs/recovery_routing_phase_summary.md`）+ moveWorkoutSession end-to-end support + optional orchestration smoke/CI coverage + Phase G/G.1 free-form routing parity + G.3 backend payload guard + H.1 invalid mutation CTA guard + H.2 localized error/fallback copy + Phase H.3 audit/docs consolidation
+- 状态：Coach Agent MVP + eval suite (105 active / 4 expectedGap, 109 total) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ recovery-routing phase summary（详见 `docs/recovery_routing_phase_summary.md`）+ moveWorkoutSession end-to-end support + optional orchestration smoke/CI coverage + Phase G/G.1 free-form routing parity + G.3 backend payload guard + H.1 invalid mutation CTA guard + H.2 localized error/fallback copy + Phase H.3 audit/docs consolidation + P1-E AdaptationPlanner eval categories
 
 > Recovery-routing 当前阶段已收尾：四个功能步骤（E-1A 文案、E-1B 压缩路由、E-1C 周度日程路由 + D-1/D-2 基础信号）+ 一个 prompt-first 硬化步骤（E-3）+ 四份脱敏 real-provider scorecard（E-2/E-4/E-5 focused）。Provider 仍是 **experimental**：不作为 production-readiness 证据，不作为 provider promotion，不进 per-PR CI。Single-session "把今天训练挪到明天" 类需求保持 non-mutating，未来若要做需要另起设计提案，不应通过扩 `rescheduleWeek` 实现。
 
@@ -65,6 +65,8 @@
 > Acute symptom guardrail standardization: global deterministic `fitness_guardrails.py` now owns acute stop signals for chest tightness/pain, breathing difficulty, dizziness/fainting/nausea, and sharp or severe pain. The `AdaptationPlanner` relies on that global guardrail instead of the previous local chest-tightness overlap, and the Flutter mock safety keywords are synced for demo parity. Ordinary fatigue, ordinary muscle soreness, and mild exertion are guarded against high-risk false positives. This is a conservative stop signal, not medical diagnosis or full triage; mutation actions, executor behavior, action schemas, output validation, `sourceContextHash`, eval JSON, CI, and dependencies are unchanged.
 
 > P1-D Flutter mock alignment: Flutter local `MockAgentClient` now mirrors the native provider's representative P1 routing priority for local/demo parity: safety first, explicit mutation intent before read-only adaptation, read-only fatigue/recovery/load advice, and false-positive guards for ordinary soreness, ordinary exercise programming, nutrition, and mild exertion wording. The mock still uses existing action types and existing preview/confirmation semantics; `LocalAgentActionExecutor`, backend providers, LangGraph, real LLM provider behavior, output validation, `sourceContextHash`, eval JSON, CI, and dependencies are unchanged. This is mock parity, not a second independent planner and not full P1 completion.
+
+> P1-E AdaptationPlanner eval expansion: `coach_agent_eval_cases.json` now includes active categories for read-only adaptation, explicit mutation intent preservation, safety priority, and false-positive guards. These evals lock deterministic/mock/native behavior only; they do not add runtime provider behavior, Flutter behavior, action types, executor behavior, LangGraph integration, real LLM planner integration, or real-provider Pass^k stability claims.
 
 ## P0 Safety / Load-Aware Baseline
 
@@ -211,15 +213,15 @@ AppState (lib/services/app_state.dart)
 
 源数据：`agent_backend/evals/coach_agent_eval_cases.json`。
 
-- Eval cases 总数：**77**
-- `active`：**73**（mock router 必须保持通过；含 clarification cases、扩展后的中文 safety guardrail、generatePlan paraphrase、B-stage 行为契约、recovery-aware 行为契约、narrow recovery compression / weekly reschedule boundary、moveWorkoutSession、orchestrationBoundary，以及 Phase G free-form paraphrase coverage）
+- Eval cases 总数：**109**
+- `active`：**105**（mock router 必须保持通过；含 clarification cases、扩展后的中文 safety guardrail、generatePlan paraphrase、B-stage 行为契约、recovery-aware 行为契约、narrow recovery compression / weekly reschedule boundary、moveWorkoutSession、orchestrationBoundary、Phase G free-form paraphrase coverage、load-aware read-only coverage，以及 P1 AdaptationPlanner eval categories）
 - `expectedGap`：**4**（stable gaps 和 volatile case 保留为 regression signal）
 
 > `agent-mvp-eval-v2` 在 `agent-mvp-eval-v1` 基础上完成的促进：MiMo v2.5 Pro post-timeout 跨多 run stable converted 的 2 个 reschedule paraphrase 已升级为 active；`compress_busy_no_minutes_zh_007` 升级为 clarification case（不允许猜 `targetMinutes`）；3 个中文 safety case (`头晕` / `膝盖剧痛` / `受伤`) 通过扩展 deterministic guardrail 升级为 active（safety 不依赖 LLM）；4 个 generatePlan paraphrase 在 eval harness context 修复后达到 3/3 clean converted，升级为 active。详细历史见 `docs/coach_agent_evals.md`。
 
 > v2 之后**不再**继续追 eval 全绿：剩余 4 个 expectedGap (`compress_short_no_minutes_zh_004` / `replace_pullup_alternative_zh_005` / `replace_too_hard_zh_006` / `reschedule_only_two_days_zh_005`) 作为 regression signal 保留。两条原因：(1) `compress_short_no_minutes_zh_004` 没有明确 `targetMinutes`，硬猜默认会违反 user-confirmation 契约；(2) 其余三条要么是稳定 LLM gap、要么 volatile，硬扩 mock router 会让 mock 变成伪 NLU。
 
-覆盖类别（每个类别都有多条 active + 多条 expectedGap，详情见 `docs/coach_agent_evals.md`）：
+覆盖类别（详情见 `docs/coach_agent_evals.md`；部分 legacy mutation categories 仍保留 expectedGap regression signal）：
 
 - `compressWorkout`
 - `replaceExercise`
@@ -230,6 +232,13 @@ AppState (lib/services/app_state.dart)
 - `safety`
 - `promptInjection`
 - `orchestrationBoundary`
+- `pendingClarification`
+- `feedbackFollowUp`
+- `loadAwareReadOnly`
+- `adaptationPlannerReadOnly`
+- `adaptationPlannerMutationIntent`
+- `adaptationPlannerSafetyPriority`
+- `adaptationPlannerFalsePositive`
 
 ### 已根据 real LLM cross-run 升级为 active 的 3 个 case
 
