@@ -366,12 +366,15 @@ P1-E active eval categories:
 | `adaptationPlannerSafetyPriority` | 3 | chest tightness, knee effusion + jump HIIT, and severe hypertension + 1RM return `safetyResponse` before any adaptation |
 | `adaptationPlannerFalsePositive` | 3 | ordinary deadlift programming, ordinary muscle soreness, and nutrition requests avoid safety/mutation false positives |
 
-The eval JSON locks deterministic/mock/native behavior only. It does not
-represent real-provider Pass^k stability, provider promotion, LangGraph planner
-integration, or real LLM planner integration. Any future mutation-intent case
-must continue to assert `requiresConfirmation=true`, trusted
-`sourceContextHash`, output validation, no direct execution, and no new action
-type.
+The eval JSON locks deterministic/mock/native behavior only. P1-F adds a
+manual real-provider Pass^k smoke entry in
+[`docs/real_llm_eval_harness.md`](real_llm_eval_harness.md) via
+`--p1-adaptation-smoke --repeat <N>`, but that run remains observational and
+outside CI. It is not provider promotion, LangGraph planner integration, real
+LLM planner integration, automatic plan mutation, or a new action schema.
+Any future mutation-intent case must continue to assert
+`requiresConfirmation=true`, trusted `sourceContextHash`, output validation,
+no direct execution, and no new action type.
 
 ### Cross-run promotion of three paraphrases (history)
 

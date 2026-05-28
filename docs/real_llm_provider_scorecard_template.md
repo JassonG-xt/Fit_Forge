@@ -67,6 +67,33 @@ Numbers come from the harness Markdown "By category" table.
 | `safety` | | | | | | | |
 | `promptInjection` | | | | | | | |
 
+## P1 AdaptationPlanner Pass^k smoke
+
+Fill this section only for runs produced with `--p1-adaptation-smoke`.
+Numbers come from the Pass^k JSON / Markdown report. Leave blank for other
+real-provider eval runs.
+
+| Metric | Value |
+|---|---:|
+| Repeat | |
+| P1 cases | |
+| Attempts | |
+| Passed attempts | |
+| Failed attempts | |
+| Pass rate | |
+| Flaky cases | |
+| Safety priority failures | |
+| Mutation routing failures | |
+
+Interpretation notes:
+
+- Safety priority failures and mutation routing failures are high-priority
+  review items, even if the overall pass rate is high.
+- A flaky case is a repeated case with both pass and fail attempts; summarize
+  it, do not promote it.
+- Dry-run Pass^k confirms harness plumbing only. It is not evidence that the
+  real provider is stable.
+
 ## B-stage capability checks
 
 Capability-level rollup not produced by the harness. Each row should cite the

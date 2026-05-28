@@ -6,6 +6,8 @@ against a real (or fake-transport) LLM provider. Used to:
 - Compare provider quality (e.g. `gpt-4o-mini` vs another model).
 - Decide whether `expectedGap` cases can flip to `active`.
 - Smoke-test a new model before swapping it in.
+- Manually check P1 AdaptationPlanner routing stability with a repeated
+  Pass^k smoke run.
 
 For the deterministic mock-only orchestration smoke matrix, use
 `python -m evals.run_orchestration_smoke` instead. That scorecard verifies
@@ -135,6 +137,44 @@ Use this to validate plumbing, parameter parsing, and report shape:
 python -m evals.run_real_llm_eval --dry-run --limit 5
 ```
 
+### P1 AdaptationPlanner Pass^k Smoke
+
+Use this manual smoke run to check whether the real provider consistently
+preserves the P1 AdaptationPlanner routing boundaries:
+
+- `safetyResponse` remains highest priority.
+- Explicit mutation intents are not stolen by read-only adaptation.
+- Read-only adaptation stays non-mutating.
+- Ordinary soreness, nutrition, and deadlift-planning prompts do not become
+  high-risk safety or mutation false positives.
+
+Example:
+
+```bash
+cd agent_backend
+python -m evals.run_real_llm_eval \
+  --p1-adaptation-smoke \
+  --repeat 3 \
+  --only-status active \
+  --out evals/results/p1_adaptation_passk.json \
+  --markdown-out evals/results/p1_adaptation_passk.md
+```
+
+For a real run, set `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL` in your
+local shell first. Do not paste real provider values into committed docs,
+scripts, reports, or PR descriptions. The same command with `--dry-run` checks
+the report plumbing only; deterministic dry-run success is not real-provider
+stability.
+
+The JSON report includes `repeat`, the P1 category list, per-attempt outcomes,
+per-case pass/fail counts, an overall pass rate, `flakyCases`,
+`safetyFailures`, and `mutationRoutingFailures`. Any safety or mutation
+boundary failure should be treated as a high-priority review item.
+
+This command is intended for manual smoke testing, not CI, and it is not a
+provider-promotion or production-readiness signal by itself. Prefer `--repeat 3`
+for a quick smoke and `--repeat 5` when investigating suspected flakiness.
+
 ### Real run against a single category
 
 ```bash
@@ -245,6 +285,8 @@ Raw output paths stay gitignored. A scorecard would only land after manual cross
 | `--markdown-out <path>` | Optional Markdown summary path. |
 | `--limit <N>` | Run at most N cases (after selection and filters). |
 | `--category <name>` | Only run this category. |
+| `--p1-adaptation-smoke` | Run the P1 AdaptationPlanner category group (`adaptationPlannerReadOnly`, `adaptationPlannerMutationIntent`, `adaptationPlannerSafetyPriority`, `adaptationPlannerFalsePositive`) and emit a Pass^k report. |
+| `--repeat <N>` | Run each selected case N times. Values greater than 1 emit a Pass^k report. |
 | `--only-status active\|expectedGap\|all` | Filter by status. Default: `all`. |
 | `--case-id <ID>` | Run this case ID. Repeatable. Unknown IDs fail fast (exit 2). |
 | `--case-list <ID,ID,...>` | Comma-separated case IDs. Combines with `--case-id`; de-duped in first-seen order. |

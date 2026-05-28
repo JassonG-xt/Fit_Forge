@@ -317,10 +317,11 @@ Each mutation-intent eval must still assert `requiresConfirmation=true`,
 trusted `sourceContextHash`, output validation, no direct execution, and no new
 action type.
 
-P1-E evals lock deterministic/mock/native behavior only. They do not claim
-real-provider Pass^k stability, provider promotion, LangGraph planner
-integration, real LLM planner integration, automatic plan mutation, or new
-action schemas.
+P1-E evals lock deterministic/mock/native behavior only. P1-F adds a manual
+real-provider Pass^k smoke entry for the same P1 categories, but it remains
+observational and outside CI. Neither P1-E nor P1-F claims provider promotion,
+LangGraph planner integration, real LLM planner integration, automatic plan
+mutation, or new action schemas.
 
 ## 9. Implementation Roadmap
 
@@ -398,6 +399,16 @@ active cases for `adaptationPlannerReadOnly`,
 `profile`, `activePlan`, `trainingLoadSummary`, and `mustContainText` checks
 needed by these cases. Future real-provider Pass^k quality work remains a
 separate track.
+
+### P1-F: Real-provider Pass^k smoke
+
+Implemented as manual eval harness / docs / test support. The real-provider
+eval harness can run the P1 AdaptationPlanner category group repeatedly via
+`--p1-adaptation-smoke --repeat <N>` and produce JSON / Markdown summaries with
+per-attempt outcomes, per-case pass counts, pass rate, flaky cases, safety
+priority failures, and mutation-routing failures. This does not call a real LLM
+in CI, does not change provider runtime behavior, and does not promote the real
+provider.
 
 ## 10. Scope Confirmation for P1-A
 

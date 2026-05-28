@@ -4,7 +4,7 @@
 
 - Tag: `agent-coach-portfolio-readiness-v1`
 - Latest tagged commit: `470855f65d81d1a8855f436d6063cfbee23ce5c2`
-- 状态：Coach Agent MVP + eval suite (105 active / 4 expectedGap, 109 total) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ recovery-routing phase summary（详见 `docs/recovery_routing_phase_summary.md`）+ moveWorkoutSession end-to-end support + optional orchestration smoke/CI coverage + Phase G/G.1 free-form routing parity + G.3 backend payload guard + H.1 invalid mutation CTA guard + H.2 localized error/fallback copy + Phase H.3 audit/docs consolidation + P1-E AdaptationPlanner eval categories
+- 状态：Coach Agent MVP + eval suite (105 active / 4 expectedGap, 109 total) + real LLM eval harness + generatePlan context completeness guard + Chinese safety guardrails + PR #17 安全加固已完成 + B-stage（preference-aware generatePlan + structured weeklyReview）+ recovery-routing phase summary（详见 `docs/recovery_routing_phase_summary.md`）+ moveWorkoutSession end-to-end support + optional orchestration smoke/CI coverage + Phase G/G.1 free-form routing parity + G.3 backend payload guard + H.1 invalid mutation CTA guard + H.2 localized error/fallback copy + Phase H.3 audit/docs consolidation + P1-E AdaptationPlanner eval categories + P1-F manual real-provider Pass^k smoke support
 
 > Recovery-routing 当前阶段已收尾：四个功能步骤（E-1A 文案、E-1B 压缩路由、E-1C 周度日程路由 + D-1/D-2 基础信号）+ 一个 prompt-first 硬化步骤（E-3）+ 四份脱敏 real-provider scorecard（E-2/E-4/E-5 focused）。Provider 仍是 **experimental**：不作为 production-readiness 证据，不作为 provider promotion，不进 per-PR CI。Single-session "把今天训练挪到明天" 类需求保持 non-mutating，未来若要做需要另起设计提案，不应通过扩 `rescheduleWeek` 实现。
 
@@ -67,6 +67,8 @@
 > P1-D Flutter mock alignment: Flutter local `MockAgentClient` now mirrors the native provider's representative P1 routing priority for local/demo parity: safety first, explicit mutation intent before read-only adaptation, read-only fatigue/recovery/load advice, and false-positive guards for ordinary soreness, ordinary exercise programming, nutrition, and mild exertion wording. The mock still uses existing action types and existing preview/confirmation semantics; `LocalAgentActionExecutor`, backend providers, LangGraph, real LLM provider behavior, output validation, `sourceContextHash`, eval JSON, CI, and dependencies are unchanged. This is mock parity, not a second independent planner and not full P1 completion.
 
 > P1-E AdaptationPlanner eval expansion: `coach_agent_eval_cases.json` now includes active categories for read-only adaptation, explicit mutation intent preservation, safety priority, and false-positive guards. These evals lock deterministic/mock/native behavior only; they do not add runtime provider behavior, Flutter behavior, action types, executor behavior, LangGraph integration, real LLM planner integration, or real-provider Pass^k stability claims.
+
+> P1-F real-provider Pass^k smoke support: `agent_backend/evals/run_real_llm_eval.py` can now run the P1 AdaptationPlanner category group repeatedly with `--p1-adaptation-smoke --repeat <N>` and write JSON / Markdown summaries for pass rate, per-case pass counts, flaky cases, safety-priority failures, and mutation-routing failures. This is manual eval tooling only: no runtime provider changes, no Flutter changes, no action schema changes, no real LLM calls in CI, and no provider-promotion claim.
 
 ## P0 Safety / Load-Aware Baseline
 
