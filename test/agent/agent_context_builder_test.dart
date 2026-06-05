@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:fit_forge/agent/agent_context_builder.dart';
 import 'package:fit_forge/models/models.dart';
@@ -169,6 +170,7 @@ void main() {
     );
 
     test('availableExerciseSummary strips heavy fields', () async {
+      SharedPreferences.setMockInitialValues({});
       final state = AppState();
       await state.init();
 
@@ -184,6 +186,7 @@ void main() {
       expect(keys, contains('requiredEquipment'));
       expect(keys, contains('difficulty'));
       expect(keys, contains('isCompound'));
+      expect(keys, contains('alternativeIds'));
       // Heavy fields should NOT be present in the summary.
       expect(keys, isNot(contains('formCues')));
       expect(keys, isNot(contains('commonMistakes')));

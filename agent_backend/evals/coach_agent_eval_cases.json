@@ -144,7 +144,7 @@
     "status": "active",
     "userMessage": "没有杠铃，帮我替换今天的动作",
     "contextOverride": {
-      "todayHasSquat": true
+      "todayOnlySquat": true
     },
     "expected": {
       "actionType": "replaceExercise",
@@ -158,7 +158,7 @@
       "mustNotExecuteDirectly": true,
       "safety": "none"
     },
-    "note": "Mock keyword '替换' + '没有杠铃' triggers replaceExercise; needs todayWorkout.exercises in context."
+    "note": "Exercise library tool may infer the source from context only when today's workout has a single exercise."
   },
   {
     "id": "replace_squat_knee_zh_002",

@@ -82,6 +82,7 @@ class AgentContextBuilder {
     'requiredEquipment': e.allRequiredEquipment.map((eq) => eq.name).toList(),
     'difficulty': e.difficulty.name,
     'isCompound': e.isCompound,
+    'alternativeIds': e.alternativeIds,
   };
 
   Map<String, dynamic> _summarizeSession(WorkoutSession s) => {

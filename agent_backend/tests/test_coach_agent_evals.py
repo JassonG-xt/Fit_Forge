@@ -63,11 +63,32 @@ _DEFAULT_CONTEXT: Dict[str, Any] = {
     "bodyMetrics": [],
     "progressSummary": {"totalWorkoutsThisWeek": 3, "streakDays": 7},
     "availableExerciseSummary": [
+        {
+            "id": "bench_press",
+            "name": "卧推",
+            "equipment": "barbell",
+            "bodyPart": "chest",
+            "requiredEquipment": ["barbell", "bench"],
+            "alternativeIds": ["pushup"],
+        },
+        {
+            "id": "barbell_squat",
+            "name": "杠铃深蹲",
+            "equipment": "barbell",
+            "bodyPart": "legs",
+            "requiredEquipment": ["barbell"],
+            "alternativeIds": ["goblet_squat"],
+        },
         {"id": "leg_press", "name": "Leg Press", "equipment": "machine", "bodyPart": "legs"},
         {"id": "goblet_squat", "name": "Goblet Squat", "equipment": "dumbbell", "bodyPart": "legs"},
         {"id": "pushup", "name": "Pushup", "equipment": "none", "bodyPart": "chest"},
         {"id": "lunge", "name": "Lunge", "equipment": "none", "bodyPart": "legs"},
-        {"id": "incline_dumbbell_press", "name": "Incline Dumbbell Press", "equipment": "dumbbell", "bodyPart": "chest"},
+        {
+            "id": "incline_dumbbell_press",
+            "name": "Incline Dumbbell Press",
+            "equipment": "dumbbell",
+            "bodyPart": "chest",
+        },
     ],
 }
 
@@ -87,8 +108,13 @@ def _build_context(case: Dict[str, Any]) -> Dict[str, Any]:
     ctx = json.loads(json.dumps(_DEFAULT_CONTEXT))  # deep copy via json roundtrip
     override = case.get("contextOverride") or {}
 
-    # 'todayHasSquat': swap one exercise to barbell_squat so '深蹲' steering works.
-    if override.get("todayHasSquat"):
+    # The exercise library tool only infers the source when the message names it
+    # or today's workout has a single exercise.
+    if override.get("todayOnlySquat"):
+        ctx["todayWorkout"]["exercises"] = [
+            {"exerciseId": "barbell_squat", "exerciseName": "Barbell Squat"},
+        ]
+    elif override.get("todayHasSquat"):
         ctx["todayWorkout"]["exercises"] = [
             {"exerciseId": "barbell_squat", "exerciseName": "Barbell Squat"},
             {"exerciseId": "bench_press", "exerciseName": "Bench Press"},
