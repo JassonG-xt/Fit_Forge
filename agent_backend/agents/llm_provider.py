@@ -28,6 +28,10 @@ from agents.coach_agent import has_explicit_target_minutes as _has_explicit_targ
 from agents.generate_plan_policy import (
     has_sufficient_generate_plan_context as _has_sufficient_generate_plan_context,
 )
+from agents.exercise_library_tool import (
+    build_replace_exercise_response,
+    has_replacement_request,
+)
 from agents.output_validation import normalize_agent_response
 from agents.training_load_advice import build_training_load_advice
 from schemas.agent_action import AgentAction
@@ -221,6 +225,11 @@ _COMPRESS_CLARIFICATION_MESSAGE = (
     "可以帮你压缩训练。你今天大概能练多少分钟？比如 15、20 或 30 分钟。"
 )
 
+_REPLACE_CLARIFICATION_MESSAGE = (
+    "可以帮你替换动作。请告诉我具体要替换哪个动作，以及你现在可用的器械；"
+    "如果今天已有训练计划，我会优先找同部位替代动作。"
+)
+
 
 def _strip_unsupported_compress_actions(
     response: AgentResponse,
@@ -334,6 +343,25 @@ def run_real_coach_agent(request: AgentRequest) -> AgentResponse:
     )
     if load_advice is not None:
         return load_advice
+
+    if has_replacement_request(request.message):
+        response = build_replace_exercise_response(
+            message=request.message,
+            context=request.context,
+            action_id_factory=lambda prefix: f"{prefix}_{uuid.uuid4().hex[:10]}",
+        )
+        if response is None:
+            return AgentResponse(
+                message=_REPLACE_CLARIFICATION_MESSAGE,
+                intent="answerOnly",
+                confidence=0.7,
+                actions=[],
+            )
+        response.actions = _inject_action_safety(
+            response.actions,
+            request.context.planContextHash,
+        )
+        return response
 
     base_url = os.environ.get("LLM_BASE_URL", "")
     api_key = os.environ.get("LLM_API_KEY", "")

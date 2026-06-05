@@ -25,6 +25,7 @@ from agents.feedback.feedback_follow_up_router import (
     route_feedback_follow_up,
 )
 from agents.feedback.training_feedback_analyzer import analyze_training_feedback
+from agents.exercise_library_tool import build_replace_exercise_response
 from agents.intent.clarification_policy import message_for as _clarification_for
 from agents.intent.coach_intent import CoachIntentType, IntentCandidate
 from agents.intent.intent_router import route as _route_intent
@@ -757,65 +758,14 @@ def _replace_response(message: str, request: AgentRequest) -> AgentResponse | No
     if not (_has_replace_intent(message) or _has_equipment_constraint(message)):
         return None
 
-    today = request.context.todayWorkout
-    if not today or not today.get("exercises"):
-        return _replace_clarification_response()
-
-    unavailable: list[str] = []
-    if "杠铃" in message or "barbell" in message.lower():
-        unavailable.append("barbell")
-    if "哑铃" in message or "dumbbell" in message.lower():
-        unavailable.append("dumbbell")
-
-    from_id = None
-    from_name = None
-    for ex in today.get("exercises", []):
-        if "深蹲" in message and "squat" in (ex.get("exerciseName") or "").lower():
-            from_id = ex.get("exerciseId")
-            from_name = ex.get("exerciseName")
-            break
-    if not from_id and today["exercises"]:
-        from_id = today["exercises"][0].get("exerciseId")
-        from_name = today["exercises"][0].get("exerciseName")
-    if not from_id:
-        return _replace_clarification_response()
-
-    candidate = None
-    for ex in request.context.availableExerciseSummary:
-        if ex.get("equipment") in unavailable:
-            continue
-        if ex.get("id") == from_id:
-            continue
-        if "深蹲" in message and ex.get("bodyPart") != "legs":
-            continue
-        candidate = ex
-        break
-    if not candidate:
-        return _replace_clarification_response()
-
-    payload = {
-        "fromExerciseId": from_id,
-        "toExerciseId": candidate["id"],
-        "reason": f"避免使用 {', '.join(unavailable) or '不可用器械'}，保留同部位训练。",
-    }
-    if today.get("dayOfWeek"):
-        payload["dayOfWeek"] = today["dayOfWeek"]
-
-    return AgentResponse(
-        message=f"可以把 {from_name} 替换成 {candidate['name']}，保留训练重点同时避免不可用器械。",
-        intent="replaceExercise",
-        confidence=0.9,
-        actions=[
-            AgentAction(
-                id=_action_id("replace"),
-                type="replaceExercise",
-                title=f"替换 {from_name}",
-                summary=f"将 {from_name} 替换为 {candidate['name']}。",
-                requiresConfirmation=True,
-                payload=payload,
-            )
-        ],
+    response = build_replace_exercise_response(
+        message=message,
+        context=request.context,
+        action_id_factory=_action_id,
     )
+    if response is None:
+        return _replace_clarification_response()
+    return response
 
 
 def _replace_clarification_response() -> AgentResponse:

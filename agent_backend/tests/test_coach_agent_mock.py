@@ -107,6 +107,62 @@ def test_mock_replace_action_carries_source_context_hash() -> None:
     assert action.sourceContextHash == _TRUSTED_HASH
 
 
+def test_mock_replace_uses_exercise_library_alternatives_before_list_order() -> None:
+    response = _run_mock_coach_agent(
+        _request(
+            "没有杠铃，把深蹲换成一个更适合新手的动作",
+            today_workout={
+                "dayOfWeek": 1,
+                "dayType": "legs",
+                "exercises": [
+                    {
+                        "exerciseId": "barbell_squat",
+                        "exerciseName": "Barbell Squat",
+                    },
+                ],
+            },
+            available_exercises=[
+                {
+                    "id": "barbell_squat",
+                    "name": "杠铃深蹲",
+                    "bodyPart": "legs",
+                    "equipment": "barbell",
+                    "requiredEquipment": ["barbell"],
+                    "difficulty": "intermediate",
+                    "isCompound": True,
+                    "alternativeIds": ["goblet_squat"],
+                },
+                {
+                    "id": "leg_press",
+                    "name": "腿举",
+                    "bodyPart": "legs",
+                    "equipment": "machine",
+                    "requiredEquipment": ["machine"],
+                    "difficulty": "beginner",
+                    "isCompound": True,
+                    "alternativeIds": [],
+                },
+                {
+                    "id": "goblet_squat",
+                    "name": "高脚杯深蹲",
+                    "bodyPart": "legs",
+                    "equipment": "dumbbell",
+                    "requiredEquipment": ["dumbbell"],
+                    "difficulty": "beginner",
+                    "isCompound": True,
+                    "alternativeIds": ["barbell_squat"],
+                },
+            ],
+        )
+    )
+
+    assert response.intent == "replaceExercise"
+    action = response.actions[0]
+    assert action.payload["fromExerciseId"] == "barbell_squat"
+    assert action.payload["toExerciseId"] == "goblet_squat"
+    assert action.sourceContextHash == _TRUSTED_HASH
+
+
 def test_mock_reschedule_action_carries_source_context_hash() -> None:
     response = _run_mock_coach_agent(
         _request("这周只能周二周五训练")

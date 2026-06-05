@@ -866,6 +866,126 @@ void main() {
       expect(action.payload['toExerciseId'], 'bodyweight_lunge');
     });
 
+    test('replace uses exercise alternativeIds before list order', () async {
+      const context = AgentContextSnapshot(
+        locale: 'zh-CN',
+        profile: {'weeklyFrequency': 3},
+        activePlan: {'id': 'replace_plan'},
+        todayWorkout: {
+          'dayOfWeek': 1,
+          'dayType': 'legs',
+          'exercises': [
+            {
+              'exerciseId': 'barbell_squat',
+              'exerciseName': 'Barbell Squat',
+              'targetSets': 4,
+              'targetReps': 8,
+              'restSeconds': 120,
+            },
+          ],
+        },
+        recentSessions: [],
+        bodyMetrics: [],
+        progressSummary: {},
+        availableExerciseSummary: [
+          {
+            'id': 'barbell_squat',
+            'name': '杠铃深蹲',
+            'bodyPart': 'legs',
+            'equipment': 'barbell',
+            'requiredEquipment': ['barbell'],
+            'difficulty': 'intermediate',
+            'isCompound': true,
+            'alternativeIds': ['goblet_squat'],
+          },
+          {
+            'id': 'leg_press',
+            'name': '腿举',
+            'bodyPart': 'legs',
+            'equipment': 'machine',
+            'requiredEquipment': ['machine'],
+            'difficulty': 'beginner',
+            'isCompound': true,
+            'alternativeIds': <String>[],
+          },
+          {
+            'id': 'goblet_squat',
+            'name': '高脚杯深蹲',
+            'bodyPart': 'legs',
+            'equipment': 'dumbbell',
+            'requiredEquipment': ['dumbbell'],
+            'difficulty': 'beginner',
+            'isCompound': true,
+            'alternativeIds': ['barbell_squat'],
+          },
+        ],
+        planContextHash: 'trusted_replace_hash',
+      );
+
+      final response = await client.sendMessage(
+        message: '没有杠铃，把深蹲换成一个更适合新手的动作',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.replaceExercise);
+      expect(
+        response.actions.single.payload['fromExerciseId'],
+        'barbell_squat',
+      );
+      expect(response.actions.single.payload['toExerciseId'], 'goblet_squat');
+    });
+
+    test('replace clarifies when workout day is missing', () async {
+      const context = AgentContextSnapshot(
+        locale: 'zh-CN',
+        profile: {'weeklyFrequency': 3},
+        activePlan: {'id': 'replace_plan'},
+        todayWorkout: {
+          'dayType': 'legs',
+          'exercises': [
+            {'exerciseId': 'barbell_squat', 'exerciseName': 'Barbell Squat'},
+          ],
+        },
+        recentSessions: [],
+        bodyMetrics: [],
+        progressSummary: {},
+        availableExerciseSummary: [
+          {
+            'id': 'barbell_squat',
+            'name': '杠铃深蹲',
+            'bodyPart': 'legs',
+            'equipment': 'barbell',
+            'requiredEquipment': ['barbell'],
+            'difficulty': 'intermediate',
+            'isCompound': true,
+            'alternativeIds': ['goblet_squat'],
+          },
+          {
+            'id': 'goblet_squat',
+            'name': '高脚杯深蹲',
+            'bodyPart': 'legs',
+            'equipment': 'dumbbell',
+            'requiredEquipment': ['dumbbell'],
+            'difficulty': 'beginner',
+            'isCompound': true,
+            'alternativeIds': ['barbell_squat'],
+          },
+        ],
+        planContextHash: 'trusted_replace_hash',
+      );
+
+      final response = await client.sendMessage(
+        message: '没有杠铃，把深蹲换成一个更适合新手的动作',
+        context: context,
+        history: const [],
+      );
+
+      expect(response.intent, AgentIntent.answerOnly);
+      expect(response.actions, isEmpty);
+      expect(response.message, contains('哪个动作'));
+    });
+
     test(
       'Phase G.1 free-form replace clarifies without workout context',
       () async {

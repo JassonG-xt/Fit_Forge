@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import '../agent_client.dart';
+import '../exercise_library_query.dart';
 import '../feedback/feedback_follow_up_router.dart';
 import '../feedback/training_feedback_analyzer.dart';
 import '../intent/clarification_policy.dart';
@@ -910,75 +911,41 @@ class MockAgentClient implements AgentClient {
   }
 
   AgentResponse _replaceResponse(String message, AgentContextSnapshot context) {
-    final exercises = context.availableExerciseSummary;
-    String? fromId;
-    String? fromName;
-    final today = context.todayWorkout;
-    if (today != null) {
-      final dayExercises = today['exercises'] as List? ?? const [];
-      if (dayExercises.isNotEmpty) {
-        for (final raw in dayExercises) {
-          final exercise = raw as Map<String, dynamic>;
-          final name = exercise['exerciseName'] as String? ?? '';
-          if (message.contains('深蹲') && name.toLowerCase().contains('squat')) {
-            fromId = exercise['exerciseId'] as String?;
-            fromName = name;
-            break;
-          }
-        }
-        fromId ??=
-            (dayExercises.first as Map<String, dynamic>)['exerciseId']
-                as String?;
-        fromName ??=
-            (dayExercises.first as Map<String, dynamic>)['exerciseName']
-                as String?;
-      }
+    final replacement = findExerciseReplacement(
+      message: message,
+      context: ExerciseReplacementContext(
+        todayWorkout: context.todayWorkout,
+        availableExerciseSummary: context.availableExerciseSummary,
+      ),
+    );
+    if (replacement == null) {
+      return _replaceClarificationResponse();
     }
-
-    final unavailable = <String>[];
-    if (message.contains('杠铃') || message.contains('barbell')) {
-      unavailable.add('barbell');
-    }
-    if (message.contains('哑铃') || message.contains('dumbbell')) {
-      unavailable.add('dumbbell');
-    }
-
-    String? toId;
-    String? toName;
-    for (final exercise in exercises) {
-      final equipment = exercise['equipment'] as String?;
-      if (equipment == null || unavailable.contains(equipment)) continue;
-      if (fromId != null && exercise['id'] == fromId) continue;
-      if (message.contains('深蹲')) {
-        if (exercise['bodyPart'] != 'legs') continue;
-      }
-      toId = exercise['id'] as String?;
-      toName = exercise['name'] as String?;
-      break;
-    }
-
-    if (toId == null || fromId == null) {
+    final dayOfWeek = replacement.dayOfWeek;
+    if (dayOfWeek == null) {
       return _replaceClarificationResponse();
     }
 
-    final dayOfWeek = today != null ? today['dayOfWeek'] as int? : null;
     return AgentResponse(
-      message: '可以把 $fromName 替换成 $toName，保留训练重点同时避免不可用器械。',
+      message:
+          '可以把 ${replacement.fromExerciseName} 替换成 ${replacement.toExerciseName}，'
+          '保留训练重点同时避免不可用器械。',
       intent: AgentIntent.replaceExercise,
       confidence: 0.9,
       actions: [
         AgentAction(
           id: _newId('replace'),
           type: AgentActionType.replaceExercise,
-          title: '替换 $fromName',
-          summary: '将 $fromName 替换为 $toName。',
+          title: '替换 ${replacement.fromExerciseName}',
+          summary:
+              '将 ${replacement.fromExerciseName} 替换为 ${replacement.toExerciseName}。',
           requiresConfirmation: true,
           sourceContextHash: context.planContextHash,
           payload: {
-            'dayOfWeek': ?dayOfWeek,
-            'fromExerciseId': fromId,
-            'toExerciseId': toId,
-            'reason': '避免使用 ${unavailable.join(", ")}，保留同部位训练。',
+            'dayOfWeek': dayOfWeek,
+            'fromExerciseId': replacement.fromExerciseId,
+            'toExerciseId': replacement.toExerciseId,
+            'reason': replacement.reason,
           },
         ),
       ],

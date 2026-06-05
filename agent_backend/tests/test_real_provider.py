@@ -318,6 +318,77 @@ def test_real_provider_safety_short_circuit(mock_call_llm) -> None:
     "LLM_API_KEY": "sk-test-key",
 })
 @patch("agents.llm_provider._call_llm")
+def test_real_provider_replace_uses_exercise_library_tool_before_llm(
+    mock_call_llm,
+) -> None:
+    request = AgentRequest(
+        message="没有杠铃，把深蹲换成一个更适合新手的动作",
+        context={
+            "planContextHash": "trusted_hash",
+            "profile": dict(_COMPLETE_PROFILE),
+            "todayWorkout": {
+                "dayOfWeek": 1,
+                "dayType": "legs",
+                "exercises": [
+                    {
+                        "exerciseId": "barbell_squat",
+                        "exerciseName": "Barbell Squat",
+                    },
+                ],
+            },
+            "availableExerciseSummary": [
+                {
+                    "id": "barbell_squat",
+                    "name": "杠铃深蹲",
+                    "bodyPart": "legs",
+                    "equipment": "barbell",
+                    "requiredEquipment": ["barbell"],
+                    "difficulty": "intermediate",
+                    "isCompound": True,
+                    "alternativeIds": ["goblet_squat"],
+                },
+                {
+                    "id": "leg_press",
+                    "name": "腿举",
+                    "bodyPart": "legs",
+                    "equipment": "machine",
+                    "requiredEquipment": ["machine"],
+                    "difficulty": "beginner",
+                    "isCompound": True,
+                    "alternativeIds": [],
+                },
+                {
+                    "id": "goblet_squat",
+                    "name": "高脚杯深蹲",
+                    "bodyPart": "legs",
+                    "equipment": "dumbbell",
+                    "requiredEquipment": ["dumbbell"],
+                    "difficulty": "beginner",
+                    "isCompound": True,
+                    "alternativeIds": ["barbell_squat"],
+                },
+            ],
+        },
+    )
+
+    resp = run_real_coach_agent(request)
+
+    assert resp.intent == "replaceExercise"
+    action = resp.actions[0]
+    assert action.type == "replaceExercise"
+    assert action.requiresConfirmation is True
+    assert action.sourceContextHash == "trusted_hash"
+    assert action.payload["fromExerciseId"] == "barbell_squat"
+    assert action.payload["toExerciseId"] == "goblet_squat"
+    mock_call_llm.assert_not_called()
+
+
+@patch.dict(os.environ, {
+    "FITFORGE_AGENT_MODE": "real",
+    "LLM_BASE_URL": "http://fake-llm",
+    "LLM_API_KEY": "sk-test-key",
+})
+@patch("agents.llm_provider._call_llm")
 def test_real_provider_llm_error_returns_fallback(mock_call_llm) -> None:
     mock_call_llm.side_effect = TimeoutError("connection timed out")
     request = _make_request()
@@ -817,23 +888,58 @@ def test_real_provider_accepts_compress_for_half_hour_shorthand(
 def test_real_provider_replace_unaffected_by_compress_guard(
     mock_call_llm: MagicMock,
 ) -> None:
-    """Guard targets compressWorkout only — replaceExercise must pass through."""
-    mock_call_llm.return_value = _valid_llm_response(
-        "replaceExercise",
-        payload={
-            "dayOfWeek": 1,
-            "fromExerciseId": "barbell_squat",
-            "toExerciseId": "goblet_squat",
-            "reason": "no barbell",
+    """Guard targets compressWorkout only; replaceExercise uses the tool."""
+    request = AgentRequest(
+        message=_REPLACE_PROBE_MSG,
+        context={
+            "planContextHash": "trusted_hash_1",
+            "profile": dict(_COMPLETE_PROFILE),
+            "todayWorkout": {
+                "dayOfWeek": 1,
+                "dayType": "legs",
+                "exercises": [
+                    {
+                        "exerciseId": "barbell_squat",
+                        "exerciseName": "Barbell Squat",
+                    },
+                ],
+            },
+            "availableExerciseSummary": [
+                {
+                    "id": "barbell_squat",
+                    "name": "杠铃深蹲",
+                    "bodyPart": "legs",
+                    "equipment": "barbell",
+                    "requiredEquipment": ["barbell"],
+                    "difficulty": "intermediate",
+                    "isCompound": True,
+                    "alternativeIds": ["goblet_squat"],
+                },
+                {
+                    "id": "goblet_squat",
+                    "name": "高脚杯深蹲",
+                    "bodyPart": "legs",
+                    "equipment": "dumbbell",
+                    "requiredEquipment": ["dumbbell"],
+                    "difficulty": "beginner",
+                    "isCompound": True,
+                    "alternativeIds": ["barbell_squat"],
+                },
+            ],
         },
     )
-    request = _make_request(message=_REPLACE_PROBE_MSG)
 
     from agents.coach_agent import run_coach_agent
 
     resp = run_coach_agent(request)
+    assert resp.intent == "replaceExercise"
     assert len(resp.actions) == 1
-    assert resp.actions[0].type == "replaceExercise"
+    action = resp.actions[0]
+    assert action.type == "replaceExercise"
+    assert action.sourceContextHash == "trusted_hash_1"
+    assert action.payload["fromExerciseId"] == "barbell_squat"
+    assert action.payload["toExerciseId"] == "goblet_squat"
+    mock_call_llm.assert_not_called()
 
 
 @patch.dict(os.environ, {
@@ -1178,20 +1284,55 @@ def test_real_provider_replace_unaffected_by_generate_plan_guard(
     mock_call_llm: MagicMock,
 ) -> None:
     """replaceExercise with incomplete profile still works (not gated)."""
-    mock_call_llm.return_value = _valid_llm_response(
-        intent="replaceExercise",
-        payload={"dayOfWeek": 1, "fromExerciseId": "a", "toExerciseId": "b"},
-    )
-    request = _make_request(
+    request = AgentRequest(
         message="帮我替换动作",
-        profile=None,
+        context={
+            "planContextHash": "trusted_hash_2",
+            "todayWorkout": {
+                "dayOfWeek": 1,
+                "dayType": "legs",
+                "exercises": [
+                    {
+                        "exerciseId": "barbell_squat",
+                        "exerciseName": "Barbell Squat",
+                    },
+                ],
+            },
+            "availableExerciseSummary": [
+                {
+                    "id": "barbell_squat",
+                    "name": "杠铃深蹲",
+                    "bodyPart": "legs",
+                    "equipment": "barbell",
+                    "requiredEquipment": ["barbell"],
+                    "difficulty": "intermediate",
+                    "isCompound": True,
+                    "alternativeIds": ["goblet_squat"],
+                },
+                {
+                    "id": "goblet_squat",
+                    "name": "高脚杯深蹲",
+                    "bodyPart": "legs",
+                    "equipment": "dumbbell",
+                    "requiredEquipment": ["dumbbell"],
+                    "difficulty": "beginner",
+                    "isCompound": True,
+                    "alternativeIds": ["barbell_squat"],
+                },
+            ],
+        },
     )
 
     resp = run_real_coach_agent(request)
 
     assert resp.intent == "replaceExercise"
     assert len(resp.actions) == 1
-    assert resp.actions[0].type == "replaceExercise"
+    action = resp.actions[0]
+    assert action.type == "replaceExercise"
+    assert action.sourceContextHash == "trusted_hash_2"
+    assert action.payload["fromExerciseId"] == "barbell_squat"
+    assert action.payload["toExerciseId"] == "goblet_squat"
+    mock_call_llm.assert_not_called()
 
 
 @patch.dict(os.environ, {
