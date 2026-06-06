@@ -15,6 +15,7 @@ import logging
 from functools import partial
 from typing import Any, TypedDict
 
+from agents.adaptation_planner import plan_adaptation
 from agents.action_safety import MUTATION_ACTION_TYPES
 from agents.output_validation import _sanitize_payload
 from agents.orchestration_trace import (
@@ -54,6 +55,7 @@ class LangGraphCoachState(TypedDict, total=False):
     response: Any
     route: str
     recovery: dict[str, Any]
+    planner: dict[str, Any]
     error: str
 
 
@@ -143,6 +145,46 @@ def recovery_policy_node(state: LangGraphCoachState) -> LangGraphCoachState:
     if load_advice is not None:
         return {"response": load_advice}
     return {"response": _recovery_policy_response()}
+
+
+def planner_node(state: LangGraphCoachState) -> LangGraphCoachState:
+    record_trace_node("planner_node")
+    if "response" in state:
+        record_trace_decision("planner_node", "skipped_existing_response")
+        return {}
+
+    request = state["request"]
+    message = request.message
+    if assess_message_safety(message).has_medical_concern:
+        record_trace_decision(
+            "planner_node",
+            "planner_safety_passthrough",
+            "medical_concern",
+        )
+        return {}
+
+    if _is_plan_explanation_request(message):
+        record_trace_decision(
+            "planner_node",
+            "planner_answer_only",
+            "plan_explanation_request",
+        )
+        return {"response": _planner_explanation_response()}
+
+    decision = plan_adaptation(message, request.context.model_dump())
+    action_type = decision.recommended_action_type
+    trace_decision, trace_reason = _planner_trace_decision(action_type)
+    if trace_decision is None:
+        record_trace_decision("planner_node", "no_planner_signal", "no_signal")
+        return {}
+
+    record_trace_decision("planner_node", trace_decision, trace_reason)
+    return {
+        "planner": {
+            "actionType": action_type,
+            "decision": "delegate",
+        }
+    }
 
 
 def native_response_node(
@@ -236,6 +278,7 @@ class LangGraphCoachAgentProvider:
         graph.add_node("intent_route_node", intent_route_node)
         graph.add_node("recovery_node", recovery_node)
         graph.add_node("recovery_policy_node", recovery_policy_node)
+        graph.add_node("planner_node", planner_node)
         graph.add_node(
             "native_response_node",
             partial(native_response_node, native_provider=self._native_provider),
@@ -248,7 +291,8 @@ class LangGraphCoachAgentProvider:
         graph.add_edge("safety_precheck_node", "intent_route_node")
         graph.add_edge("intent_route_node", "recovery_node")
         graph.add_edge("recovery_node", "recovery_policy_node")
-        graph.add_edge("recovery_policy_node", "native_response_node")
+        graph.add_edge("recovery_policy_node", "planner_node")
+        graph.add_edge("planner_node", "native_response_node")
         graph.add_edge("native_response_node", "response_contract_validation_node")
         graph.add_edge("response_contract_validation_node", END)
         return graph.compile()
@@ -405,6 +449,34 @@ def _has_explicit_mutation_intent(message: str) -> bool:
     )
 
 
+def _planner_trace_decision(action_type: str | None) -> tuple[str | None, str | None]:
+    if action_type == "generatePlan":
+        return "planner_delegate_generate_plan", "generate_plan_request"
+    if action_type == "rescheduleWeek":
+        return "planner_delegate_reschedule", "reschedule_request"
+    if action_type == "moveWorkoutSession":
+        return "planner_delegate_move_session", "move_session_request"
+    return None, None
+
+
+def _is_plan_explanation_request(message: str) -> bool:
+    if not any(token in message for token in ("计划", "训练安排", "训练结构")):
+        return False
+    return any(token in message for token in ("为什么", "解释", "说明", "怎么看", "合理吗"))
+
+
+def _planner_explanation_response() -> AgentResponse:
+    return AgentResponse(
+        message=(
+            "训练计划通常会根据你的目标、每周训练频率、训练经验、可用器械和恢复情况来安排。"
+            "如果你想修改计划，请明确说生成新计划、重排训练日或移动某一天训练；这些修改仍需要你确认后才会生效。"
+        ),
+        intent="answerOnly",
+        confidence=0.75,
+        actions=[],
+    )
+
+
 def _recovery_policy_response() -> AgentResponse:
     return AgentResponse(
         message=(
@@ -550,6 +622,7 @@ __all__ = [
     "LangGraphCoachState",
     "intent_route_node",
     "native_response_node",
+    "planner_node",
     "recovery_node",
     "recovery_policy_node",
     "response_contract_validation_node",

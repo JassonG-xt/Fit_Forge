@@ -2,8 +2,10 @@
 
 ## Purpose
 
-Phase F defines the design and eval contract for future `PlannerNode` and
-`NutritionNode` work. It does not implement new runtime behavior.
+Phase F defined the design and eval contract for future `PlannerNode` and
+`NutritionNode` work. PlannerNode V1 is now implemented in the optional
+LangGraph path as a routing / decision-trace node. NutritionNode remains
+design-only.
 
 ## Current Baseline
 
@@ -16,6 +18,7 @@ safety_precheck_node
 -> intent_route_node
 -> recovery_node
 -> recovery_policy_node
+-> planner_node
 -> native_response_node
 -> response_contract_validation_node
 ```
@@ -26,7 +29,7 @@ safety_precheck_node
 
 ## Future Target Graph
 
-Proposed future graph:
+Proposed future graph after NutritionNode:
 
 ```text
 safety_precheck_node
@@ -39,7 +42,7 @@ safety_precheck_node
 -> response_contract_validation_node
 ```
 
-Important: this is a proposed design only, not implemented in Phase F.
+Important: PlannerNode V1 is implemented; NutritionNode is still proposed.
 
 ## Node Responsibility Table
 
@@ -49,21 +52,19 @@ Important: this is a proposed design only, not implemented in Phase F.
 | `intent_route_node` | Coarse intent routing | No | No | Yes |
 | `recovery_node` | Recovery metadata detection | No | No | Yes |
 | `recovery_policy_node` | Non-mutating recovery advice for ambiguous fatigue/overtraining | No | No | Yes |
-| `planner_node` | Future plan-generation / schedule / training-structure routing | No | May propose typed mutation action | Yes |
+| `planner_node` | Plan-generation / schedule / training-structure routing and metadata-only trace decisions | No | Routes toward existing typed mutation actions; directly returns only `answerOnly` | Yes |
 | `nutrition_node` | Future nutrition-advice routing | No | No by default | Yes |
 | `native_response_node` | Delegates explicit action generation to native provider | No | May return typed action | Yes |
 | `response_contract_validation_node` | Final contract and safety validation | No | No | N/A |
 
 ## PlannerNode Design
 
-`PlannerNode` may handle future training-plan intents such as:
+`PlannerNode` V1 handles training-plan intents such as:
 
 - `generatePlan`
 - `rescheduleWeek`
 - `moveWorkoutSession`
-- training frequency adjustments
 - plan structure explanation
-- equipment or experience-level constraints
 
 `PlannerNode` must not:
 
@@ -75,12 +76,16 @@ Important: this is a proposed design only, not implemented in Phase F.
 - perform medical diagnosis
 - override `safetyResponse`
 
-`PlannerNode` may only produce or route toward existing structured actions:
+`PlannerNode` may only route toward existing structured actions:
 
 - `generatePlan`
 - `rescheduleWeek`
 - `moveWorkoutSession`
 - `answerOnly`
+
+For mutation actions, V1 records a planner decision and delegates concrete
+action generation to `native_response_node`. It does not construct mutation
+payloads itself.
 
 Mutation actions must still require:
 
