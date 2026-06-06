@@ -4,10 +4,10 @@ FitForge remains a provider-agnostic structured-action agent system.
 Phase D keeps the optional LangGraph adapter experimental while adding
 privacy-safe node-level decision tracing and smoke scorecards. Phase E
 consolidates the release narrative and demo/eval checklist without changing
-runtime behavior. It is still not a full LangGraph migration and does not add
-Planner or Nutrition behavior.
-Phase F proposes future Planner/Nutrition nodes in a design/eval contract only;
-the current graph remains unchanged.
+runtime behavior. It is still not a full LangGraph migration.
+Phase F proposed Planner/Nutrition nodes in a design/eval contract.
+PlannerNode V1 is now implemented as a routing / trace node in the optional
+LangGraph path; NutritionNode remains design-only.
 
 ## Current architecture
 
@@ -178,6 +178,7 @@ input
 -> intent_route_node
 -> recovery_node
 -> recovery_policy_node
+-> planner_node
 -> native_response_node
 -> response_contract_validation_node
 -> AgentResponse
@@ -189,20 +190,26 @@ input
 | `intent_route_node` | Coarse routing only | No |
 | `recovery_node` | Detects fatigue / recovery / time-constraint signals and records metadata | No |
 | `recovery_policy_node` | Consumes recovery metadata and may return safe non-mutating recovery advice | No |
+| `planner_node` | Records plan/schedule routing decisions and may answer plan-explanation prompts without mutation | No |
 | `native_response_node` | Delegates explicit action generation to the native provider | No |
 | `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
 
 Phase D node decisions use string enums such as `safety_short_circuit`,
-`policy_answer_only`, `delegate_explicit_mutation`, `delegated_to_native`,
-`passed`, and `fail_closed`. Reasons are also enums, such as
-`medical_concern`, `fatigue_or_recovery`, `explicit_mutation_intent`, and
+`policy_answer_only`, `delegate_explicit_mutation`,
+`planner_delegate_generate_plan`, `planner_delegate_reschedule`,
+`planner_delegate_move_session`, `planner_answer_only`,
+`delegated_to_native`, `passed`, and `fail_closed`. Reasons are also enums,
+such as `medical_concern`, `fatigue_or_recovery`,
+`explicit_mutation_intent`, `generate_plan_request`, `reschedule_request`,
+`move_session_request`, `plan_explanation_request`, and
 `validator_contract_violation`.
 
 The node flow does not invent new action types and does not bypass the
 structured-action boundary. Ambiguous fatigue / overtraining requests can
-return `answerOnly` advice with no actions. Explicit mutation requests still
-flow to `native_response_node`, which delegates actual action generation to
-the existing native provider, and
+return `answerOnly` advice with no actions. Plan-generation, weekly
+reschedule, and single-session move requests pass through `planner_node` for
+metadata-only decisions and still flow to `native_response_node`, which
+delegates actual action generation to the existing native provider.
 `response_contract_validation_node` fails closed to a safe `answerOnly`
 response when the graph output is malformed, unsafe, missing confirmation,
 or carries a suspicious `sourceContextHash`.
@@ -211,9 +218,8 @@ If LangGraph is unavailable, the provider returns a valid `answerOnly`
 `AgentResponse` explaining that the experimental orchestration adapter is
 unavailable in the current backend environment.
 
-Future Planner/Nutrition nodes are proposed only in
+NutritionNode is still proposed only in
 [`docs/agent_phase_f_planner_nutrition_contract.md`](agent_phase_f_planner_nutrition_contract.md).
-They are not wired into this graph in Phase F.
 
 ## Phase D non-goals
 
@@ -225,10 +231,9 @@ They are not wired into this graph in Phase F.
 - not Flutter UI rewrite
 - not production observability
 - not a full replacement for the native default path
-- not new Planner / Nutrition behavior
+- not Nutrition behavior
 - not a product UI tracing surface
 
-Phase F documents the Planner/Nutrition node design and eval contract before
-implementation. Future phases may replace the coarse `intent_route_node` with
-dedicated Planner, Recovery, Nutrition, and Validator nodes, but those are not
-implemented in this phase.
+Phase F documents the Planner/Nutrition node design and eval contract.
+PlannerNode V1 is implemented conservatively; future phases may add
+NutritionNode or deepen Planner behavior without expanding mutation authority.

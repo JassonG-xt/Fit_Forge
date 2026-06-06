@@ -25,6 +25,7 @@ _LANGGRAPH_NODE_ORDER = (
     "intent_route_node",
     "recovery_node",
     "recovery_policy_node",
+    "planner_node",
     "native_response_node",
     "response_contract_validation_node",
 )
@@ -105,6 +106,10 @@ def test_smoke_cases_cover_required_backend_paths() -> None:
         "freeform-replace-clarify-or-action",
         "freeform-nutrition-protein",
         "freeform-safety-over-plan",
+        "planner-generate-plan-delegates",
+        "planner-reschedule-week-delegates",
+        "planner-move-session-delegates",
+        "planner-plan-explanation-answer-only",
     }
 
 
@@ -260,9 +265,51 @@ def test_langgraph_trace_on_smoke_report_includes_key_phase_d_decisions(
     assert {
         ("recovery_node", "detected_signal"),
         ("recovery_policy_node", "delegate_explicit_mutation"),
+        ("planner_node", "no_planner_signal"),
         ("native_response_node", "delegated_to_native"),
         ("response_contract_validation_node", "passed"),
     } <= _decision_pairs(compress)
+
+
+def test_langgraph_trace_on_smoke_report_includes_planner_decisions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_langgraph(monkeypatch)
+
+    report = run_smoke_matrix(
+        orchestrators=["langgraph"],
+        traces=["on"],
+        case_ids=[
+            "planner-generate-plan-delegates",
+            "planner-reschedule-week-delegates",
+            "planner-move-session-delegates",
+            "planner-plan-explanation-answer-only",
+        ],
+        include_langgraph=True,
+    )
+    results = {result["caseId"]: result for result in report["results"]}
+
+    assert (
+        "planner_node",
+        "planner_delegate_generate_plan",
+    ) in _decision_pairs(results["planner-generate-plan-delegates"])
+    assert (
+        "planner_node",
+        "planner_delegate_reschedule",
+    ) in _decision_pairs(results["planner-reschedule-week-delegates"])
+    assert (
+        "planner_node",
+        "planner_delegate_move_session",
+    ) in _decision_pairs(results["planner-move-session-delegates"])
+
+    explanation = results["planner-plan-explanation-answer-only"]
+    assert explanation["status"] == "pass"
+    assert explanation["intent"] == "answerOnly"
+    assert explanation["actionTypes"] == []
+    assert (
+        "planner_node",
+        "planner_answer_only",
+    ) in _decision_pairs(explanation)
 
 
 def test_report_outputs_do_not_include_raw_prompt_text(tmp_path: Path) -> None:

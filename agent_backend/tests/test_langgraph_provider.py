@@ -16,6 +16,7 @@ from agents.action_safety import MUTATION_ACTION_TYPES
 from agents.orchestration_trace import orchestration_trace_scope
 from agents.providers.langgraph_provider import (
     LangGraphCoachAgentProvider,
+    planner_node,
     recovery_node,
     recovery_policy_node,
     response_contract_validation_node,
@@ -88,6 +89,7 @@ _EXPECTED_NODE_ORDER = (
     "intent_route_node",
     "recovery_node",
     "recovery_policy_node",
+    "planner_node",
     "native_response_node",
     "response_contract_validation_node",
 )
@@ -201,7 +203,8 @@ def test_langgraph_builds_named_safe_node_sequence(
         ("safety_precheck_node", "intent_route_node"),
         ("intent_route_node", "recovery_node"),
         ("recovery_node", "recovery_policy_node"),
-        ("recovery_policy_node", "native_response_node"),
+        ("recovery_policy_node", "planner_node"),
+        ("planner_node", "native_response_node"),
         ("native_response_node", "response_contract_validation_node"),
         ("response_contract_validation_node", "__end__"),
     ]
@@ -291,6 +294,16 @@ def test_langgraph_graph_path_preserves_safety_response(
             {
                 ("recovery_node", "detected_signal", "time_constrained"),
                 ("recovery_policy_node", "delegate_explicit_mutation", "explicit_mutation_intent"),
+                ("planner_node", "no_planner_signal", "no_signal"),
+                ("native_response_node", "delegated_to_native", None),
+                ("response_contract_validation_node", "passed", None),
+            },
+        ),
+        (
+            "\u5e2e\u6211\u751f\u6210\u4e00\u4e2a\u589e\u808c\u8ba1\u5212",
+            "generatePlan",
+            {
+                ("planner_node", "planner_delegate_generate_plan", "generate_plan_request"),
                 ("native_response_node", "delegated_to_native", None),
                 ("response_contract_validation_node", "passed", None),
             },
@@ -474,6 +487,46 @@ def test_recovery_policy_node_does_not_intercept_safety_response() -> None:
             },
         }
     ) == {}
+
+
+def test_planner_node_noops_when_response_already_present() -> None:
+    assert planner_node(
+        {
+            "request": _request("帮我生成一个增肌计划"),
+            "response": {"intent": "answerOnly"},
+        }
+    ) == {}
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_action_type"),
+    [
+        ("帮我生成一个增肌计划", "generatePlan"),
+        ("这周只能周一周三练，帮我重排", "rescheduleWeek"),
+        ("把今天训练挪到周三", "moveWorkoutSession"),
+    ],
+)
+def test_planner_node_delegates_plan_mutation_intents(
+    message: str,
+    expected_action_type: str,
+) -> None:
+    result = planner_node({"request": _request(message)})
+
+    assert result == {
+        "planner": {
+            "actionType": expected_action_type,
+            "decision": "delegate",
+        }
+    }
+
+
+def test_planner_node_answers_plan_explanations_without_mutation() -> None:
+    result = planner_node({"request": _request("这个训练计划为什么这样安排")})
+
+    response = result["response"]
+    assert response.intent == "answerOnly"
+    assert response.actions == []
+    assert "训练计划" in response.message
 
 
 @pytest.mark.parametrize(

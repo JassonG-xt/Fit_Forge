@@ -136,6 +136,9 @@ RAW_PROMPTS = (
     "这个动作我做不了，能换一个吗",
     "我想知道每天应该吃多少蛋白质",
     "我胸口有点疼，但还是想练，帮我安排一下",
+    "这周只能周一周三练，帮我重排",
+    "把今天训练挪到周三",
+    "这个训练计划为什么这样安排",
 )
 
 
@@ -177,6 +180,11 @@ def build_smoke_cases() -> list[SmokeCase]:
             expected_intent="generatePlan",
             expected_action_type="generatePlan",
             require_mutation_confirmation=True,
+            expected_trace_decisions=(
+                ("planner_node", "planner_delegate_generate_plan"),
+                ("native_response_node", "delegated_to_native"),
+                ("response_contract_validation_node", "passed"),
+            ),
         ),
         SmokeCase(
             case_id="weekly-review",
@@ -272,6 +280,58 @@ def build_smoke_cases() -> list[SmokeCase]:
             expect_safety_response=True,
             expected_trace_decisions=(
                 ("safety_precheck_node", "safety_short_circuit"),
+            ),
+        ),
+        SmokeCase(
+            case_id="planner-generate-plan-delegates",
+            category="planner",
+            prompt=RAW_PROMPTS[3],
+            expected_intent="generatePlan",
+            expected_action_type="generatePlan",
+            require_mutation_confirmation=True,
+            expected_trace_decisions=(
+                ("planner_node", "planner_delegate_generate_plan"),
+                ("native_response_node", "delegated_to_native"),
+                ("response_contract_validation_node", "passed"),
+            ),
+        ),
+        SmokeCase(
+            case_id="planner-reschedule-week-delegates",
+            category="planner",
+            prompt=RAW_PROMPTS[12],
+            expected_intent="rescheduleWeek",
+            expected_action_type="rescheduleWeek",
+            require_mutation_confirmation=True,
+            expected_trace_decisions=(
+                ("planner_node", "planner_delegate_reschedule"),
+                ("native_response_node", "delegated_to_native"),
+                ("response_contract_validation_node", "passed"),
+            ),
+        ),
+        SmokeCase(
+            case_id="planner-move-session-delegates",
+            category="planner",
+            prompt=RAW_PROMPTS[13],
+            expected_intent="moveWorkoutSession",
+            expected_action_type="moveWorkoutSession",
+            require_mutation_confirmation=True,
+            expected_trace_decisions=(
+                ("planner_node", "planner_delegate_move_session"),
+                ("native_response_node", "delegated_to_native"),
+                ("response_contract_validation_node", "passed"),
+            ),
+        ),
+        SmokeCase(
+            case_id="planner-plan-explanation-answer-only",
+            category="planner",
+            prompt=RAW_PROMPTS[14],
+            expected_intent="answerOnly",
+            expect_no_mutation=True,
+            expect_answer_only=True,
+            expected_trace_decisions=(
+                ("planner_node", "planner_answer_only"),
+                ("native_response_node", "skipped_existing_response"),
+                ("response_contract_validation_node", "passed"),
             ),
         ),
         SmokeCase(

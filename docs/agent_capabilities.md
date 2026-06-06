@@ -9,9 +9,10 @@ Phase D adds privacy-safe node-level decision tracing and smoke scorecards for
 the optional LangGraph path. Phase E consolidates that work into the release
 scorecard and interview narrative. LangGraph remains optional and
 orchestration-only, and native remains the default path.
-Phase F defines future Planner/Nutrition node responsibilities and eval gates
+Phase F defines Planner/Nutrition node responsibilities and eval gates
 in [`docs/agent_phase_f_planner_nutrition_contract.md`](agent_phase_f_planner_nutrition_contract.md);
-those nodes are design-only at this stage and are not implemented.
+PlannerNode V1 is now implemented in the optional LangGraph path as a
+routing/trace node, while NutritionNode remains design-only.
 Phase G hardens deterministic mock/native routing for realistic free-form
 Chinese paraphrases. It improves coverage for planning, compression,
 replacement, schedule changes, recovery, nutrition, and safety priority
@@ -155,6 +156,7 @@ input
 -> intent_route_node
 -> recovery_node
 -> recovery_policy_node
+-> planner_node
 -> native_response_node
 -> response_contract_validation_node
 -> AgentResponse
@@ -166,6 +168,7 @@ input
 | `intent_route_node` | Coarse routing only | No |
 | `recovery_node` | Detects fatigue / recovery / time-constraint signals and records metadata | No |
 | `recovery_policy_node` | Consumes recovery metadata and may return safe non-mutating recovery advice | No |
+| `planner_node` | Records plan/schedule routing decisions and may answer plan-explanation prompts without mutation | No |
 | `native_response_node` | Delegates explicit action generation to the native provider | No |
 | `response_contract_validation_node` | Validates and fail-closes the `AgentResponse` contract | No |
 
@@ -175,6 +178,8 @@ requests still delegate actual action generation to the native provider and
 cannot bypass confirmation or the trusted `sourceContextHash` boundary. The
 graph also fail-closes malformed output, safety-violating output, and mutation
 actions that are missing confirmation or carry an unsafe hash.
+PlannerNode V1 does not build mutation payloads itself; it records structural
+planner decisions and leaves concrete action generation to native delegation.
 
 ## Privacy-Safe Tracing
 
@@ -282,13 +287,13 @@ fallback.
 - not cloud sync
 - not HealthKit / Health Connect
 - not direct backend state mutation
-- not a multi-agent graph yet
+- not a fully autonomous multi-agent graph
 - not a Flutter UI rewrite
 - not real LLM CI
 - not replacing the native default path
-- not adding Planner or Nutrition behavior
+- not adding Nutrition behavior
 - not exposing trace scorecards in Flutter
-- not implementing the Phase F Planner/Nutrition design
+- not implementing the full Phase F Planner/Nutrition design
 - not full semantic NLU; Phase G is deterministic mock/native routing coverage
 
 ## Release Scorecard

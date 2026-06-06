@@ -34,6 +34,9 @@ path now has explicit safe nodes:
 input
 -> safety_precheck_node
 -> intent_route_node
+-> recovery_node
+-> recovery_policy_node
+-> planner_node
 -> native_response_node
 -> response_contract_validation_node
 -> AgentResponse
@@ -133,7 +136,7 @@ but it does not commit generated smoke output.
 | Structured `AgentResponse` schema | ✅ implemented |
 | Safety guardrails (expanded deterministic keywords) | ✅ implemented |
 | Real LLM-backed Coach Agent | ✅ implemented (provider-agnostic) |
-| Multi-agent orchestration | 📋 planned |
+| Multi-agent orchestration | 🧪 experimental |
 
 ## Real LLM Provider
 
