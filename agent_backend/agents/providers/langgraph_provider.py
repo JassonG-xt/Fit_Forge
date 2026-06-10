@@ -171,23 +171,18 @@ def planner_node(state: LangGraphCoachState) -> LangGraphCoachState:
         )
         return {"response": _planner_explanation_response()}
 
-    decision = plan_adaptation(message, request.context.model_dump())
-    action_type = decision.recommended_action_type
-    trace_decision, trace_reason = _planner_trace_decision(action_type)
-    if trace_decision is None:
+    from agents.coach_routing import route_to_plan
+
+    plan = route_to_plan(request)
+    trace_decision, trace_reason = _planner_trace_decision(plan.action_type)
+    if trace_decision is not None:
+        record_trace_decision("planner_node", trace_decision, trace_reason)
+    else:
         record_trace_decision("planner_node", "no_planner_signal", "no_signal")
-        return {}
-
-    record_trace_decision("planner_node", trace_decision, trace_reason)
-    return {
-        "planner": {
-            "actionType": action_type,
-            "decision": "delegate",
-        }
-    }
+    return {"plan": plan}
 
 
-def native_response_node(
+def builder_node(
     state: LangGraphCoachState,
     native_provider: CoachAgentProvider | None = None,
 ) -> LangGraphCoachState:
@@ -201,9 +196,25 @@ def native_response_node(
         record_trace_decision("native_response_node", "fallback_answer_only")
         return {"response": _langgraph_fallback_response()}
 
-    provider = native_provider or NativeCoachAgentProvider()
+    plan = state.get("plan")
+    if plan is None:
+        # Defensive: no plan (e.g. planner short-circuited). Fall back to native,
+        # which itself runs route_to_plan -> build_from_plan -> finalize.
+        provider = native_provider or NativeCoachAgentProvider()
+        record_trace_decision("native_response_node", "delegated_to_native")
+        return {"response": provider.handle(state["request"])}
+
+    from agents.coach_building import build_from_plan, finalize_response
+
     record_trace_decision("native_response_node", "delegated_to_native")
-    return {"response": provider.handle(state["request"])}
+    response = finalize_response(build_from_plan(plan, state["request"]), state["request"])
+    return {"response": response}
+
+
+# Backward-compatible alias: the graph node key and trace string remain
+# "native_response_node"; the function is now builder_node (it consumes the
+# planner's ActionPlan instead of blindly re-routing the whole native monolith).
+native_response_node = builder_node
 
 
 def response_contract_validation_node(
@@ -620,6 +631,7 @@ def _langgraph_fallback_response() -> AgentResponse:
 __all__ = [
     "LangGraphCoachAgentProvider",
     "LangGraphCoachState",
+    "builder_node",
     "intent_route_node",
     "native_response_node",
     "planner_node",

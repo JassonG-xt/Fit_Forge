@@ -8,10 +8,15 @@ recomputed.
 Behaviour is preserved by construction: each branch calls exactly the builder
 that ``_route_mock_message`` called for the corresponding branch. The 109-case
 eval suite is the regression net (see Task 4).
+
+``finalize_response`` applies the mock provider's post-routing steps
+(generatePlan context guard + trusted ``sourceContextHash`` injection) so the
+native path and the LangGraph builder node produce identical output.
 """
 
 from __future__ import annotations
 
+from agents.action_safety import inject_action_safety
 from agents.coach_plan import ActionPlan
 from agents.feedback.feedback_follow_up_router import route_feedback_follow_up
 from agents.providers import native_provider as nv
@@ -61,3 +66,19 @@ def build_from_plan(plan: ActionPlan, request: AgentRequest) -> AgentResponse:
     if code == "nutrition":
         return nv._nutrition_response()
     return nv._fallback_response()  # "fallback"
+
+
+def finalize_response(response: AgentResponse, request: AgentRequest) -> AgentResponse:
+    """Apply the mock provider's post-routing steps. Shared by the native path
+    and the LangGraph builder node so both produce identical output."""
+    if any(a.type == "generatePlan" for a in response.actions):
+        if not nv._has_sufficient_generate_plan_context(request.context.profile):
+            response.actions = []
+            response.intent = "answerOnly"
+            response.message = nv._GENERATE_PLAN_CLARIFICATION_MESSAGE
+
+    response.actions = inject_action_safety(
+        response.actions,
+        request.context.planContextHash,
+    )
+    return response

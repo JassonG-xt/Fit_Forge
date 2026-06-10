@@ -996,23 +996,11 @@ def _run_mock_coach_agent(request: AgentRequest) -> AgentResponse:
     is forced true. Mock and real providers share this safety layer.
     """
     from agents.coach_routing import route_to_plan
-    from agents.coach_building import build_from_plan
+    from agents.coach_building import build_from_plan, finalize_response
 
     plan = route_to_plan(request)
     response = build_from_plan(plan, request)
-
-    # Guard: if mock returned generatePlan but profile is incomplete, clarify.
-    if any(a.type == "generatePlan" for a in response.actions):
-        if not _has_sufficient_generate_plan_context(request.context.profile):
-            response.actions = []
-            response.intent = "answerOnly"
-            response.message = _GENERATE_PLAN_CLARIFICATION_MESSAGE
-
-    response.actions = inject_action_safety(
-        response.actions,
-        request.context.planContextHash,
-    )
-    return response
+    return finalize_response(response, request)
 
 
 def _route_mock_message(request: AgentRequest) -> AgentResponse:

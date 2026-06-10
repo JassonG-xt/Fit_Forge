@@ -512,12 +512,8 @@ def test_planner_node_delegates_plan_mutation_intents(
 ) -> None:
     result = planner_node({"request": _request(message)})
 
-    assert result == {
-        "planner": {
-            "actionType": expected_action_type,
-            "decision": "delegate",
-        }
-    }
+    assert result.get("plan") is not None
+    assert result["plan"].action_type == expected_action_type
 
 
 def test_planner_node_answers_plan_explanations_without_mutation() -> None:
@@ -634,13 +630,15 @@ def test_langgraph_native_node_failure_returns_safe_fallback(
 ) -> None:
     _install_fake_langgraph(monkeypatch)
 
-    class FailingNativeProvider:
-        def handle(self, request: AgentRequest) -> AgentResponse:
-            raise RuntimeError("native provider failed")
+    def _boom(*args, **kwargs):
+        raise RuntimeError("native provider failed")
 
-    response = LangGraphCoachAgentProvider(
-        native_provider=FailingNativeProvider(),
-    ).handle(_request())
+    # In graph phase 1 the builder node consumes the planner's ActionPlan via
+    # build_from_plan; making that raise exercises the graph's node-failure
+    # resilience (graph.invoke catches it -> safe fallback, no error leak).
+    monkeypatch.setattr("agents.coach_building.build_from_plan", _boom)
+
+    response = LangGraphCoachAgentProvider().handle(_request())
 
     assert response.intent == "answerOnly"
     assert response.actions == []
