@@ -995,7 +995,11 @@ def _run_mock_coach_agent(request: AgentRequest) -> AgentResponse:
     `request.context.planContextHash` (when present) and `requiresConfirmation`
     is forced true. Mock and real providers share this safety layer.
     """
-    response = _route_mock_message(request)
+    from agents.coach_routing import route_to_plan
+    from agents.coach_building import build_from_plan
+
+    plan = route_to_plan(request)
+    response = build_from_plan(plan, request)
 
     # Guard: if mock returned generatePlan but profile is incomplete, clarify.
     if any(a.type == "generatePlan" for a in response.actions):
