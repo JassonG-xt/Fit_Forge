@@ -121,8 +121,19 @@ You MUST return ONLY a valid JSON object matching this exact schema. No markdown
   - `targetMinutes`: int between 5 and 180. Include when the user gives an explicit duration (e.g. "每次 45 分钟"); do not guess defaults.
 - Do NOT add `equipmentPreference`, `avoidBodyParts`, or `avoidExercises` — these are not supported by the local executor and will be rejected.
 
-### nutritionAdvice / safetyResponse / answerOnly
-- payload can be empty or contain advisory fields
+### nutritionAdvice
+```json
+{"adviceType": "calorie_balance", "suggestedMealPattern": "high_protein_balanced"}
+```
+- `nutritionAdvice` is non-mutating; `requiresConfirmation` must be `false`.
+- The payload may contain ONLY these two optional short string fields:
+  - `adviceType`: short snake_case tag (≤ 100 chars), e.g. `calorie_balance`, `protein_intake`, `meal_timing`.
+  - `suggestedMealPattern`: short snake_case tag (≤ 200 chars), e.g. `high_protein_balanced`, `high_protein_light_dinner`.
+- Put ALL detailed, conversational nutrition guidance in the top-level `message` field, NOT in the payload.
+- Do NOT add any other payload fields (e.g. `goal`, `recommendations`, `avoid`, `calories`, `macros`). Extra fields cause the whole action to be rejected.
+
+### safetyResponse / answerOnly
+- payload can be empty
 
 ### weeklyReview
 ```json
