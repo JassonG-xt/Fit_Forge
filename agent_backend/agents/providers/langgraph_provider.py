@@ -15,7 +15,6 @@ import logging
 from functools import partial
 from typing import Any, TypedDict
 
-from agents.adaptation_planner import plan_adaptation
 from agents.action_safety import MUTATION_ACTION_TYPES
 from agents.output_validation import _sanitize_payload
 from agents.orchestration_trace import (

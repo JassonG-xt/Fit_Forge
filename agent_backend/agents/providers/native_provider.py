@@ -16,14 +16,10 @@ import uuid
 from typing import Iterable
 
 from agents.adaptation_planner import AdaptationDecision, plan_adaptation
-from agents.action_safety import inject_action_safety
 from agents.generate_plan_policy import (
     has_sufficient_generate_plan_context as _has_sufficient_generate_plan_context,
 )
-from agents.feedback.feedback_follow_up_router import (
-    FeedbackFollowUpResult,
-    route_feedback_follow_up,
-)
+from agents.feedback.feedback_follow_up_router import FeedbackFollowUpResult
 from agents.feedback.training_feedback_analyzer import analyze_training_feedback
 from agents.exercise_library_tool import build_replace_exercise_response
 from agents.intent.clarification_policy import message_for as _clarification_for
@@ -1001,101 +997,6 @@ def _run_mock_coach_agent(request: AgentRequest) -> AgentResponse:
     plan = route_to_plan(request)
     response = build_from_plan(plan, request)
     return finalize_response(response, request)
-
-
-def _route_mock_message(request: AgentRequest) -> AgentResponse:
-    """Pure routing: pick a response builder based on keyword heuristics."""
-    message = request.message
-
-    if assess_message_safety(message).has_medical_concern:
-        return _safety_response(message)
-
-    planner_decision = _plan_adaptation(request)
-    if planner_decision.decision_type == "safety":
-        return _safety_response(message)
-
-    pending_response = _resolve_pending_clarification(request)
-    if pending_response is not None:
-        return pending_response
-
-    feedback_follow_up = _feedback_follow_up_response(
-        request,
-        route_feedback_follow_up(request),
-    )
-    if feedback_follow_up is not None:
-        return feedback_follow_up
-
-    candidate = _route_intent(message)
-    if (
-        candidate.type == CoachIntentType.compressWorkout
-        and candidate.has_missing_slots
-        and "rawTargetMinutes" in candidate.slots
-    ):
-        return _compress_minutes_clarification_response(candidate.slots["rawTargetMinutes"])
-    clarification = _clarification_for(candidate)
-    if clarification and _should_clarify_before_legacy_routing(candidate):
-        return _clarification_response(clarification, candidate.score)
-    if candidate.type == CoachIntentType.rescheduleWeek and "availableWeekdays" in candidate.slots:
-        rescheduled = _reschedule_response(message)
-        if rescheduled is not None:
-            return rescheduled
-
-    if planner_decision.decision_type == "explicitMutation":
-        planner_response = _planner_explicit_mutation_response(request, planner_decision)
-        if planner_response is not None:
-            return planner_response
-
-    if planner_decision.decision_type == "readOnlyAdaptation":
-        planner_response = _planner_read_only_response(request, planner_decision)
-        if planner_response is not None:
-            return planner_response
-
-    load_advice = build_training_load_advice(
-        context=request.context,
-        user_message=message,
-    )
-    if load_advice is not None:
-        return load_advice
-
-    if candidate.type in {CoachIntentType.trainingFeedback, CoachIntentType.recoveryAdvice}:
-        return _weekly_review_response(request)
-
-    # generatePlan must win over compress when the user asks to generate a plan
-    # AND happens to mention preferences like `每次 45 分钟` — the minutes are
-    # a generatePlan preference, not a request to compress today's workout.
-    if _has_training_plan_intent(message):
-        return _generate_plan_response(message)
-
-    if _is_compress(message) is not None:
-        return _compress_response(message, request)
-    if _has_free_form_compress_intent(message):
-        return _compress_clarification_response()
-
-    replace = _replace_response(message, request)
-    if replace is not None:
-        return replace
-
-    # moveWorkoutSession must win before _is_reschedule: a sentence like
-    # `把周一训练挪到周三` has two weekday tokens + "训练", which would
-    # otherwise be misrouted into `rescheduleWeek availableWeekdays:[1,3]`.
-    if _is_move_session(message):
-        return _move_session_response(message)
-
-    if _is_reschedule(message):
-        rescheduled = _reschedule_response(message)
-        if rescheduled is not None:
-            return rescheduled
-    if _has_weekly_review_intent(message):
-        return _weekly_review_response(request)
-    if _has_free_form_recovery_intent(message):
-        return _weekly_review_response(request)
-    if _looks_like_schedule_request(message) or _has_all(message, ("这周", "两天")):
-        return _schedule_clarification_response()
-
-    if _has_free_form_nutrition_intent(message):
-        return _nutrition_response()
-
-    return _fallback_response()
 
 
 def _resolve_pending_clarification(request: AgentRequest) -> AgentResponse | None:
