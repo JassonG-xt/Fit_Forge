@@ -1178,6 +1178,7 @@ def _run_one_case(
     *,
     dry_run: bool,
     include_diagnostics: bool = False,
+    orchestrator: str = "native",
 ) -> CaseResult:
     """Execute a single case through the real provider (or fake transport)."""
     # Import lazily so test code can monkeypatch and so importing this module
@@ -1193,6 +1194,8 @@ def _run_one_case(
 
     # Force real provider for the duration of this call.
     env_overlay = {"FITFORGE_AGENT_MODE": "real"}
+    if orchestrator == "graph":
+        env_overlay["FITFORGE_AGENT_ORCHESTRATOR"] = "langgraph"
     if dry_run:
         # Make the real provider believe it has env (it does NOT call the
         # network because we patch _call_llm to a fake transport).
@@ -1361,6 +1364,7 @@ def run_eval(
     dry_run: bool,
     model: Optional[str],
     provider: str,
+    orchestrator: str = "native",
 ) -> Dict[str, Any]:
     """Run all `cases` and return a report dict."""
     run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6]}"
@@ -1380,7 +1384,7 @@ def run_eval(
                 failureReason=f"status={case.get('status')}",
             ))
             continue
-        results.append(_run_one_case(case, dry_run=dry_run))
+        results.append(_run_one_case(case, dry_run=dry_run, orchestrator=orchestrator))
 
     summary = {
         "total": len(results),
@@ -1430,6 +1434,7 @@ def run_eval(
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "model": model or os.environ.get("LLM_MODEL") or "unknown",
         "provider": provider,
+        "orchestrator": orchestrator,
         "mode": "dry-run" if dry_run else "real",
         "durationSeconds": round(time.time() - started, 3),
         "summary": summary,
@@ -1610,6 +1615,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                    help="Model name to record in the report (overrides $LLM_MODEL).")
     p.add_argument("--provider", default="openai-compatible",
                    help="Provider label recorded in the report.")
+    p.add_argument(
+        "--orchestrator",
+        choices=("native", "graph"),
+        default="native",
+        help="Route cases through the native provider (default) or the LangGraph "
+             "orchestrator (graph). 'graph' + real mode exercises the LLM intent node.",
+    )
     p.add_argument("--dry-run", action="store_true",
                    help="Do NOT call a real LLM. Use canonical fake responses.")
     return p
@@ -1693,6 +1705,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             provider=args.provider,
             repeat=args.repeat,
             categories=categories,
+            orchestrator=args.orchestrator,
         )
     else:
         report = run_eval(
@@ -1700,6 +1713,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             dry_run=args.dry_run,
             model=args.model,
             provider=args.provider,
+            orchestrator=args.orchestrator,
         )
 
     out_path = Path(args.out) if args.out else (
@@ -1794,6 +1808,7 @@ def _build_passk_report(
     provider: str,
     categories: Any,
     duration_seconds: float,
+    orchestrator: str = "native",
 ) -> Dict[str, Any]:
     """Aggregate repeated real-provider attempts into a Pass^k smoke report."""
     records = _normalize_passk_attempts(attempts)
@@ -1914,6 +1929,7 @@ def _build_passk_report(
         "mode": "dry-run" if dry_run else "real",
         "durationSeconds": round(duration_seconds, 3),
         "repeat": repeat,
+        "orchestrator": orchestrator,
         "categories": category_list,
         "totalCases": len(cases),
         "totalAttempts": total_attempts,
@@ -1953,6 +1969,7 @@ def run_passk_eval(
     provider: str,
     repeat: int,
     categories: Any,
+    orchestrator: str = "native",
 ) -> Dict[str, Any]:
     """Run cases repeatedly and return a Pass^k smoke report."""
     started = time.time()
@@ -1974,6 +1991,7 @@ def run_passk_eval(
                     case,
                     dry_run=dry_run,
                     include_diagnostics=True,
+                    orchestrator=orchestrator,
                 )
             record = result.to_dict()
             record["attempt"] = attempt
@@ -1988,6 +2006,7 @@ def run_passk_eval(
         provider=provider,
         categories=categories,
         duration_seconds=time.time() - started,
+        orchestrator=orchestrator,
     )
 
 
