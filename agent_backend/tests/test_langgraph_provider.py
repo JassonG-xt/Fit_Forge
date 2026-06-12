@@ -909,3 +909,62 @@ def test_langgraph_native_and_graph_parity_cover_core_intents(
             assert all(action.type == "safetyResponse" for action in graph_response.actions)
         if expected_intent == "answerOnly":
             assert graph_response.actions == []
+
+
+from agents.intent.coach_intent import CoachIntentType, IntentCandidate
+from agents.providers.langgraph_provider import intent_slot_node
+
+
+def _p2_req(msg):
+    return AgentRequest(message=msg, context={"locale": "zh-CN"})
+
+
+def test_intent_slot_node_writes_candidate_without_client():
+    # No client → keyword detection; still writes intent_candidate to state.
+    out = intent_slot_node({"request": _p2_req("把周三的训练挪到周五")}, llm_intent_client=None)
+    assert out["route"] == "native"
+    assert out["intent_candidate"].type == CoachIntentType.moveWorkoutSession
+    assert out["intent_source"] == "keyword_fast_path"
+    assert out["intent"] == "moveWorkoutSession"
+
+
+def test_intent_slot_node_empty_message_falls_back():
+    out = intent_slot_node({"request": _p2_req("   ")}, llm_intent_client=None)
+    assert out["route"] == "fallback"
+
+
+def test_intent_slot_node_uses_llm_client_in_band():
+    class _Stub:
+        def classify(self, message, context):
+            return CoachIntentType.nutritionAdvice, 0.66
+
+    out = intent_slot_node({"request": _p2_req("你觉得呢")}, llm_intent_client=_Stub())
+    assert out["intent_candidate"].type == CoachIntentType.nutritionAdvice
+    assert out["intent_source"] == "llm"
+
+
+def test_planner_node_consumes_injected_candidate():
+    # intent_candidate present in state → planner routes by it.
+    state = {
+        "request": _p2_req("你觉得呢"),
+        "intent_candidate": IntentCandidate(
+            type=CoachIntentType.nutritionAdvice, score=0.66, reason="x"
+        ),
+    }
+    out = planner_node(state)
+    assert out["plan"].rationale_code == "nutrition"
+
+
+def test_provider_autobuilds_intent_client_in_real_mode(monkeypatch):
+    monkeypatch.setenv("FITFORGE_AGENT_MODE", "real")
+    monkeypatch.setenv("LLM_BASE_URL", "http://x")
+    monkeypatch.setenv("LLM_API_KEY", "k")
+    monkeypatch.setenv("LLM_MODEL", "m")
+    provider = LangGraphCoachAgentProvider()
+    assert provider._llm_intent_client is not None
+
+
+def test_provider_no_intent_client_in_mock_mode(monkeypatch):
+    monkeypatch.setenv("FITFORGE_AGENT_MODE", "mock")
+    provider = LangGraphCoachAgentProvider()
+    assert provider._llm_intent_client is None

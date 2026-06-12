@@ -10,12 +10,17 @@ optional dependency.
 
 from __future__ import annotations
 
+import os
 import re
 import logging
 from functools import partial
 from typing import Any, TypedDict
 
 from agents.action_safety import MUTATION_ACTION_TYPES
+from agents.intent.llm_intent import (
+    build_default_intent_client_from_env,
+    detect_intent_slots,
+)
 from agents.output_validation import _sanitize_payload
 from agents.orchestration_trace import (
     record_trace_decision,
@@ -55,6 +60,12 @@ class LangGraphCoachState(TypedDict, total=False):
     route: str
     recovery: dict[str, Any]
     planner: dict[str, Any]
+    plan: Any
+    intent_candidate: Any
+    intent: str
+    slots: dict[str, Any]
+    intent_confidence: float
+    intent_source: str
     error: str
 
 
@@ -75,7 +86,10 @@ def safety_precheck_node(state: LangGraphCoachState) -> LangGraphCoachState:
     return {"route": "native"}
 
 
-def intent_route_node(state: LangGraphCoachState) -> LangGraphCoachState:
+def intent_slot_node(
+    state: LangGraphCoachState,
+    llm_intent_client: Any = None,
+) -> LangGraphCoachState:
     record_trace_node("intent_route_node")
     if "response" in state:
         record_trace_decision("intent_route_node", "skipped_existing_response")
@@ -84,8 +98,23 @@ def intent_route_node(state: LangGraphCoachState) -> LangGraphCoachState:
     if not message:
         record_trace_decision("intent_route_node", "fallback", "empty_message")
         return {"route": "fallback"}
-    record_trace_decision("intent_route_node", "native")
-    return {"route": "native"}
+
+    detection = detect_intent_slots(state["request"], llm_client=llm_intent_client)
+    record_trace_decision("intent_route_node", "intent_detected", detection.source)
+    return {
+        "route": "native",
+        "intent_candidate": detection.candidate,
+        "intent": detection.candidate.type.value,
+        "slots": dict(detection.candidate.slots),
+        "intent_confidence": detection.confidence,
+        "intent_source": detection.source,
+    }
+
+
+# Backward-compatible alias: the graph node key and trace string remain
+# "intent_route_node"; the function is now intent_slot_node (it performs real
+# intent+slot detection instead of only gating empty messages).
+intent_route_node = intent_slot_node
 
 
 def recovery_node(state: LangGraphCoachState) -> LangGraphCoachState:
@@ -172,7 +201,7 @@ def planner_node(state: LangGraphCoachState) -> LangGraphCoachState:
 
     from agents.coach_routing import route_to_plan
 
-    plan = route_to_plan(request)
+    plan = route_to_plan(request, candidate=state.get("intent_candidate"))
     trace_decision, trace_reason = _planner_trace_decision(plan.action_type)
     if trace_decision is not None:
         record_trace_decision("planner_node", trace_decision, trace_reason)
@@ -245,8 +274,18 @@ def response_contract_validation_node(
 class LangGraphCoachAgentProvider:
     """Optional LangGraph wrapper around the existing native provider."""
 
-    def __init__(self, native_provider: CoachAgentProvider | None = None) -> None:
+    def __init__(
+        self,
+        native_provider: CoachAgentProvider | None = None,
+        llm_intent_client: Any = None,
+    ) -> None:
         self._native_provider = native_provider or NativeCoachAgentProvider()
+        if (
+            llm_intent_client is None
+            and os.environ.get("FITFORGE_AGENT_MODE", "mock").lower() == "real"
+        ):
+            llm_intent_client = build_default_intent_client_from_env()
+        self._llm_intent_client = llm_intent_client
 
     def handle(self, request: AgentRequest) -> AgentResponse:
         record_trace_provider("langgraph")
@@ -285,7 +324,10 @@ class LangGraphCoachAgentProvider:
         graph = StateGraph(LangGraphCoachState)
 
         graph.add_node("safety_precheck_node", safety_precheck_node)
-        graph.add_node("intent_route_node", intent_route_node)
+        graph.add_node(
+            "intent_route_node",
+            partial(intent_slot_node, llm_intent_client=self._llm_intent_client),
+        )
         graph.add_node("recovery_node", recovery_node)
         graph.add_node("recovery_policy_node", recovery_policy_node)
         graph.add_node("planner_node", planner_node)
@@ -632,6 +674,7 @@ __all__ = [
     "LangGraphCoachState",
     "builder_node",
     "intent_route_node",
+    "intent_slot_node",
     "native_response_node",
     "planner_node",
     "recovery_node",
