@@ -18,14 +18,57 @@ from __future__ import annotations
 
 from agents.coach_plan import ActionPlan
 from agents.feedback.feedback_follow_up_router import route_feedback_follow_up
-from agents.intent.coach_intent import CoachIntentType
+from agents.intent.coach_intent import CoachIntentType, IntentCandidate
+from agents.intent.slot_extractor import target_minutes
 from agents.providers import native_provider as nv
 from agents.training_load_advice import build_training_load_advice
 from safety.fitness_guardrails import assess_message_safety
 from schemas.agent_request import AgentRequest
 
 
-def route_to_plan(request: AgentRequest) -> ActionPlan:
+def plan_from_candidate(candidate, request, base):
+    """Map an IntentCandidate to an ActionPlan by intent TYPE.
+
+    Used by the graph path when an (LLM-derived) candidate is injected into
+    route_to_plan. Returns None for ambiguous/unactionable types so the caller
+    falls through to the keyword cascade. None-able builders are probed
+    (mirroring the probe pattern in route_to_plan); if a builder declines we
+    return None and let the cascade handle clarification.
+    """
+    message = request.message
+    slots = {**base, "candidate": candidate}
+    ctype = candidate.type
+
+    if ctype == CoachIntentType.generatePlan:
+        return ActionPlan("generatePlan", slots=slots, rationale_code="training_plan")
+    if ctype == CoachIntentType.nutritionAdvice:
+        return ActionPlan("nutritionAdvice", slots=slots, read_only=True, rationale_code="nutrition")
+    if ctype in {CoachIntentType.trainingFeedback, CoachIntentType.recoveryAdvice}:
+        return ActionPlan("weeklyReview", slots=slots, read_only=True, rationale_code="candidate_feedback_recovery")
+    if ctype == CoachIntentType.moveWorkoutSession:
+        return ActionPlan("moveWorkoutSession", slots=slots, rationale_code="move")
+    if ctype == CoachIntentType.compressWorkout:
+        if target_minutes(message) is not None:
+            return ActionPlan("compressWorkout", slots=slots, rationale_code="compress")
+        return ActionPlan(None, slots=slots, read_only=True, rationale_code="free_form_compress")
+    if ctype == CoachIntentType.replaceExercise:
+        if nv._replace_response(message, request) is not None:
+            return ActionPlan("replaceExercise", slots=slots, rationale_code="replace")
+        return None
+    if ctype == CoachIntentType.rescheduleWeek:
+        if nv._reschedule_response(message) is not None:
+            return ActionPlan("rescheduleWeek", slots=slots, rationale_code="reschedule")
+        return ActionPlan(None, slots=slots, read_only=True, rationale_code="schedule_clarification")
+
+    # clarification / unrelated / safety → fall through to the keyword cascade
+    return None
+
+
+def route_to_plan(
+    request: AgentRequest,
+    *,
+    candidate: "IntentCandidate | None" = None,
+) -> ActionPlan:
     message = request.message
 
     # 1. user-message safety
@@ -47,9 +90,18 @@ def route_to_plan(request: AgentRequest) -> ActionPlan:
     if nv._feedback_follow_up_response(request, route_feedback_follow_up(request)) is not None:
         return ActionPlan(None, slots=dict(base), rationale_code="feedback_follow_up")
 
-    # 5. intent candidate
-    candidate = nv._route_intent(message)
+    # 5. intent candidate. When a candidate is injected (graph/LLM path), try
+    # type-based dispatch FIRST, then fall through to the keyword cascade. The
+    # native path (candidate=None) skips type-dispatch → behavior is identical.
+    llm_supplied = candidate is not None
+    if candidate is None:
+        candidate = nv._route_intent(message)
     slots = {**base, "candidate": candidate}
+
+    if llm_supplied:
+        candidate_plan = plan_from_candidate(candidate, request, base)
+        if candidate_plan is not None:
+            return candidate_plan
 
     if (
         candidate.type == CoachIntentType.compressWorkout
