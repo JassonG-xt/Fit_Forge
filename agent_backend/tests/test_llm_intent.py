@@ -36,3 +36,38 @@ def test_safety_message_never_consults_llm():
     detection = detect_intent_slots(_req("我胸口有点疼"), llm_client=_Boom())
     assert detection.candidate.type == CoachIntentType.safety
     assert detection.source == INTENT_SOURCE_FAST_PATH
+
+
+from agents.intent.llm_intent import IntentClassification, _parse_intent
+
+
+def test_parse_intent_valid_json():
+    parsed = _parse_intent('{"intent": "compressWorkout", "confidence": 0.7}')
+    assert parsed == (CoachIntentType.compressWorkout, 0.7)
+
+
+def test_parse_intent_strips_code_fence():
+    parsed = _parse_intent('```json\n{"intent": "nutritionAdvice", "confidence": 0.6}\n```')
+    assert parsed == (CoachIntentType.nutritionAdvice, 0.6)
+
+
+def test_parse_intent_rejects_unknown_intent():
+    assert _parse_intent('{"intent": "orderPizza", "confidence": 0.9}') is None
+
+
+def test_parse_intent_rejects_extra_fields():
+    # extra="forbid" must reject smuggled fields (e.g. an attempted action).
+    assert _parse_intent('{"intent": "compressWorkout", "confidence": 0.7, "actions": []}') is None
+
+
+def test_parse_intent_rejects_non_json():
+    assert _parse_intent("I think you want to compress your workout") is None
+
+
+def test_parse_intent_rejects_out_of_range_confidence():
+    assert _parse_intent('{"intent": "compressWorkout", "confidence": 1.5}') is None
+
+
+def test_intent_classification_model_is_strict():
+    model = IntentClassification.model_validate({"intent": "generatePlan", "confidence": 0.5})
+    assert model.intent == CoachIntentType.generatePlan

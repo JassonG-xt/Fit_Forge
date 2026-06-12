@@ -9,9 +9,12 @@ intent ONLY; slots stay deterministic (carried from the keyword candidate).
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Any, Optional, Protocol, Tuple
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agents.intent.coach_intent import CoachIntentType, IntentCandidate
 from agents.intent.intent_router import route as _keyword_route
@@ -38,6 +41,43 @@ class LLMIntentClient(Protocol):
         self, message: str, context: dict[str, Any]
     ) -> Tuple[CoachIntentType, float]:
         ...
+
+
+class IntentClassification(BaseModel):
+    """Strict structured-output contract for the LLM intent reply."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    intent: CoachIntentType
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+def _parse_intent(raw: str) -> Optional[Tuple[CoachIntentType, float]]:
+    """Parse the LLM intent reply. Returns None on any malformation.
+
+    Tolerates ```json fences. Rejects non-JSON, unknown intents (enum),
+    extra fields (extra="forbid"), and out-of-range confidence.
+    """
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.split("\n", 1)
+        text = lines[1] if len(lines) > 1 else text
+    if text.endswith("```"):
+        text = text[:-3].rstrip()
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        logger.warning("LLM intent output not JSON length=%s", len(raw))
+        return None
+
+    try:
+        parsed = IntentClassification.model_validate(data)
+    except ValidationError:
+        logger.warning("LLM intent output failed schema validation")
+        return None
+
+    return parsed.intent, parsed.confidence
 
 
 def detect_intent_slots(
