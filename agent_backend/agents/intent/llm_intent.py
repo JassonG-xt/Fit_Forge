@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Optional, Protocol, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -78,6 +80,74 @@ def _parse_intent(raw: str) -> Optional[Tuple[CoachIntentType, float]]:
         return None
 
     return parsed.intent, parsed.confidence
+
+
+_INTENT_PROMPT_PATH = (
+    Path(__file__).resolve().parent.parent.parent / "prompts" / "coach_intent_system.md"
+)
+
+
+def _load_intent_prompt() -> str:
+    return _INTENT_PROMPT_PATH.read_text(encoding="utf-8")
+
+
+def _build_intent_messages(
+    message: str, context: dict[str, Any]
+) -> list[dict[str, str]]:
+    context_json = json.dumps(context, ensure_ascii=False)
+    system = _load_intent_prompt()
+    return [
+        {"role": "system", "content": f"{system}\n\n## Context\n```json\n{context_json}\n```"},
+        {"role": "user", "content": message},
+    ]
+
+
+class IntentParseError(Exception):
+    """Raised when an LLM intent reply cannot be parsed/validated."""
+
+
+class OpenAICompatibleIntentClient:
+    """Classify intent via an OpenAI-compatible chat endpoint.
+
+    Reuses `agents.llm_provider._call_llm` for the HTTP transport so the
+    Cloudflare-passing User-Agent, timeout, and error handling are shared.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout: Optional[float] = None,
+    ) -> None:
+        self._base_url = base_url
+        self._api_key = api_key
+        self._model = model
+        self._timeout = timeout
+
+    def classify(
+        self, message: str, context: dict[str, Any]
+    ) -> Tuple[CoachIntentType, float]:
+        from agents.llm_provider import _call_llm
+
+        messages = _build_intent_messages(message, context)
+        raw = _call_llm(
+            messages, self._base_url, self._api_key, self._model, self._timeout
+        )
+        parsed = _parse_intent(raw)
+        if parsed is None:
+            raise IntentParseError("intent reply could not be parsed")
+        return parsed
+
+
+def build_default_intent_client_from_env() -> Optional[OpenAICompatibleIntentClient]:
+    """Build a client from LLM_* env vars, or None if any are missing."""
+    base_url = os.environ.get("LLM_BASE_URL", "")
+    api_key = os.environ.get("LLM_API_KEY", "")
+    model = os.environ.get("LLM_MODEL", "")
+    if not base_url or not api_key or not model:
+        return None
+    return OpenAICompatibleIntentClient(base_url, api_key, model)
 
 
 def detect_intent_slots(

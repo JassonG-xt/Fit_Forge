@@ -71,3 +71,53 @@ def test_parse_intent_rejects_out_of_range_confidence():
 def test_intent_classification_model_is_strict():
     model = IntentClassification.model_validate({"intent": "generatePlan", "confidence": 0.5})
     assert model.intent == CoachIntentType.generatePlan
+
+
+import pytest
+
+from agents.intent.llm_intent import (
+    IntentParseError,
+    OpenAICompatibleIntentClient,
+    build_default_intent_client_from_env,
+)
+
+
+def test_client_classify_parses_llm_reply(monkeypatch):
+    captured = {}
+
+    def fake_call_llm(messages, base_url, api_key, model, timeout=None):
+        captured["model"] = model
+        captured["system"] = messages[0]["content"]
+        return '{"intent": "compressWorkout", "confidence": 0.7}'
+
+    monkeypatch.setattr("agents.llm_provider._call_llm", fake_call_llm)
+    client = OpenAICompatibleIntentClient("http://x", "k", "m")
+    intent, conf = client.classify("把训练弄短点", {"locale": "zh-CN"})
+    assert (intent, conf) == (CoachIntentType.compressWorkout, 0.7)
+    assert captured["model"] == "m"
+    # The intent prompt — not the full coach prompt — must be used.
+    assert "Intent Classifier" in captured["system"]
+
+
+def test_client_classify_raises_on_unparseable(monkeypatch):
+    monkeypatch.setattr(
+        "agents.llm_provider._call_llm",
+        lambda *a, **k: "sorry I cannot do that",
+    )
+    client = OpenAICompatibleIntentClient("http://x", "k", "m")
+    with pytest.raises(IntentParseError):
+        client.classify("hi", {})
+
+
+def test_build_default_client_returns_none_without_env(monkeypatch):
+    for var in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+    assert build_default_intent_client_from_env() is None
+
+
+def test_build_default_client_from_env(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "http://x")
+    monkeypatch.setenv("LLM_API_KEY", "k")
+    monkeypatch.setenv("LLM_MODEL", "m")
+    client = build_default_intent_client_from_env()
+    assert isinstance(client, OpenAICompatibleIntentClient)
