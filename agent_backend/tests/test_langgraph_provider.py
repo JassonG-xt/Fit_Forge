@@ -944,12 +944,13 @@ def test_intent_slot_node_uses_llm_client_in_band():
 
 
 def test_planner_node_consumes_injected_candidate():
-    # intent_candidate present in state → planner routes by it.
+    # intent_candidate present AND sourced from the LLM → planner routes by it.
     state = {
         "request": _p2_req("你觉得呢"),
         "intent_candidate": IntentCandidate(
             type=CoachIntentType.nutritionAdvice, score=0.66, reason="x"
         ),
+        "intent_source": "llm",
     }
     out = planner_node(state)
     assert out["plan"].rationale_code == "nutrition"
@@ -968,3 +969,32 @@ def test_provider_no_intent_client_in_mock_mode(monkeypatch):
     monkeypatch.setenv("FITFORGE_AGENT_MODE", "mock")
     provider = LangGraphCoachAgentProvider()
     assert provider._llm_intent_client is None
+
+
+def test_planner_keyword_source_uses_cascade_not_type_dispatch():
+    """Keyword-derived candidates (intent_source != 'llm') must route via the
+    full cascade — identical to native/Phase-1 — NOT the simplified
+    plan_from_candidate type-dispatch. Regression: the graph previously passed
+    every candidate, so the keyword fast-path/fallback diverged from cascade
+    routing on ~40% of eval cases."""
+    from agents.coach_routing import route_to_plan
+    from agents.intent.intent_router import route as kw_route
+
+    msg = "家里没有器械，能不能换成自重动作"
+    req = _p2_req(msg)
+    kw = kw_route(msg)
+    # Precondition: for this message, type-dispatch DIVERGES from the cascade.
+    assert route_to_plan(req).rationale_code != route_to_plan(req, candidate=kw).rationale_code
+    # The planner, given a KEYWORD-source candidate, must match the cascade.
+    state = {"request": req, "intent_candidate": kw, "intent_source": "keyword_fallback"}
+    assert planner_node(state)["plan"].rationale_code == route_to_plan(req).rationale_code
+
+
+def test_planner_llm_source_uses_candidate_dispatch():
+    """A genuine LLM classification (intent_source == 'llm') DOES get the
+    candidate-first type-dispatch — that is the intended new behavior."""
+    msg = "家里没有器械，能不能换成自重动作"
+    req = _p2_req(msg)
+    cand = IntentCandidate(type=CoachIntentType.nutritionAdvice, score=0.66, reason="llm")
+    state = {"request": req, "intent_candidate": cand, "intent_source": "llm"}
+    assert planner_node(state)["plan"].rationale_code == "nutrition"

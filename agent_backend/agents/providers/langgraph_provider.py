@@ -201,7 +201,12 @@ def planner_node(state: LangGraphCoachState) -> LangGraphCoachState:
 
     from agents.coach_routing import route_to_plan
 
-    plan = route_to_plan(request, candidate=state.get("intent_candidate"))
+    # Only a genuine LLM classification gets the candidate-first dispatch. The
+    # keyword fast-path/fallback must route via the full cascade (Phase-1
+    # parity) — passing a keyword candidate would trigger plan_from_candidate's
+    # simplified type-dispatch and diverge from native on many cases.
+    candidate = state.get("intent_candidate") if state.get("intent_source") == "llm" else None
+    plan = route_to_plan(request, candidate=candidate)
     trace_decision, trace_reason = _planner_trace_decision(plan.action_type)
     if trace_decision is not None:
         record_trace_decision("planner_node", trace_decision, trace_reason)
