@@ -121,3 +121,46 @@ def test_build_default_client_from_env(monkeypatch):
     monkeypatch.setenv("LLM_MODEL", "m")
     client = build_default_intent_client_from_env()
     assert isinstance(client, OpenAICompatibleIntentClient)
+
+
+from agents.intent.llm_intent import INTENT_SOURCE_LLM
+
+
+class _StubClient:
+    def __init__(self, intent, confidence=0.7, exc=None):
+        self._intent = intent
+        self._confidence = confidence
+        self._exc = exc
+        self.calls = 0
+
+    def classify(self, message, context):
+        self.calls += 1
+        if self._exc is not None:
+            raise self._exc
+        return self._intent, self._confidence
+
+
+def test_llm_override_changes_intent_type():
+    # "你觉得呢" → keyword `unrelated` (0.4) → LLM overrides to nutritionAdvice.
+    client = _StubClient(CoachIntentType.nutritionAdvice, 0.66)
+    detection = detect_intent_slots(_req("你觉得呢"), llm_client=client)
+    assert client.calls == 1
+    assert detection.candidate.type == CoachIntentType.nutritionAdvice
+    assert detection.confidence == 0.66
+    assert detection.source == INTENT_SOURCE_LLM
+
+
+def test_llm_agreement_keeps_keyword_candidate():
+    # Mid-confidence keyword (replace at 0.74) + LLM agrees → keep keyword candidate.
+    client = _StubClient(CoachIntentType.replaceExercise, 0.8)
+    detection = detect_intent_slots(_req("这个动作做不了，换一个"), llm_client=client)
+    assert detection.candidate.type == CoachIntentType.replaceExercise
+    assert detection.source == INTENT_SOURCE_LLM
+    assert detection.confidence == 0.8
+
+
+def test_llm_exception_falls_back_to_keyword():
+    client = _StubClient(None, exc=RuntimeError("boom"))
+    detection = detect_intent_slots(_req("你觉得呢"), llm_client=client)
+    assert detection.candidate.type == CoachIntentType.unrelated
+    assert detection.source == INTENT_SOURCE_FALLBACK

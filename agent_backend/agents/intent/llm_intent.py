@@ -165,5 +165,25 @@ def detect_intent_slots(
     if llm_client is None:
         return IntentDetection(keyword, keyword.score, INTENT_SOURCE_FALLBACK)
 
-    # LLM branch is wired in Task 4. For now, fall back to keyword.
-    return IntentDetection(keyword, keyword.score, INTENT_SOURCE_FALLBACK)
+    try:
+        llm_intent, llm_confidence = llm_client.classify(
+            message, request.context.model_dump()
+        )
+    except Exception as exc:  # noqa: BLE001 — any LLM failure → keyword fallback
+        logger.warning(
+            "LLM intent classification failed (%s); using keyword fallback",
+            exc.__class__.__name__,
+        )
+        return IntentDetection(keyword, keyword.score, INTENT_SOURCE_FALLBACK)
+
+    if llm_intent == keyword.type:
+        return IntentDetection(keyword, llm_confidence, INTENT_SOURCE_LLM)
+
+    overridden = IntentCandidate(
+        type=llm_intent,
+        score=llm_confidence,
+        reason="llm-classified",
+        slots=dict(keyword.slots),
+        missing_slots=list(keyword.missing_slots),
+    )
+    return IntentDetection(overridden, llm_confidence, INTENT_SOURCE_LLM)
