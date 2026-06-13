@@ -17,8 +17,6 @@ from agents.orchestration_trace import orchestration_trace_scope
 from agents.providers.langgraph_provider import (
     LangGraphCoachAgentProvider,
     planner_node,
-    recovery_node,
-    recovery_policy_node,
     response_contract_validation_node,
 )
 from schemas.agent_request import AgentRequest
@@ -87,8 +85,6 @@ def _mutation_response_state(
 _EXPECTED_NODE_ORDER = (
     "safety_precheck_node",
     "intent_route_node",
-    "recovery_node",
-    "recovery_policy_node",
     "planner_node",
     "native_response_node",
     "response_contract_validation_node",
@@ -201,9 +197,7 @@ def test_langgraph_builds_named_safe_node_sequence(
     assert graph.edges == [
         ("__start__", "safety_precheck_node"),
         ("safety_precheck_node", "intent_route_node"),
-        ("intent_route_node", "recovery_node"),
-        ("recovery_node", "recovery_policy_node"),
-        ("recovery_policy_node", "planner_node"),
+        ("intent_route_node", "planner_node"),
         ("planner_node", "native_response_node"),
         ("native_response_node", "response_contract_validation_node"),
         ("response_contract_validation_node", "__end__"),
@@ -281,10 +275,10 @@ def test_langgraph_graph_path_preserves_safety_response(
         ),
         (
             "\u6211\u8fd9\u51e0\u5929\u5f88\u7d2f\uff0c\u72b6\u6001\u5f88\u5dee\uff0c\u8fd8\u8981\u7ee7\u7eed\u7ec3\u5417",
-            "answerOnly",
+            "weeklyReview",
             {
-                ("recovery_node", "detected_signal", "fatigue_or_recovery"),
-                ("recovery_policy_node", "policy_answer_only", "fatigue_or_recovery"),
+                ("planner_node", "no_planner_signal", "no_signal"),
+                ("native_response_node", "delegated_to_native", None),
                 ("response_contract_validation_node", "passed", None),
             },
         ),
@@ -292,8 +286,6 @@ def test_langgraph_graph_path_preserves_safety_response(
             "\u4eca\u5929\u53ea\u670920\u5206\u949f\uff0c\u5e2e\u6211\u538b\u7f29\u8bad\u7ec3",
             "compressWorkout",
             {
-                ("recovery_node", "detected_signal", "time_constrained"),
-                ("recovery_policy_node", "delegate_explicit_mutation", "explicit_mutation_intent"),
                 ("planner_node", "no_planner_signal", "no_signal"),
                 ("native_response_node", "delegated_to_native", None),
                 ("response_contract_validation_node", "passed", None),
@@ -355,140 +347,6 @@ def test_langgraph_trace_records_validator_fail_closed_decision(
     ) in _decision_pairs(payload)
 
 
-def test_recovery_node_noops_when_response_already_present() -> None:
-    assert recovery_node({"request": _request(), "response": {"intent": "answerOnly"}}) == {}
-
-
-def test_recovery_node_marks_time_constrained_signals() -> None:
-    result = recovery_node(
-        {
-            "request": _request("今天只有20分钟，帮我压缩训练"),
-        }
-    )
-
-    assert result["recovery"]["signal"] == "time_constrained"
-    assert result["recovery"]["reason"] == "explicit_target_minutes"
-
-
-def test_recovery_node_ignores_high_risk_symptoms() -> None:
-    assert recovery_node(
-        {
-            "request": _request("我胸口疼但还想继续练，帮我压缩训练"),
-        }
-    ) == {}
-
-
-def test_recovery_node_marks_fatigue_signals() -> None:
-    result = recovery_node(
-        {
-            "request": _request("我这几天很累，状态很差，还要继续练吗"),
-        }
-    )
-
-    assert result["recovery"]["signal"] == "fatigue_or_recovery"
-
-
-def test_recovery_policy_node_noops_when_response_already_present() -> None:
-    assert recovery_policy_node(
-        {
-            "request": _request(),
-            "recovery": {"signal": "fatigue_or_recovery"},
-            "response": {"intent": "answerOnly"},
-        }
-    ) == {}
-
-
-def test_recovery_policy_node_noops_without_recovery_metadata() -> None:
-    assert recovery_policy_node({"request": _request()}) == {}
-
-
-def test_recovery_policy_node_answers_only_for_fatigue() -> None:
-    result = recovery_policy_node(
-        {
-            "request": _request("\u6211\u8fd9\u51e0\u5929\u5f88\u7d2f\uff0c\u72b6\u6001\u5f88\u5dee\uff0c\u8fd8\u8981\u7ee7\u7eed\u7ec3\u5417"),
-            "recovery": {
-                "signal": "fatigue_or_recovery",
-                "reason": "recovery_keywords",
-            },
-        }
-    )
-
-    assert result["response"].intent == "answerOnly"
-    assert result["response"].actions == []
-
-
-def test_recovery_policy_node_answers_only_for_overtraining() -> None:
-    result = recovery_policy_node(
-        {
-            "request": _request("\u6211\u8fde\u7eed\u7ec3\u4e86\u597d\u51e0\u5929\uff0c\u6709\u70b9\u7d2f\uff0c\u4eca\u5929\u600e\u4e48\u5b89\u6392"),
-            "recovery": {
-                "signal": "overtraining",
-                "reason": "load_or_overtraining_keywords",
-            },
-        }
-    )
-
-    assert result["response"].intent == "answerOnly"
-    assert result["response"].actions == []
-
-
-def test_recovery_policy_node_uses_training_load_summary_when_available() -> None:
-    request = AgentRequest(
-        message="我是不是练太多了？",
-        context={
-            "trainingLoadSummary": {
-                "plannedTrainingDays": 6,
-                "restDays": 1,
-                "totalPlannedSets": 72,
-                "maxDailySets": 18,
-                "longestConsecutiveTrainingDays": 4,
-                "weeklySetsByBodyPart": {"chest": 24},
-                "flags": ["high_training_frequency"],
-                "loadLevel": "high",
-            }
-        },
-    )
-    result = recovery_policy_node(
-        {
-            "request": request,
-            "recovery": {
-                "signal": "overtraining",
-                "reason": "load_or_overtraining_keywords",
-            },
-        }
-    )
-
-    response = result["response"]
-    assert response.intent == "weeklyReview"
-    assert response.actions[0].type == "weeklyReview"
-    assert response.actions[0].requiresConfirmation is False
-    assert any("负荷偏高" in note for note in response.actions[0].payload["riskNotes"])
-
-
-def test_recovery_policy_node_does_not_intercept_explicit_compress_requests() -> None:
-    assert recovery_policy_node(
-        {
-            "request": _request("\u4eca\u5929\u53ea\u670920\u5206\u949f\uff0c\u5e2e\u6211\u538b\u7f29\u8bad\u7ec3"),
-            "recovery": {
-                "signal": "time_constrained",
-                "reason": "explicit_target_minutes",
-            },
-        }
-    ) == {}
-
-
-def test_recovery_policy_node_does_not_intercept_safety_response() -> None:
-    assert recovery_policy_node(
-        {
-            "request": _request("chest pain"),
-            "recovery": {
-                "signal": "fatigue_or_recovery",
-                "reason": "recovery_keywords",
-            },
-        }
-    ) == {}
-
-
 def test_planner_node_noops_when_response_already_present() -> None:
     assert planner_node(
         {
@@ -514,15 +372,6 @@ def test_planner_node_delegates_plan_mutation_intents(
 
     assert result.get("plan") is not None
     assert result["plan"].action_type == expected_action_type
-
-
-def test_planner_node_answers_plan_explanations_without_mutation() -> None:
-    result = planner_node({"request": _request("这个训练计划为什么这样安排")})
-
-    response = result["response"]
-    assert response.intent == "answerOnly"
-    assert response.actions == []
-    assert "训练计划" in response.message
 
 
 @pytest.mark.parametrize(

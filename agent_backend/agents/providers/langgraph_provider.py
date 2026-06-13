@@ -1,8 +1,8 @@
 """Experimental LangGraph orchestration adapter.
 
 The optional path stays small and safe:
-input -> safety_precheck_node -> intent_route_node -> recovery_node
--> recovery_policy_node -> native_response_node -> response_contract_validation_node -> output.
+input -> safety_precheck_node -> intent_route_node -> planner_node
+-> native_response_node -> response_contract_validation_node -> output.
 
 LangGraph is imported lazily so normal backend CI does not require the
 optional dependency.
@@ -11,7 +11,6 @@ optional dependency.
 from __future__ import annotations
 
 import os
-import re
 import logging
 from functools import partial
 from typing import Any, TypedDict
@@ -30,7 +29,6 @@ from agents.orchestration_trace import (
     record_trace_provider,
     record_trace_response,
 )
-from agents.training_load_advice import build_training_load_advice
 from schemas.agent_action import AgentAction
 from schemas.agent_request import AgentRequest
 from schemas.agent_response import AgentResponse, SafetyInfo
@@ -58,7 +56,6 @@ class LangGraphCoachState(TypedDict, total=False):
     request: AgentRequest
     response: Any
     route: str
-    recovery: dict[str, Any]
     planner: dict[str, Any]
     plan: Any
     intent_candidate: Any
@@ -117,64 +114,6 @@ def intent_slot_node(
 intent_route_node = intent_slot_node
 
 
-def recovery_node(state: LangGraphCoachState) -> LangGraphCoachState:
-    record_trace_node("recovery_node")
-    if "response" in state:
-        record_trace_decision("recovery_node", "skipped_existing_response")
-        return {}
-
-    request = state["request"]
-    recovery = _detect_recovery_signal(request)
-    if recovery is None:
-        record_trace_decision("recovery_node", "no_signal", "no_recovery_signal")
-        return {}
-    record_trace_decision(
-        "recovery_node",
-        "detected_signal",
-        _recovery_signal_reason(recovery),
-    )
-    return {"recovery": recovery}
-
-
-def recovery_policy_node(state: LangGraphCoachState) -> LangGraphCoachState:
-    record_trace_node("recovery_policy_node")
-    if "response" in state:
-        record_trace_decision("recovery_policy_node", "skipped_existing_response")
-        return {}
-
-    request = state["request"]
-    if assess_message_safety(request.message).has_medical_concern:
-        record_trace_decision(
-            "recovery_policy_node",
-            "safety_passthrough",
-            "medical_concern",
-        )
-        return {}
-    recovery = state.get("recovery")
-    if not isinstance(recovery, dict):
-        record_trace_decision("recovery_policy_node", "no_recovery_metadata")
-        return {}
-    signal = _recovery_signal_reason(recovery)
-    if not _should_recovery_policy_answer(recovery, request.message):
-        if _has_explicit_mutation_intent(request.message):
-            record_trace_decision(
-                "recovery_policy_node",
-                "delegate_explicit_mutation",
-                "explicit_mutation_intent",
-            )
-        else:
-            record_trace_decision("recovery_policy_node", "delegate_non_recovery")
-        return {}
-    record_trace_decision("recovery_policy_node", "policy_answer_only", signal)
-    load_advice = build_training_load_advice(
-        context=request.context,
-        user_message=request.message,
-    )
-    if load_advice is not None:
-        return {"response": load_advice}
-    return {"response": _recovery_policy_response()}
-
-
 def planner_node(state: LangGraphCoachState) -> LangGraphCoachState:
     record_trace_node("planner_node")
     if "response" in state:
@@ -190,14 +129,6 @@ def planner_node(state: LangGraphCoachState) -> LangGraphCoachState:
             "medical_concern",
         )
         return {}
-
-    if _is_plan_explanation_request(message):
-        record_trace_decision(
-            "planner_node",
-            "planner_answer_only",
-            "plan_explanation_request",
-        )
-        return {"response": _planner_explanation_response()}
 
     from agents.coach_routing import route_to_plan
 
@@ -333,8 +264,6 @@ class LangGraphCoachAgentProvider:
             "intent_route_node",
             partial(intent_slot_node, llm_intent_client=self._llm_intent_client),
         )
-        graph.add_node("recovery_node", recovery_node)
-        graph.add_node("recovery_policy_node", recovery_policy_node)
         graph.add_node("planner_node", planner_node)
         graph.add_node(
             "native_response_node",
@@ -346,9 +275,7 @@ class LangGraphCoachAgentProvider:
         )
         graph.add_edge(START, "safety_precheck_node")
         graph.add_edge("safety_precheck_node", "intent_route_node")
-        graph.add_edge("intent_route_node", "recovery_node")
-        graph.add_edge("recovery_node", "recovery_policy_node")
-        graph.add_edge("recovery_policy_node", "planner_node")
+        graph.add_edge("intent_route_node", "planner_node")
         graph.add_edge("planner_node", "native_response_node")
         graph.add_edge("native_response_node", "response_contract_validation_node")
         graph.add_edge("response_contract_validation_node", END)
@@ -366,146 +293,6 @@ def _coerce_agent_response(response: Any) -> AgentResponse | None:
         return None
 
 
-def _detect_recovery_signal(request: AgentRequest) -> dict[str, Any] | None:
-    message = request.message.lower()
-    if assess_message_safety(request.message).has_medical_concern:
-        return None
-
-    explicit_minutes = _extract_explicit_minutes(request.message)
-    context = request.context.model_dump()
-    progress = context.get("progressSummary") or {}
-    profile = context.get("profile") or {}
-    streak_days = _as_int(progress.get("streakDays"))
-    weekly_frequency = _as_int(progress.get("weeklyFrequency") or profile.get("weeklyFrequency"))
-    completed = _as_int(progress.get("totalWorkoutsThisWeek"))
-
-    if _has_schedule_recovery_signal(message):
-        return {"signal": "schedule_recovery", "reason": "schedule_change_keywords"}
-
-    if explicit_minutes is not None and _has_time_constraint_signal(message):
-        return {
-            "signal": "time_constrained",
-            "reason": "explicit_target_minutes",
-            "targetMinutes": explicit_minutes,
-        }
-
-    if (
-        _has_overtraining_signal(message)
-        or (
-            streak_days is not None
-            and streak_days >= 4
-            and _has_recovery_keywords(message)
-        )
-        or (
-            weekly_frequency is not None
-            and completed is not None
-            and completed >= weekly_frequency
-            and _has_recovery_keywords(message)
-        )
-    ):
-        return {"signal": "overtraining", "reason": "load_or_overtraining_keywords"}
-
-    if _has_recovery_fatigue_signal(message) or _has_recovery_keywords(message):
-        return {"signal": "fatigue_or_recovery", "reason": "recovery_keywords"}
-
-    return None
-
-
-def _recovery_signal_reason(recovery: dict[str, Any]) -> str | None:
-    signal = recovery.get("signal")
-    if signal in {
-        "time_constrained",
-        "fatigue_or_recovery",
-        "overtraining",
-        "schedule_recovery",
-    }:
-        return str(signal)
-    return None
-
-
-def _has_recovery_keywords(message: str) -> bool:
-    return any(
-        token in message
-        for token in (
-            "累",
-            "疲劳",
-            "恢复",
-            "休息",
-            "酸痛",
-            "连续训练",
-            "练太多",
-            "训练过多",
-            "streak",
-        )
-    )
-
-
-def _has_recovery_fatigue_signal(message: str) -> bool:
-    return any(token in message for token in ("累", "疲劳", "恢复", "休息", "酸痛"))
-
-
-def _has_overtraining_signal(message: str) -> bool:
-    return any(token in message for token in ("连续训练", "练太多", "训练过多", "streak"))
-
-
-def _has_time_constraint_signal(message: str) -> bool:
-    return any(token in message for token in ("分钟", "时间不够", "只有", "压缩", "缩短"))
-
-
-def _has_schedule_recovery_signal(message: str) -> bool:
-    return any(token in message for token in ("改训练日", "调整训练日", "本周只能", "这周只能", "今天只能"))
-
-
-def _extract_explicit_minutes(message: str) -> int | None:
-    match = re.search(r"(\d+)\s*分钟", message)
-    if match:
-        try:
-            return int(match.group(1))
-        except ValueError:
-            return None
-    return None
-
-
-def _as_int(value: Any) -> int | None:
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _should_recovery_policy_answer(
-    recovery: dict[str, Any],
-    message: str,
-) -> bool:
-    if recovery.get("signal") not in {"fatigue_or_recovery", "overtraining"}:
-        return False
-    return not _has_explicit_mutation_intent(message)
-
-
-def _has_explicit_mutation_intent(message: str) -> bool:
-    return any(
-        token in message
-        for token in (
-            "压缩",
-            "缩短",
-            "换动作",
-            "替换",
-            "生成计划",
-            "制定计划",
-            "调整训练日",
-            "改训练日",
-            "移动训练",
-            "挪到",
-            "改到周",
-        )
-    ) or (
-        bool(re.search(r"\d+\s*分钟", message))
-        and any(token in message for token in ("帮我", "调整", "压缩", "缩短", "训练"))
-    )
-
-
 def _planner_trace_decision(action_type: str | None) -> tuple[str | None, str | None]:
     if action_type == "generatePlan":
         return "planner_delegate_generate_plan", "generate_plan_request"
@@ -514,37 +301,6 @@ def _planner_trace_decision(action_type: str | None) -> tuple[str | None, str | 
     if action_type == "moveWorkoutSession":
         return "planner_delegate_move_session", "move_session_request"
     return None, None
-
-
-def _is_plan_explanation_request(message: str) -> bool:
-    if not any(token in message for token in ("计划", "训练安排", "训练结构")):
-        return False
-    return any(token in message for token in ("为什么", "解释", "说明", "怎么看", "合理吗"))
-
-
-def _planner_explanation_response() -> AgentResponse:
-    return AgentResponse(
-        message=(
-            "训练计划通常会根据你的目标、每周训练频率、训练经验、可用器械和恢复情况来安排。"
-            "如果你想修改计划，请明确说生成新计划、重排训练日或移动某一天训练；这些修改仍需要你确认后才会生效。"
-        ),
-        intent="answerOnly",
-        confidence=0.75,
-        actions=[],
-    )
-
-
-def _recovery_policy_response() -> AgentResponse:
-    return AgentResponse(
-        message=(
-            "如果只是普通疲劳，可以先降低训练强度、减少训练量或休息一天；"
-            "优先保证睡眠、补水和热身。如果出现胸痛、头晕、呼吸困难等症状，"
-            "请停止训练并寻求专业帮助。"
-        ),
-        intent="answerOnly",
-        confidence=0.85,
-        actions=[],
-    )
 
 
 def _is_safe_graph_response(
@@ -682,8 +438,6 @@ __all__ = [
     "intent_slot_node",
     "native_response_node",
     "planner_node",
-    "recovery_node",
-    "recovery_policy_node",
     "response_contract_validation_node",
     "safety_precheck_node",
 ]
