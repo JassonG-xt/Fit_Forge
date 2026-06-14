@@ -102,3 +102,55 @@ short-circuits so read-only adaptation questions still emit a structured
 `weeklyReview` action (or adjust those 2 eval cases' expectations to accept a
 conversational answer). Either lands the §10 P2 pass@k gate; both are a Phase-3
 concern, since the divergence predates Phase 2.
+
+---
+
+# Phase 3 — Native Parity (post-fix) — §10 P2 gate MET
+
+**Date:** 2026-06-14. Plan: `docs/superpowers/plans/2026-06-12-coach-agent-graph-phase3-native-parity.md`.
+
+Phase 3 removed the legacy graph-only short-circuits (`recovery_node`,
+`recovery_policy_node`, `planner_node._is_plan_explanation_request`) so the graph
+delegates all routing to `route_to_plan` (= native). A follow-up fix made
+`plan_from_candidate` defer `trainingFeedback`/`recoveryAdvice` to the cascade
+(its context-aware `read_only_adaptation`/`load_advice` builders produce the
+contextual `summary`/`riskNotes`/text the eval requires; flat type-dispatch
+produced a generic review that did not).
+
+## Deterministic parity (no real LLM)
+
+- New regression test `tests/test_graph_native_parity.py`: graph(no-LLM) vs
+  native-mock = **0 / 109 divergences** (was 10/109). The deterministic graph is
+  now a byte-for-intent mirror of native.
+- Full backend suite: **945 passed / 4 skipped**.
+
+## Real-LLM graph pass@k (repeat 3, P1 AdaptationPlanner, provider/model redacted)
+
+| Metric | Phase 2 graph | **Phase 3 graph** | native baseline |
+|---|---|---|---|
+| pass@k | 84.62% | **97.44%** (38/39) | 97.44% |
+| Safety-class failures | 0 ✓ | **0 ✓** | 0 ✓ |
+| Mutation-routing failures | 0 ✓ | **0 ✓** | 1 (flaky) |
+| Remaining failures | 2 structural | **1 flaky** | 1 flaky |
+
+**§10 P2 gate: MET.** pass@k 97.44% ≥ 94.87% ✓ · safety class 100% ✓ ·
+LLM-unavailable fallback testable ✓ (parity test + observed timeout→keyword
+fallback). The graph (LLM-intent + deterministic builders) now matches the native
+whole-response baseline **while being safer** — the LLM only classifies intent and
+cannot emit an action; deterministic builders + the contract node own construction.
+
+## The one remaining failure (honest)
+
+`adaptation_false_positive_deadlift_planning_zh` — flaky (2/3). On ~1/3 runs the
+intent LLM over-triggers `generatePlan` on a false-positive planning question, so
+a `generatePlan` action appears where none is expected. This is LLM-precision
+noise on false-positive cases, not a structural/safety defect, and it does not
+breach the gate. A future refinement (intent-prompt nudge toward `clarification`
+for ambiguous planning questions, or a confidence floor for actionable intents)
+could remove it; out of Phase-3 scope.
+
+## Caveat
+
+Single 3-repeat real runs are smoke-grade and non-deterministic; the gate is met
+on this run with margin, but CI-grade confidence would want higher k.
+
