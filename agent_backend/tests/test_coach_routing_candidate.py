@@ -32,6 +32,15 @@ def test_plan_from_candidate_compress_without_minutes_clarifies():
     assert plan.rationale_code == "free_form_compress"
 
 
+def test_plan_from_candidate_defers_feedback_recovery_to_cascade():
+    # trainingFeedback / recoveryAdvice must route via the cascade's
+    # context-aware adaptation planner (read_only_adaptation / load_advice),
+    # NOT the generic candidate_feedback_recovery builder. plan_from_candidate
+    # defers (returns None) so route_to_plan's contextual routing wins.
+    assert plan_from_candidate(_cand(CoachIntentType.recoveryAdvice), _req("最近很累"), {}) is None
+    assert plan_from_candidate(_cand(CoachIntentType.trainingFeedback), _req("最近很累"), {}) is None
+
+
 def test_route_to_plan_native_path_unchanged_when_no_candidate():
     # Regression guard: the no-candidate path must NOT invoke type-dispatch.
     plan = route_to_plan(_req("帮我看看饮食怎么吃"))

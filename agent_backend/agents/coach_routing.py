@@ -43,8 +43,6 @@ def plan_from_candidate(candidate, request, base):
         return ActionPlan("generatePlan", slots=slots, rationale_code="training_plan")
     if ctype == CoachIntentType.nutritionAdvice:
         return ActionPlan("nutritionAdvice", slots=slots, read_only=True, rationale_code="nutrition")
-    if ctype in {CoachIntentType.trainingFeedback, CoachIntentType.recoveryAdvice}:
-        return ActionPlan("weeklyReview", slots=slots, read_only=True, rationale_code="candidate_feedback_recovery")
     if ctype == CoachIntentType.moveWorkoutSession:
         return ActionPlan("moveWorkoutSession", slots=slots, rationale_code="move")
     if ctype == CoachIntentType.compressWorkout:
@@ -60,7 +58,9 @@ def plan_from_candidate(candidate, request, base):
             return ActionPlan("rescheduleWeek", slots=slots, rationale_code="reschedule")
         return ActionPlan(None, slots=slots, read_only=True, rationale_code="schedule_clarification")
 
-    # clarification / unrelated / safety → fall through to the keyword cascade
+    # trainingFeedback / recoveryAdvice / clarification / unrelated / safety →
+    # fall through to the keyword cascade, whose context-aware adaptation planner
+    # (read_only_adaptation / load_advice) routes them better than flat type-dispatch.
     return None
 
 
