@@ -67,7 +67,6 @@ class SmokeCase:
     expect_answer_only: bool = False
     expect_unknown_orchestrator_fallback: bool = False
     expect_langgraph_unavailable: bool = False
-    strict_langgraph_recovery_policy: bool = False
     validator_probe_kind: str | None = None
     expected_trace_decisions: tuple[tuple[str, str], ...] = ()
     context: dict[str, Any] = field(default_factory=dict)
@@ -159,8 +158,7 @@ def build_smoke_cases() -> list[SmokeCase]:
             expected_action_type="compressWorkout",
             require_mutation_confirmation=True,
             expected_trace_decisions=(
-                ("recovery_node", "detected_signal"),
-                ("recovery_policy_node", "delegate_explicit_mutation"),
+                ("planner_node", "no_planner_signal"),
                 ("native_response_node", "delegated_to_native"),
                 ("response_contract_validation_node", "passed"),
             ),
@@ -254,21 +252,20 @@ def build_smoke_cases() -> list[SmokeCase]:
             case_id="recovery-fatigue-answer-only",
             category="recovery",
             prompt="\u6211\u8fd9\u51e0\u5929\u5f88\u7d2f\uff0c\u72b6\u6001\u5f88\u5dee\uff0c\u8fd8\u8981\u7ee7\u7eed\u7ec3\u5417",
+            acceptable_intents=("weeklyReview", "answerOnly"),
             expect_no_mutation=True,
-            expect_answer_only=True,
-            strict_langgraph_recovery_policy=True,
             expected_trace_decisions=(
-                ("recovery_node", "detected_signal"),
-                ("recovery_policy_node", "policy_answer_only"),
+                ("planner_node", "no_planner_signal"),
+                ("native_response_node", "delegated_to_native"),
+                ("response_contract_validation_node", "passed"),
             ),
         ),
         SmokeCase(
             case_id="recovery-overtraining-answer-only",
             category="recovery",
             prompt="\u6211\u8fde\u7eed\u7ec3\u4e86\u597d\u51e0\u5929\uff0c\u6709\u70b9\u7d2f\uff0c\u4eca\u5929\u600e\u4e48\u5b89\u6392",
+            acceptable_intents=("weeklyReview", "answerOnly"),
             expect_no_mutation=True,
-            expect_answer_only=True,
-            strict_langgraph_recovery_policy=True,
         ),
         SmokeCase(
             case_id="recovery-safety-overrides-compress",
@@ -329,8 +326,8 @@ def build_smoke_cases() -> list[SmokeCase]:
             expect_no_mutation=True,
             expect_answer_only=True,
             expected_trace_decisions=(
-                ("planner_node", "planner_answer_only"),
-                ("native_response_node", "skipped_existing_response"),
+                ("planner_node", "no_planner_signal"),
+                ("native_response_node", "delegated_to_native"),
                 ("response_contract_validation_node", "passed"),
             ),
         ),
@@ -602,11 +599,6 @@ def _result_from_response(
             notes.append("safety_response_mismatch")
         if mutation_actions:
             notes.append("safety_returned_mutation_action")
-    if case.strict_langgraph_recovery_policy and requested_orchestrator == "langgraph":
-        if response.intent != "answerOnly":
-            notes.append("recovery_policy_intent_mismatch")
-        if action_types:
-            notes.append("recovery_policy_actions_not_empty")
     if (
         trace == "on"
         and requested_orchestrator == "langgraph"

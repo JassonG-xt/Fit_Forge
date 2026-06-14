@@ -135,6 +135,14 @@ def _call_llm(
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
+            # Some OpenAI-compatible endpoints sit behind Cloudflare, whose
+            # Browser Integrity Check rejects the default urllib User-Agent
+            # with HTTP 403 (CF error 1010). A browser-like UA passes the check.
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
         },
         method="POST",
     )

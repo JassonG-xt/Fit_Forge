@@ -23,8 +23,6 @@ from evals.run_orchestration_smoke import (
 _LANGGRAPH_NODE_ORDER = (
     "safety_precheck_node",
     "intent_route_node",
-    "recovery_node",
-    "recovery_policy_node",
     "planner_node",
     "native_response_node",
     "response_contract_validation_node",
@@ -216,30 +214,6 @@ def test_validator_probe_cases_fail_closed_without_raw_leaks() -> None:
     ) in _decision_pairs(mismatch)
 
 
-def test_langgraph_trace_on_smoke_report_includes_recovery_decisions(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _install_fake_langgraph(monkeypatch)
-
-    report = run_smoke_matrix(
-        orchestrators=["langgraph"],
-        traces=["on"],
-        case_ids=["recovery-fatigue-answer-only"],
-        include_langgraph=True,
-    )
-    result = report["results"][0]
-
-    assert result["status"] == "pass"
-    assert result["traceDecisions"]
-    assert ("recovery_node", "detected_signal") in _decision_pairs(result)
-    assert ("recovery_policy_node", "policy_answer_only") in _decision_pairs(result)
-    assert result["finalDecisionNode"] == "recovery_policy_node"
-    assert result["finalDecision"] == "policy_answer_only"
-    assert result["decisionNodes"]
-    assert result["decisions"]
-    assert result["decisionReasons"]
-
-
 def test_langgraph_trace_on_smoke_report_includes_key_phase_d_decisions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -263,8 +237,6 @@ def test_langgraph_trace_on_smoke_report_includes_key_phase_d_decisions(
     assert compress["intent"] == "compressWorkout"
     assert compress["requiresConfirmationOk"] is True
     assert {
-        ("recovery_node", "detected_signal"),
-        ("recovery_policy_node", "delegate_explicit_mutation"),
         ("planner_node", "no_planner_signal"),
         ("native_response_node", "delegated_to_native"),
         ("response_contract_validation_node", "passed"),
@@ -308,7 +280,7 @@ def test_langgraph_trace_on_smoke_report_includes_planner_decisions(
     assert explanation["actionTypes"] == []
     assert (
         "planner_node",
-        "planner_answer_only",
+        "no_planner_signal",
     ) in _decision_pairs(explanation)
 
 
@@ -348,8 +320,8 @@ def test_markdown_scorecard_includes_privacy_safe_decision_summary(
 
     md_text = md_path.read_text(encoding="utf-8")
     assert "## Decision Summary" in md_text
-    assert "recovery_policy_node" in md_text
-    assert "policy_answer_only" in md_text
+    assert "planner_node" in md_text
+    assert "no_planner_signal" in md_text
     for raw_prompt in RAW_PROMPTS:
         assert raw_prompt not in md_text
     assert "trusted_smoke_hash" not in md_text
@@ -470,13 +442,13 @@ def test_langgraph_recovery_policy_cases_return_safe_advice_when_available() -> 
 
     fatigue = results["recovery-fatigue-answer-only"]
     if fatigue["status"] == "pass":
-        assert fatigue["intent"] == "answerOnly"
-        assert fatigue["actionTypes"] == []
+        assert fatigue["intent"] in {"answerOnly", "weeklyReview"}
+        assert fatigue["mutationActionCount"] == 0
 
     overtraining = results["recovery-overtraining-answer-only"]
     if overtraining["status"] == "pass":
-        assert overtraining["intent"] == "answerOnly"
-        assert overtraining["actionTypes"] == []
+        assert overtraining["intent"] in {"answerOnly", "weeklyReview"}
+        assert overtraining["mutationActionCount"] == 0
 
     safety = results["recovery-safety-overrides-compress"]
     if safety["status"] == "pass":

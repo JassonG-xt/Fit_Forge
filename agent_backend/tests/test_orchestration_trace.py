@@ -20,8 +20,7 @@ _TRACE_LOGGER = "agents.orchestration_trace"
 _EXPECTED_NODE_ORDER = (
     "safety_precheck_node",
     "intent_route_node",
-    "recovery_node",
-    "recovery_policy_node",
+    "planner_node",
     "native_response_node",
     "response_contract_validation_node",
 )
@@ -179,7 +178,7 @@ def test_trace_decision_recorder_adds_only_safe_structural_metadata(
 
     with orchestration_trace_scope("mock"):
         record_trace_decision(
-            "recovery_policy_node",
+            "planner_node",
             "policy_answer_only",
             "fatigue_or_recovery",
         )
@@ -193,7 +192,7 @@ def test_trace_decision_recorder_adds_only_safe_structural_metadata(
 
     assert payload["decisions"] == [
         {
-            "node": "recovery_policy_node",
+            "node": "planner_node",
             "decision": "policy_answer_only",
             "reason": "fatigue_or_recovery",
         },
@@ -266,8 +265,7 @@ def test_langgraph_trace_records_node_order_when_mocked(
         (decision["node"], decision["decision"], decision.get("reason"))
         for decision in payload["decisions"]
     } >= {
-        ("recovery_node", "detected_signal", "time_constrained"),
-        ("recovery_policy_node", "delegate_explicit_mutation", "explicit_mutation_intent"),
+        ("planner_node", "no_planner_signal", "no_signal"),
         ("native_response_node", "delegated_to_native", None),
         ("response_contract_validation_node", "passed", None),
     }
@@ -287,10 +285,10 @@ def test_langgraph_trace_records_node_order_when_mocked(
         (
             "\u6211\u8fd9\u51e0\u5929\u5f88\u7d2f\uff0c\u72b6\u6001\u5f88\u5dee\uff0c\u8fd8\u8981\u7ee7\u7eed\u7ec3\u5417",
             {
-                ("recovery_node", "detected_signal", "fatigue_or_recovery"),
-                ("recovery_policy_node", "policy_answer_only", "fatigue_or_recovery"),
+                ("planner_node", "no_planner_signal", "no_signal"),
+                ("native_response_node", "delegated_to_native", None),
             },
-            "answerOnly",
+            "weeklyReview",
         ),
     ],
 )

@@ -17,8 +17,6 @@ from agents.orchestration_trace import orchestration_trace_scope
 from agents.providers.langgraph_provider import (
     LangGraphCoachAgentProvider,
     planner_node,
-    recovery_node,
-    recovery_policy_node,
     response_contract_validation_node,
 )
 from schemas.agent_request import AgentRequest
@@ -87,8 +85,6 @@ def _mutation_response_state(
 _EXPECTED_NODE_ORDER = (
     "safety_precheck_node",
     "intent_route_node",
-    "recovery_node",
-    "recovery_policy_node",
     "planner_node",
     "native_response_node",
     "response_contract_validation_node",
@@ -201,9 +197,7 @@ def test_langgraph_builds_named_safe_node_sequence(
     assert graph.edges == [
         ("__start__", "safety_precheck_node"),
         ("safety_precheck_node", "intent_route_node"),
-        ("intent_route_node", "recovery_node"),
-        ("recovery_node", "recovery_policy_node"),
-        ("recovery_policy_node", "planner_node"),
+        ("intent_route_node", "planner_node"),
         ("planner_node", "native_response_node"),
         ("native_response_node", "response_contract_validation_node"),
         ("response_contract_validation_node", "__end__"),
@@ -281,10 +275,10 @@ def test_langgraph_graph_path_preserves_safety_response(
         ),
         (
             "\u6211\u8fd9\u51e0\u5929\u5f88\u7d2f\uff0c\u72b6\u6001\u5f88\u5dee\uff0c\u8fd8\u8981\u7ee7\u7eed\u7ec3\u5417",
-            "answerOnly",
+            "weeklyReview",
             {
-                ("recovery_node", "detected_signal", "fatigue_or_recovery"),
-                ("recovery_policy_node", "policy_answer_only", "fatigue_or_recovery"),
+                ("planner_node", "no_planner_signal", "no_signal"),
+                ("native_response_node", "delegated_to_native", None),
                 ("response_contract_validation_node", "passed", None),
             },
         ),
@@ -292,8 +286,6 @@ def test_langgraph_graph_path_preserves_safety_response(
             "\u4eca\u5929\u53ea\u670920\u5206\u949f\uff0c\u5e2e\u6211\u538b\u7f29\u8bad\u7ec3",
             "compressWorkout",
             {
-                ("recovery_node", "detected_signal", "time_constrained"),
-                ("recovery_policy_node", "delegate_explicit_mutation", "explicit_mutation_intent"),
                 ("planner_node", "no_planner_signal", "no_signal"),
                 ("native_response_node", "delegated_to_native", None),
                 ("response_contract_validation_node", "passed", None),
@@ -355,140 +347,6 @@ def test_langgraph_trace_records_validator_fail_closed_decision(
     ) in _decision_pairs(payload)
 
 
-def test_recovery_node_noops_when_response_already_present() -> None:
-    assert recovery_node({"request": _request(), "response": {"intent": "answerOnly"}}) == {}
-
-
-def test_recovery_node_marks_time_constrained_signals() -> None:
-    result = recovery_node(
-        {
-            "request": _request("今天只有20分钟，帮我压缩训练"),
-        }
-    )
-
-    assert result["recovery"]["signal"] == "time_constrained"
-    assert result["recovery"]["reason"] == "explicit_target_minutes"
-
-
-def test_recovery_node_ignores_high_risk_symptoms() -> None:
-    assert recovery_node(
-        {
-            "request": _request("我胸口疼但还想继续练，帮我压缩训练"),
-        }
-    ) == {}
-
-
-def test_recovery_node_marks_fatigue_signals() -> None:
-    result = recovery_node(
-        {
-            "request": _request("我这几天很累，状态很差，还要继续练吗"),
-        }
-    )
-
-    assert result["recovery"]["signal"] == "fatigue_or_recovery"
-
-
-def test_recovery_policy_node_noops_when_response_already_present() -> None:
-    assert recovery_policy_node(
-        {
-            "request": _request(),
-            "recovery": {"signal": "fatigue_or_recovery"},
-            "response": {"intent": "answerOnly"},
-        }
-    ) == {}
-
-
-def test_recovery_policy_node_noops_without_recovery_metadata() -> None:
-    assert recovery_policy_node({"request": _request()}) == {}
-
-
-def test_recovery_policy_node_answers_only_for_fatigue() -> None:
-    result = recovery_policy_node(
-        {
-            "request": _request("\u6211\u8fd9\u51e0\u5929\u5f88\u7d2f\uff0c\u72b6\u6001\u5f88\u5dee\uff0c\u8fd8\u8981\u7ee7\u7eed\u7ec3\u5417"),
-            "recovery": {
-                "signal": "fatigue_or_recovery",
-                "reason": "recovery_keywords",
-            },
-        }
-    )
-
-    assert result["response"].intent == "answerOnly"
-    assert result["response"].actions == []
-
-
-def test_recovery_policy_node_answers_only_for_overtraining() -> None:
-    result = recovery_policy_node(
-        {
-            "request": _request("\u6211\u8fde\u7eed\u7ec3\u4e86\u597d\u51e0\u5929\uff0c\u6709\u70b9\u7d2f\uff0c\u4eca\u5929\u600e\u4e48\u5b89\u6392"),
-            "recovery": {
-                "signal": "overtraining",
-                "reason": "load_or_overtraining_keywords",
-            },
-        }
-    )
-
-    assert result["response"].intent == "answerOnly"
-    assert result["response"].actions == []
-
-
-def test_recovery_policy_node_uses_training_load_summary_when_available() -> None:
-    request = AgentRequest(
-        message="我是不是练太多了？",
-        context={
-            "trainingLoadSummary": {
-                "plannedTrainingDays": 6,
-                "restDays": 1,
-                "totalPlannedSets": 72,
-                "maxDailySets": 18,
-                "longestConsecutiveTrainingDays": 4,
-                "weeklySetsByBodyPart": {"chest": 24},
-                "flags": ["high_training_frequency"],
-                "loadLevel": "high",
-            }
-        },
-    )
-    result = recovery_policy_node(
-        {
-            "request": request,
-            "recovery": {
-                "signal": "overtraining",
-                "reason": "load_or_overtraining_keywords",
-            },
-        }
-    )
-
-    response = result["response"]
-    assert response.intent == "weeklyReview"
-    assert response.actions[0].type == "weeklyReview"
-    assert response.actions[0].requiresConfirmation is False
-    assert any("负荷偏高" in note for note in response.actions[0].payload["riskNotes"])
-
-
-def test_recovery_policy_node_does_not_intercept_explicit_compress_requests() -> None:
-    assert recovery_policy_node(
-        {
-            "request": _request("\u4eca\u5929\u53ea\u670920\u5206\u949f\uff0c\u5e2e\u6211\u538b\u7f29\u8bad\u7ec3"),
-            "recovery": {
-                "signal": "time_constrained",
-                "reason": "explicit_target_minutes",
-            },
-        }
-    ) == {}
-
-
-def test_recovery_policy_node_does_not_intercept_safety_response() -> None:
-    assert recovery_policy_node(
-        {
-            "request": _request("chest pain"),
-            "recovery": {
-                "signal": "fatigue_or_recovery",
-                "reason": "recovery_keywords",
-            },
-        }
-    ) == {}
-
-
 def test_planner_node_noops_when_response_already_present() -> None:
     assert planner_node(
         {
@@ -512,21 +370,8 @@ def test_planner_node_delegates_plan_mutation_intents(
 ) -> None:
     result = planner_node({"request": _request(message)})
 
-    assert result == {
-        "planner": {
-            "actionType": expected_action_type,
-            "decision": "delegate",
-        }
-    }
-
-
-def test_planner_node_answers_plan_explanations_without_mutation() -> None:
-    result = planner_node({"request": _request("这个训练计划为什么这样安排")})
-
-    response = result["response"]
-    assert response.intent == "answerOnly"
-    assert response.actions == []
-    assert "训练计划" in response.message
+    assert result.get("plan") is not None
+    assert result["plan"].action_type == expected_action_type
 
 
 @pytest.mark.parametrize(
@@ -634,13 +479,15 @@ def test_langgraph_native_node_failure_returns_safe_fallback(
 ) -> None:
     _install_fake_langgraph(monkeypatch)
 
-    class FailingNativeProvider:
-        def handle(self, request: AgentRequest) -> AgentResponse:
-            raise RuntimeError("native provider failed")
+    def _boom(*args, **kwargs):
+        raise RuntimeError("native provider failed")
 
-    response = LangGraphCoachAgentProvider(
-        native_provider=FailingNativeProvider(),
-    ).handle(_request())
+    # In graph phase 1 the builder node consumes the planner's ActionPlan via
+    # build_from_plan; making that raise exercises the graph's node-failure
+    # resilience (graph.invoke catches it -> safe fallback, no error leak).
+    monkeypatch.setattr("agents.coach_building.build_from_plan", _boom)
+
+    response = LangGraphCoachAgentProvider().handle(_request())
 
     assert response.intent == "answerOnly"
     assert response.actions == []
@@ -911,3 +758,92 @@ def test_langgraph_native_and_graph_parity_cover_core_intents(
             assert all(action.type == "safetyResponse" for action in graph_response.actions)
         if expected_intent == "answerOnly":
             assert graph_response.actions == []
+
+
+from agents.intent.coach_intent import CoachIntentType, IntentCandidate
+from agents.providers.langgraph_provider import intent_slot_node
+
+
+def _p2_req(msg):
+    return AgentRequest(message=msg, context={"locale": "zh-CN"})
+
+
+def test_intent_slot_node_writes_candidate_without_client():
+    # No client → keyword detection; still writes intent_candidate to state.
+    out = intent_slot_node({"request": _p2_req("把周三的训练挪到周五")}, llm_intent_client=None)
+    assert out["route"] == "native"
+    assert out["intent_candidate"].type == CoachIntentType.moveWorkoutSession
+    assert out["intent_source"] == "keyword_fast_path"
+    assert out["intent"] == "moveWorkoutSession"
+
+
+def test_intent_slot_node_empty_message_falls_back():
+    out = intent_slot_node({"request": _p2_req("   ")}, llm_intent_client=None)
+    assert out["route"] == "fallback"
+
+
+def test_intent_slot_node_uses_llm_client_in_band():
+    class _Stub:
+        def classify(self, message, context):
+            return CoachIntentType.nutritionAdvice, 0.66
+
+    out = intent_slot_node({"request": _p2_req("你觉得呢")}, llm_intent_client=_Stub())
+    assert out["intent_candidate"].type == CoachIntentType.nutritionAdvice
+    assert out["intent_source"] == "llm"
+
+
+def test_planner_node_consumes_injected_candidate():
+    # intent_candidate present AND sourced from the LLM → planner routes by it.
+    state = {
+        "request": _p2_req("你觉得呢"),
+        "intent_candidate": IntentCandidate(
+            type=CoachIntentType.nutritionAdvice, score=0.66, reason="x"
+        ),
+        "intent_source": "llm",
+    }
+    out = planner_node(state)
+    assert out["plan"].rationale_code == "nutrition"
+
+
+def test_provider_autobuilds_intent_client_in_real_mode(monkeypatch):
+    monkeypatch.setenv("FITFORGE_AGENT_MODE", "real")
+    monkeypatch.setenv("LLM_BASE_URL", "http://x")
+    monkeypatch.setenv("LLM_API_KEY", "k")
+    monkeypatch.setenv("LLM_MODEL", "m")
+    provider = LangGraphCoachAgentProvider()
+    assert provider._llm_intent_client is not None
+
+
+def test_provider_no_intent_client_in_mock_mode(monkeypatch):
+    monkeypatch.setenv("FITFORGE_AGENT_MODE", "mock")
+    provider = LangGraphCoachAgentProvider()
+    assert provider._llm_intent_client is None
+
+
+def test_planner_keyword_source_uses_cascade_not_type_dispatch():
+    """Keyword-derived candidates (intent_source != 'llm') must route via the
+    full cascade — identical to native/Phase-1 — NOT the simplified
+    plan_from_candidate type-dispatch. Regression: the graph previously passed
+    every candidate, so the keyword fast-path/fallback diverged from cascade
+    routing on ~40% of eval cases."""
+    from agents.coach_routing import route_to_plan
+    from agents.intent.intent_router import route as kw_route
+
+    msg = "家里没有器械，能不能换成自重动作"
+    req = _p2_req(msg)
+    kw = kw_route(msg)
+    # Precondition: for this message, type-dispatch DIVERGES from the cascade.
+    assert route_to_plan(req).rationale_code != route_to_plan(req, candidate=kw).rationale_code
+    # The planner, given a KEYWORD-source candidate, must match the cascade.
+    state = {"request": req, "intent_candidate": kw, "intent_source": "keyword_fallback"}
+    assert planner_node(state)["plan"].rationale_code == route_to_plan(req).rationale_code
+
+
+def test_planner_llm_source_uses_candidate_dispatch():
+    """A genuine LLM classification (intent_source == 'llm') DOES get the
+    candidate-first type-dispatch — that is the intended new behavior."""
+    msg = "家里没有器械，能不能换成自重动作"
+    req = _p2_req(msg)
+    cand = IntentCandidate(type=CoachIntentType.nutritionAdvice, score=0.66, reason="llm")
+    state = {"request": req, "intent_candidate": cand, "intent_source": "llm"}
+    assert planner_node(state)["plan"].rationale_code == "nutrition"

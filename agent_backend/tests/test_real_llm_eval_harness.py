@@ -1489,3 +1489,39 @@ def test_classifier_helper_directly() -> None:
     ) == ("network", None)
     assert _classify_provider_exception(TimeoutError("x")) == ("timeout", None)
     assert _classify_provider_exception(RuntimeError("x")) == ("unknown", None)
+
+
+# ── Phase 2: --orchestrator graph routing ──
+
+
+def test_run_one_case_graph_orchestrator_sets_env(monkeypatch):
+    seen = {}
+
+    def fake_run_coach_agent(request):
+        seen["orchestrator"] = os.environ.get("FITFORGE_AGENT_ORCHESTRATOR")
+        from schemas.agent_response import AgentResponse
+
+        return AgentResponse(message="ok", intent="answerOnly", confidence=0.5, actions=[])
+
+    monkeypatch.setattr("agents.coach_agent.run_coach_agent", fake_run_coach_agent)
+    case = {"id": "t1", "category": "nonMutatingCoaching", "status": "active",
+            "userMessage": "hi", "expected": {}}
+    _run_one_case(case, dry_run=True, orchestrator="graph")
+    assert seen["orchestrator"] == "langgraph"
+
+
+def test_run_one_case_native_orchestrator_is_default(monkeypatch):
+    seen = {}
+
+    def fake_run_coach_agent(request):
+        seen["orchestrator"] = os.environ.get("FITFORGE_AGENT_ORCHESTRATOR")
+        from schemas.agent_response import AgentResponse
+
+        return AgentResponse(message="ok", intent="answerOnly", confidence=0.5, actions=[])
+
+    monkeypatch.setattr("agents.coach_agent.run_coach_agent", fake_run_coach_agent)
+    monkeypatch.delenv("FITFORGE_AGENT_ORCHESTRATOR", raising=False)
+    case = {"id": "t1", "category": "nonMutatingCoaching", "status": "active",
+            "userMessage": "hi", "expected": {}}
+    _run_one_case(case, dry_run=True)
+    assert seen["orchestrator"] in (None, "native")
